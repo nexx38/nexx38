@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Timeline from './pages/Timeline'
 import TodoList from './pages/TodoList'
 
@@ -19,9 +19,71 @@ function getWeek(date) {
   })
 }
 
+function useInstallPrompt() {
+  const [prompt,    setPrompt]    = useState(null)
+  const [installed, setInstalled] = useState(false)
+
+  useEffect(() => {
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches
+      || window.navigator.standalone === true
+    if (isStandalone) { setInstalled(true); return }
+
+    const handler = (e) => { e.preventDefault(); setPrompt(e) }
+    window.addEventListener('beforeinstallprompt', handler)
+    return () => window.removeEventListener('beforeinstallprompt', handler)
+  }, [])
+
+  const install = async () => {
+    if (!prompt) return
+    prompt.prompt()
+    const { outcome } = await prompt.userChoice
+    if (outcome === 'accepted') setInstalled(true)
+    setPrompt(null)
+  }
+
+  return { prompt, installed, install }
+}
+
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream
+
+function InstallBanner({ onDismiss }) {
+  const { prompt, installed, install } = useInstallPrompt()
+  const [iosHint, setIosHint] = useState(false)
+
+  if (installed) return null
+
+  if (isIOS) return (
+    <div style={bannerStyle}>
+      <span style={{ fontSize: 20 }}>📲</span>
+      <div style={{ flex: 1, fontSize: 13 }}>
+        {iosHint
+          ? <span>Tippe <strong>Teilen</strong> ↑ → <strong>„Zum Home-Bildschirm"</strong></span>
+          : <span>Als App installieren?</span>
+        }
+      </div>
+      {!iosHint && (
+        <button onClick={() => setIosHint(true)} style={bannerBtn('#3B82F6')}>Anleitung</button>
+      )}
+      <button onClick={onDismiss} style={{ color: 'var(--text2)', fontSize: 20, padding: '0 4px' }}>✕</button>
+    </div>
+  )
+
+  if (prompt) return (
+    <div style={bannerStyle}>
+      <span style={{ fontSize: 20 }}>📲</span>
+      <div style={{ flex: 1, fontSize: 13 }}>Als App auf dem Handy installieren</div>
+      <button onClick={install}   style={bannerBtn('#3B82F6')}>Installieren</button>
+      <button onClick={onDismiss} style={{ color: 'var(--text2)', fontSize: 20, padding: '0 4px' }}>✕</button>
+    </div>
+  )
+
+  return null
+}
+
 export default function App() {
-  const [tab, setTab]   = useState('timeline')
-  const [date, setDate] = useState(new Date())
+  const [tab,     setTab]     = useState('timeline')
+  const [date,    setDate]    = useState(new Date())
+  const [banner,  setBanner]  = useState(true)
   const today = new Date()
   const week  = getWeek(date)
 
@@ -29,6 +91,9 @@ export default function App() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', maxWidth: 480, margin: '0 auto', background: 'var(--bg)' }}>
+
+      {/* ── Install Banner ── */}
+      {banner && <InstallBanner onDismiss={() => setBanner(false)} />}
 
       {/* ── Header ── */}
       <div style={{ flexShrink: 0, background: 'var(--bg)', borderBottom: '1px solid var(--border)', padding: '14px 16px 10px' }}>
@@ -126,3 +191,15 @@ const navBtn = {
   borderRadius: 8, background: 'var(--bg3)', color: 'var(--text2)',
   fontSize: 20, fontWeight: 300,
 }
+
+const bannerStyle = {
+  display: 'flex', alignItems: 'center', gap: 10,
+  background: 'var(--bg2)', borderBottom: '1px solid var(--border)',
+  padding: '10px 14px', flexShrink: 0,
+}
+
+const bannerBtn = (bg) => ({
+  background: bg, color: 'white',
+  padding: '6px 14px', borderRadius: 20,
+  fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap',
+})

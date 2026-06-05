@@ -1,0 +1,22 @@
+CREATE TABLE IF NOT EXISTS todos (
+  id SERIAL PRIMARY KEY,
+  text TEXT NOT NULL,
+  category VARCHAR(20) DEFAULT 'office',
+  person VARCHAR(50) DEFAULT 'Tamer',
+  priority VARCHAR(10) DEFAULT 'medium',
+  done BOOLEAN DEFAULT false,
+  date DATE DEFAULT CURRENT_DATE,
+  created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS timeblocks (
+  id SERIAL PRIMARY KEY,
+  title TEXT NOT NULL,
+  hour INTEGER NOT NULL,
+  duration INTEGER DEFAULT 1,
+  category VARCHAR(20) DEFAULT 'office',
+  person VARCHAR(50) DEFAULT 'Tamer',
+  done BOOLEAN DEFAULT false,
+  date DATE DEFAULT CURRENT_DATE,
+  created_at TIMESTAMP DEFAULT NOW()
+);

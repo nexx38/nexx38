@@ -1,0 +1,40 @@
+name: Deploy SHK Planer
+
+on:
+  push:
+    branches: [claude/shk-tagesplaner-pwa-GWi78, main]
+    paths:
+      - 'shk-planer/**'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: SSH Deploy auf VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: 178.104.159.191
+          username: root
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            set -e
+
+            # Repo klonen oder aktualisieren
+            if [ ! -d /root/shk-planer-repo ]; then
+              git clone https://github.com/nexx38/nexx38.git /root/shk-planer-repo
+            else
+              cd /root/shk-planer-repo && git fetch origin && git checkout claude/shk-tagesplaner-pwa-GWi78 && git pull
+            fi
+
+            # Dateien kopieren
+            rsync -a /root/shk-planer-repo/shk-planer/ /root/shk-planer/
+            chmod +x /root/shk-planer/deploy.sh
+
+            # Deploy ausführen
+            bash /root/shk-planer/deploy.sh
+
+            echo "✅ Deploy abgeschlossen"

@@ -129,7 +129,8 @@ const Scanner = {
       this._updateARUI();
     } catch (err) {
       console.warn('AR session failed:', err);
-      this._showARError(err.message);
+      // Auto-fallback to camera mode if AR session creation fails
+      await this.switchMode('camera');
     }
   },
 

@@ -400,11 +400,19 @@ const App = {
 
         <div class="room-editor-header">
           <span class="room-editor-title">${roomEmoji[room.type] || '🏠'} ${esc(room.name)}</span>
-          <button class="btn btn-danger btn-sm" onclick="App.deleteRoom('${room.id}')">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
-            Raum löschen
-          </button>
-        </div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <button class="btn btn-outline btn-sm" onclick="Scanner.open('${room.id}')" title="Raum mit Kamera / AR / Punktwolke ausmessen"
+              style="color:var(--primary);border-color:var(--primary);display:flex;align-items:center;gap:5px;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px">
+                <circle cx="12" cy="12" r="3"/><path d="M3 9a9 9 0 0 1 9-6 9 9 0 0 1 9 6M3 15a9 9 0 0 0 9 6 9 9 0 0 0 9-6"/>
+              </svg>
+              📡 Scan
+            </button>
+            <button class="btn btn-danger btn-sm" onclick="App.deleteRoom('${room.id}')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:14px;height:14px"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
+              Raum löschen
+            </button>
+          </div>
 
         ${banner}
 

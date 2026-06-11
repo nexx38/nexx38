@@ -35,16 +35,45 @@ const roomEmoji = {
 // ── App ──────────────────────────────────────────────────
 const App = {
   init() {
+    // Auto-load last session
+    this._autoLoad();
     this.populateCitySelect();
     this.populateBuildingTypeSelect();
     this.updateClimateInfo();
     this.render();
+    this.renderRoomDetail();
 
-    // Auto-save on any input change
     document.addEventListener('change', () => {
       this.syncProjectFromForm();
       this.render();
+      this._autoSave();
     });
+  },
+
+  _autoSave() {
+    try {
+      this.syncProjectFromForm();
+      const room = this.getRoom(state.selectedRoomId);
+      if (room) this.syncRoomFromForm(room);
+      localStorage.setItem('hlb_autosave', JSON.stringify({
+        project: state.project,
+        rooms: state.rooms,
+        selectedRoomId: state.selectedRoomId,
+      }));
+    } catch(e) {}
+  },
+
+  _autoLoad() {
+    try {
+      const raw = localStorage.getItem('hlb_autosave');
+      if (!raw) return;
+      const saved = JSON.parse(raw);
+      Object.assign(state.project, saved.project || {});
+      state.rooms = saved.rooms || [];
+      state.selectedRoomId = saved.selectedRoomId || null;
+      _idCounter = state.rooms.reduce((m, r) => Math.max(m, parseInt(r.id.replace('id_',''))||0), 0) + 1;
+      _roomCounter = state.rooms.reduce((m, r) => Math.max(m, parseInt(r.name.replace('Raum ',''))||0), 0);
+    } catch(e) {}
   },
 
   // ── Navigation ──────────────────────────────────────────
@@ -147,6 +176,7 @@ const App = {
     };
     state.rooms.push(room);
     state.selectedRoomId = room.id;
+    this._autoSave();
     this.render();
     this.renderRoomDetail();
     this.switchTab('rooms');
@@ -158,6 +188,7 @@ const App = {
     if (state.selectedRoomId === id) {
       state.selectedRoomId = state.rooms.length ? state.rooms[state.rooms.length - 1].id : null;
     }
+    this._autoSave();
     this.render();
     this.renderRoomDetail();
     this.toast(`"${name}" gelöscht`, 'success');
@@ -183,6 +214,7 @@ const App = {
     const bt = document.getElementById('buildingType');
     if (bt) bt.value = 'residential';
     this.updateClimateInfo();
+    this._autoSave();
     this.render();
     this.renderRoomDetail();
     this.switchTab('rooms');

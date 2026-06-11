@@ -22,6 +22,7 @@ const state = {
 };
 
 let _idCounter = 1;
+let _roomCounter = 0;
 const newId = () => 'id_' + (_idCounter++);
 
 // ── Room type emoji map ──────────────────────────────────
@@ -129,12 +130,13 @@ const App = {
   addRoom() {
     const type = 'living';
     const defaults = HLB_DATA.roomTypes[type];
+    _roomCounter++;
     const room = {
       id: newId(),
-      name: 'Raum ' + (state.rooms.length + 1),
+      name: 'Raum ' + _roomCounter,
       type,
-      area: 20,
-      height: 2.5,
+      area: 0,
+      height: 0,
       indoorTemp: defaults.temp,
       components: [],
       vent: {
@@ -172,6 +174,7 @@ const App = {
     state.rooms = [];
     state.selectedRoomId = null;
     _idCounter = 1;
+    _roomCounter = 0;
     // Reset project form fields
     const pn = document.getElementById('projectName');
     if (pn) pn.value = 'Mein Projekt';

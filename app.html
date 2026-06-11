@@ -7,9 +7,10 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>HeizlastProfi – Heizlastberechnung nach DIN EN 12831</title>
+  <link rel="stylesheet" href="css/styles.css?v=5">
+  <link rel="stylesheet" href="css/scanner.css?v=5">
+  <link rel="stylesheet" href="css/modules.css?v=5">
 <style>
-
-/* === css/styles.css === */
 /* ────────────────────────────────────────────────────────
    HeizlastProfi — Styles
    ──────────────────────────────────────────────────────── */
@@ -905,7 +906,6 @@ input[type=checkbox] {
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-light); }
 
-/* === css/scanner.css === */
 /* ────────────────────────────────────────────────────────
    Scanner — Styles
    ──────────────────────────────────────────────────────── */
@@ -1475,7 +1475,6 @@ input[type=checkbox] {
   .pc-sidebar { width: 100%; height: 200px; border-left: none; border-top: 1px solid rgba(255,255,255,.1); }
 }
 
-/* === css/modules.css === */
 /* ────────────────────────────────────────────────────────
    Module Styles — Heat Pump, Hydraulics, Radiators,
                    Quote, CRM
@@ -2635,11 +2634,16 @@ input[type=checkbox] {
 </div><!-- /#scannerOverlay -->
 
 <!-- Scripts -->
+<script src="js/data.js?v=5"></script>
+<script src="js/calc.js?v=5"></script>
+<script src="js/scanner.js?v=5"></script>
+<script src="js/product_data.js?v=5"></script>
+<script src="js/modules.js?v=5"></script>
+<script src="js/modules_ui.js?v=5"></script>
+<script src="js/app.js?v=5"></script>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
-
-/* === js/data.js === */
 const HLB_DATA = {
   cities: [
     { name: 'Aachen', temp: -10 },
@@ -2765,7 +2769,6 @@ const HLB_DATA = {
   },
 };
 
-/* === js/calc.js === */
 const HLB_CALC = {
   // Transmission heat loss for one component [W]
   // ΦT = A × U × Δθ (with temperature correction for internal boundaries)
@@ -2850,7 +2853,6 @@ const HLB_CALC = {
   },
 };
 
-/* === js/scanner.js === */
 /* ────────────────────────────────────────────────────────
    HeizlastProfi — LiDAR / AR Room Scanner
    Modes:
@@ -3789,7 +3791,6 @@ const Scanner = {
   },
 };
 
-/* === js/product_data.js === */
 /* ────────────────────────────────────────────────────────
    Product Database — Heat Pumps, Radiators, Valves
    Performance data approximate (typical EN 14825 test pts)
@@ -4032,7 +4033,6 @@ const PRODUCTS = {
   ],
 };
 
-/* === js/modules.js === */
 /* ────────────────────────────────────────────────────────
    HeizlastProfi — Erweiterungsmodule
    4. Wärmepumpen-Auslegung
@@ -4490,7 +4490,6 @@ function esc(s) {
   return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-/* === js/modules_ui.js === */
 /* ────────────────────────────────────────────────────────
    Modules UI — render functions for tabs 4–8
    ──────────────────────────────────────────────────────── */
@@ -4981,7 +4980,6 @@ function escUI(s) {
   return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-/* === js/app.js === */
 /* ────────────────────────────────────────────────────────
    HeizlastProfi — Application Logic
    ──────────────────────────────────────────────────────── */
@@ -5006,6 +5004,7 @@ const state = {
 };
 
 let _idCounter = 1;
+let _roomCounter = 0;
 const newId = () => 'id_' + (_idCounter++);
 
 // ── Room type emoji map ──────────────────────────────────
@@ -5113,12 +5112,13 @@ const App = {
   addRoom() {
     const type = 'living';
     const defaults = HLB_DATA.roomTypes[type];
+    _roomCounter++;
     const room = {
       id: newId(),
-      name: 'Raum ' + (state.rooms.length + 1),
+      name: 'Raum ' + _roomCounter,
       type,
-      area: 20,
-      height: 2.5,
+      area: 0,
+      height: 0,
       indoorTemp: defaults.temp,
       components: [],
       vent: {
@@ -5156,6 +5156,7 @@ const App = {
     state.rooms = [];
     state.selectedRoomId = null;
     _idCounter = 1;
+    _roomCounter = 0;
     // Reset project form fields
     const pn = document.getElementById('projectName');
     if (pn) pn.value = 'Mein Projekt';

@@ -153,6 +153,43 @@ tbody tr:hover { background: rgba(255,255,255,0.02); }
   .kpi-grid { grid-template-columns: repeat(2, 1fr); }
   .two-col, .three-col { grid-template-columns: 1fr; }
 }
+
+/* ── Steuerberater ── */
+.period-bar { display:flex; gap:8px; align-items:center; margin-bottom:20px; flex-wrap:wrap; }
+.period-btn { padding:6px 14px; border-radius:8px; border:1px solid var(--border); background:var(--dark3); color:var(--text2); font-size:13px; font-weight:600; cursor:pointer; transition:all 0.15s; }
+.period-btn.active, .period-btn:hover { background:var(--blue); color:white; border-color:var(--blue); }
+.period-select { background:var(--dark3); border:1px solid var(--border); color:var(--text); padding:6px 10px; border-radius:8px; font-size:13px; }
+
+.ausgaben-form { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.ausgabe-row { display:flex; flex-direction:column; gap:4px; }
+.ausgabe-row label { font-size:11px; color:var(--text2); text-transform:uppercase; letter-spacing:0.4px; }
+.ausgabe-input { background:var(--dark3); border:1px solid var(--border); color:var(--text); padding:8px 12px; border-radius:8px; font-size:13px; width:100%; outline:none; transition:border 0.15s; }
+.ausgabe-input:focus { border-color:var(--blue); }
+
+.stb-summary { background:var(--dark3); border-radius:10px; padding:18px; }
+.stb-line { display:flex; justify-content:space-between; align-items:center; padding:7px 0; border-bottom:1px solid rgba(255,255,255,0.05); font-size:13px; }
+.stb-line:last-child { border-bottom:none; }
+.stb-line.total { font-weight:700; font-size:15px; padding-top:12px; margin-top:4px; border-top:2px solid var(--border); border-bottom:none; }
+.stb-line .lbl { color:var(--text2); }
+.stb-line .val { font-weight:600; }
+
+/* ── Print ── */
+@media print {
+  body { background:white !important; color:black !important; display:block; }
+  .sidebar, .topbar, .no-print { display:none !important; }
+  .main { display:block; }
+  .content { overflow:visible; padding:0; }
+  .page { display:none !important; }
+  #page-steuerberater { display:block !important; }
+  .card { background:white !important; border:1px solid #ddd !important; box-shadow:none !important; break-inside:avoid; }
+  .period-bar, .btn-primary { display:none !important; }
+  * { color:black !important; }
+  .pos { color:#166534 !important; }
+  .neg { color:#991b1b !important; }
+  .print-header { display:block !important; }
+  .ausgabe-input { border:1px solid #ddd !important; background:white !important; }
+}
+.print-header { display:none; }
 </style>
 </head>
 <body>
@@ -185,6 +222,9 @@ tbody tr:hover { background: rgba(255,255,255,0.02); }
     <div class="nav-section" style="margin-top:8px">Finanzen</div>
     <button class="nav-item" onclick="navigate('guv')">
       <span class="icon">📈</span> Gewinn & Verlust
+    </button>
+    <button class="nav-item" onclick="navigate('steuerberater')">
+      <span class="icon">🧮</span> Steuerberater
     </button>
   </nav>
   <div class="sidebar-footer">
@@ -438,6 +478,101 @@ tbody tr:hover { background: rgba(255,255,255,0.02); }
       </div>
     </div>
 
+    <!-- ══════════════════════════════════
+         STEUERBERATER
+    ══════════════════════════════════ -->
+    <div class="page" id="page-steuerberater">
+
+      <!-- Print Header (nur beim Drucken sichtbar) -->
+      <div class="print-header" style="margin-bottom:20px;padding-bottom:12px;border-bottom:2px solid #ddd">
+        <div style="font-size:20px;font-weight:800">SHK Betrieb · Steuerauswertung</div>
+        <div id="print-period-label" style="font-size:14px;color:#555;margin-top:4px"></div>
+        <div style="font-size:12px;color:#888;margin-top:2px">Erstellt: <span id="print-date"></span></div>
+      </div>
+
+      <!-- Zeitraum-Auswahl -->
+      <div class="period-bar no-print">
+        <span style="font-size:13px;color:var(--text2);font-weight:600">Zeitraum:</span>
+        <select class="period-select" id="stb-year" onchange="buildStb()">
+          <option value="2026">2026</option>
+          <option value="2025" selected>2025</option>
+          <option value="2024">2024</option>
+        </select>
+        <button class="period-btn active" onclick="setStbMode('quartal','Q1',this)">Q1 Jan–Mär</button>
+        <button class="period-btn" onclick="setStbMode('quartal','Q2',this)">Q2 Apr–Jun</button>
+        <button class="period-btn" onclick="setStbMode('quartal','Q3',this)">Q3 Jul–Sep</button>
+        <button class="period-btn" onclick="setStbMode('quartal','Q4',this)">Q4 Okt–Dez</button>
+        <button class="period-btn" onclick="setStbMode('jahr','JAHR',this)">Ganzes Jahr</button>
+        <div style="margin-left:auto;display:flex;gap:8px">
+          <button class="btn btn-primary btn-sm" onclick="window.print()">🖨 Drucken / PDF</button>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+
+        <!-- ── Einnahmen (aus DB) ── -->
+        <div class="card">
+          <h3>📥 Einnahmen <span style="font-size:11px;font-weight:400;color:var(--green)">aus Datenbank</span></h3>
+          <div class="table-wrap">
+            <table>
+              <thead><tr>
+                <th>Datum</th><th>Nr.</th><th>Kunde</th><th>Netto</th><th>MwSt 19%</th><th>Brutto</th>
+              </tr></thead>
+              <tbody id="stb-einnahmen-rows"></tbody>
+              <tfoot>
+                <tr style="font-weight:700;border-top:2px solid var(--border)">
+                  <td colspan="3" style="padding:8px 12px;font-size:12px;color:var(--text2)">SUMME EINNAHMEN</td>
+                  <td style="padding:8px 12px;text-align:right" id="stb-sum-netto">–</td>
+                  <td style="padding:8px 12px;text-align:right;color:var(--orange)" id="stb-sum-mwst">–</td>
+                  <td style="padding:8px 12px;text-align:right;color:var(--blue-light)" id="stb-sum-brutto">–</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+
+        <!-- ── Ausgaben (editierbar) ── -->
+        <div class="card">
+          <h3>📤 Betriebsausgaben <span style="font-size:11px;font-weight:400;color:var(--orange)">bitte eintragen</span></h3>
+          <div class="ausgaben-form" id="stb-ausgaben-form">
+            <!-- wird per JS befüllt -->
+          </div>
+          <div style="margin-top:14px;display:flex;justify-content:space-between;align-items:center">
+            <div style="font-size:12px;color:var(--text2)">💾 Werte werden automatisch gespeichert</div>
+            <button class="btn btn-ghost btn-sm no-print" onclick="resetAusgaben()">Zurücksetzen</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── EÜR Zusammenfassung ── -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+        <div class="card">
+          <h3>📊 EÜR – Einnahmenüberschussrechnung</h3>
+          <div class="stb-summary" id="stb-euer"></div>
+        </div>
+
+        <!-- ── USt-Voranmeldung ── -->
+        <div class="card">
+          <h3>🏦 Umsatzsteuer-Voranmeldung</h3>
+          <div style="margin-bottom:12px;padding:8px 12px;background:rgba(59,130,246,0.08);border-radius:8px;font-size:12px;color:var(--text2)">
+            Umsatzsteuer (19%) auf Ausgangsrechnungen minus<br>
+            Vorsteuer aus Eingangsrechnungen = <strong style="color:var(--text)">Zahllast ans Finanzamt</strong>
+          </div>
+          <div class="stb-summary" id="stb-ust"></div>
+        </div>
+      </div>
+
+      <!-- ── Hinweis für Steuerberater ── -->
+      <div class="card no-print" style="border-color:rgba(34,197,94,0.3)">
+        <h3>📎 Hinweis für den Steuerberater</h3>
+        <textarea id="stb-notiz" rows="3"
+          style="width:100%;background:var(--dark3);border:1px solid var(--border);color:var(--text);padding:10px;border-radius:8px;font-size:13px;resize:vertical;outline:none"
+          placeholder="Notizen für den Steuerberater (z.B. besondere Ausgaben, Investitionen, Fragen)..."
+          oninput="saveNotiz()"></textarea>
+      </div>
+
+    </div><!-- /page-steuerberater -->
+
   </div><!-- /content -->
 </div><!-- /main -->
 
@@ -530,12 +665,13 @@ function umsatzByKunde(year) {
 // NAVIGATION
 // ═══════════════════════════════════════════════════════════════
 const PAGE_TITLES = {
-  dashboard:   ['Dashboard', 'Übersicht · Stand heute'],
-  kunden:      ['Kunden', `${KUNDEN.length} Einträge im Kundenstamm`],
-  angebote:    ['Angebote & Aufträge', 'Alle Angebote aus der Datenbank'],
-  rechnungen:  ['Rechnungen', 'Offene und abgeschlossene Rechnungen'],
-  termine:     ['Termine', 'Einsätze & Besprechungen'],
-  guv:         ['Gewinn & Verlust', 'GuV · Echte Daten aus der DB'],
+  dashboard:      ['Dashboard', 'Übersicht · Stand heute'],
+  kunden:         ['Kunden', `${KUNDEN.length} Einträge im Kundenstamm`],
+  angebote:       ['Angebote & Aufträge', 'Alle Angebote aus der Datenbank'],
+  rechnungen:     ['Rechnungen', 'Offene und abgeschlossene Rechnungen'],
+  termine:        ['Termine', 'Einsätze & Besprechungen'],
+  guv:            ['Gewinn & Verlust', 'GuV · Echte Daten aus der DB'],
+  steuerberater:  ['Steuerberater', 'EÜR · UStVA · Monats- & Quartalsauswertung'],
 };
 
 function navigate(page) {
@@ -891,6 +1027,204 @@ function switchGuvTab(tab, btn) {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// STEUERBERATER
+// ═══════════════════════════════════════════════════════════════
+
+const AUSGABEN_KATEGORIEN = [
+  { key:'material',      label:'Material / Wareneinsatz',    hint:'Einkauf von Rohren, Armaturen, Materialien' },
+  { key:'personal',      label:'Personalkosten',             hint:'Löhne, Gehälter, Sozialversicherung' },
+  { key:'fahrzeuge',     label:'Fahrzeugkosten',             hint:'Kraftstoff, Leasing, Kfz-Steuer, Reparatur' },
+  { key:'werkzeug',      label:'Werkzeug & Maschinen',       hint:'Kauf und Reparatur von Werkzeug' },
+  { key:'buero',         label:'Büro & Verwaltung',          hint:'Miete Büro, Porto, Telefon, Bürobedarf' },
+  { key:'software',      label:'Software & Abonnements',     hint:'Buchhaltungssoftware, Warenwirtschaft' },
+  { key:'versicherung',  label:'Versicherungen',             hint:'Betriebs-, Haftpflicht-, KFZ-Versicherung' },
+  { key:'steuerberater', label:'Steuerberater / Rechtsber.', hint:'Honorar Steuerberater, Anwalt' },
+  { key:'marketing',     label:'Marketing & Werbung',        hint:'Website, Flyer, Google Ads, Werbemittel' },
+  { key:'sonstiges',     label:'Sonstige Betriebsausgaben',  hint:'Reinigung, Bewirtung, Sonstiges' },
+  { key:'vorsteuer',     label:'Vorsteuer (aus Rechnungen)', hint:'MwSt aus Eingangsrechnungen (Vorsteuerabzug)' },
+];
+
+let stbMode  = 'quartal';
+let stbQ     = 'Q1';
+let stbYear  = 2025;
+
+const QUARTER_MONTHS = { Q1:[0,1,2], Q2:[3,4,5], Q3:[6,7,8], Q4:[9,10,11] };
+const QUARTER_LABELS = { Q1:'Q1 Januar – März', Q2:'Q2 April – Juni', Q3:'Q3 Juli – September', Q4:'Q4 Oktober – Dezember', JAHR:'Ganzes Jahr' };
+
+function stbStorageKey() {
+  const period = stbMode === 'jahr' ? 'JAHR' : stbQ;
+  return `shk_ausgaben_${stbYear}_${period}`;
+}
+
+function loadAusgaben() {
+  try { return JSON.parse(localStorage.getItem(stbStorageKey()) || '{}'); } catch { return {}; }
+}
+
+function saveAusgaben() {
+  const vals = {};
+  AUSGABEN_KATEGORIEN.forEach(k => {
+    const el = document.getElementById('aus_' + k.key);
+    if (el) vals[k.key] = parseFloat(el.value.replace(',','.')) || 0;
+  });
+  localStorage.setItem(stbStorageKey(), JSON.stringify(vals));
+  buildStbSummary();
+}
+
+function resetAusgaben() {
+  if (!confirm('Alle Ausgaben für diesen Zeitraum zurücksetzen?')) return;
+  localStorage.removeItem(stbStorageKey());
+  buildStb();
+}
+
+function saveNotiz() {
+  const key = `shk_notiz_${stbYear}_${stbMode==='jahr'?'JAHR':stbQ}`;
+  localStorage.setItem(key, document.getElementById('stb-notiz').value);
+}
+
+function setStbMode(mode, q, btn) {
+  stbMode = mode; stbQ = q;
+  document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  buildStb();
+}
+
+function getStbPeriodMonths() {
+  if (stbMode === 'jahr') return [0,1,2,3,4,5,6,7,8,9,10,11];
+  return QUARTER_MONTHS[stbQ] || [];
+}
+
+function getStbEinnahmen() {
+  const months = getStbPeriodMonths();
+  return ANGEBOTE.filter(a => {
+    if (a.status !== 'Abgerechnet') return false;
+    const d = new Date(a.datum);
+    return d.getFullYear() === stbYear && months.includes(d.getMonth());
+  });
+}
+
+function buildStb() {
+  stbYear = parseInt(document.getElementById('stb-year').value);
+  buildStbEinnahmen();
+  buildStbAusgabenForm();
+  buildStbSummary();
+  // Notiz laden
+  const key = `shk_notiz_${stbYear}_${stbMode==='jahr'?'JAHR':stbQ}`;
+  document.getElementById('stb-notiz').value = localStorage.getItem(key) || '';
+  // Print labels
+  const periodLabel = QUARTER_LABELS[stbMode==='jahr'?'JAHR':stbQ] + ' ' + stbYear;
+  document.getElementById('print-period-label').textContent = periodLabel;
+  document.getElementById('print-date').textContent = new Date().toLocaleDateString('de-DE');
+}
+
+function buildStbEinnahmen() {
+  const einnahmen = getStbEinnahmen();
+  const sorted = [...einnahmen].sort((a,b) => new Date(a.datum)-new Date(b.datum));
+
+  let totalNetto = 0, totalMwSt = 0, totalBrutto = 0;
+  document.getElementById('stb-einnahmen-rows').innerHTML = sorted.length === 0
+    ? `<tr><td colspan="6" style="text-align:center;color:var(--text2);padding:16px">Keine Einnahmen in diesem Zeitraum</td></tr>`
+    : sorted.map(a => {
+        const n = netto(a.brutto);
+        const m = a.brutto - n;
+        totalNetto += n; totalMwSt += m; totalBrutto += a.brutto;
+        return `<tr>
+          <td style="color:var(--text2)">${fmtDate(a.datum)}</td>
+          <td style="color:var(--blue-light);font-weight:600">${a.nr}</td>
+          <td>${kundeName(a.kundeId)}</td>
+          <td style="text-align:right;font-weight:600">${fmt(n)}</td>
+          <td style="text-align:right;color:var(--orange)">${fmt(m)}</td>
+          <td style="text-align:right;font-weight:600;color:var(--blue-light)">${fmt(a.brutto)}</td>
+        </tr>`;
+      }).join('');
+
+  document.getElementById('stb-sum-netto').textContent  = fmt(totalNetto);
+  document.getElementById('stb-sum-mwst').textContent   = fmt(totalMwSt);
+  document.getElementById('stb-sum-brutto').textContent = fmt(totalBrutto);
+}
+
+function buildStbAusgabenForm() {
+  const saved = loadAusgaben();
+  document.getElementById('stb-ausgaben-form').innerHTML = AUSGABEN_KATEGORIEN.map(k => `
+    <div class="ausgabe-row">
+      <label title="${k.hint}">${k.label}</label>
+      <input class="ausgabe-input" id="aus_${k.key}" type="number" min="0" step="0.01"
+        value="${(saved[k.key] || 0).toFixed(2)}"
+        placeholder="0,00"
+        oninput="saveAusgaben()">
+    </div>
+  `).join('');
+}
+
+function buildStbSummary() {
+  const einnahmen = getStbEinnahmen();
+  const totalNetto  = einnahmen.reduce((s,a) => s + netto(a.brutto), 0);
+  const totalBrutto = einnahmen.reduce((s,a) => s + a.brutto, 0);
+  const ustAus      = totalBrutto - totalNetto;
+
+  const saved = loadAusgaben();
+  let totalAusgaben = 0, vorsteuer = 0;
+  AUSGABEN_KATEGORIEN.forEach(k => {
+    const v = parseFloat((saved[k.key]||0));
+    if (k.key === 'vorsteuer') vorsteuer += v;
+    else totalAusgaben += v;
+  });
+
+  const gewinn   = totalNetto - totalAusgaben;
+  const zahllast = ustAus - vorsteuer;
+
+  // EÜR
+  const euerLines = [
+    { lbl:'Betriebseinnahmen (netto)',        val: totalNetto,     cls: totalNetto>0?'pos':'' },
+    { lbl:'– Betriebsausgaben gesamt',        val: -totalAusgaben, cls: totalAusgaben>0?'neg':'' },
+    { lbl:'= Gewinn / Verlust (vor Steuer)',  val: gewinn,         cls: gewinn>=0?'pos':'neg', total:true },
+  ];
+  document.getElementById('stb-euer').innerHTML = euerLines.map(l => `
+    <div class="stb-line${l.total?' total':''}">
+      <span class="lbl">${l.lbl}</span>
+      <span class="val ${l.cls||''}">${fmt(l.val)}</span>
+    </div>
+  `).join('') + `
+    <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">
+      ${AUSGABEN_KATEGORIEN.filter(k=>k.key!=='vorsteuer').map(k=>{
+        const v = parseFloat(saved[k.key]||0);
+        return v > 0 ? `<div class="stb-line" style="font-size:12px">
+          <span class="lbl" style="padding-left:12px">${k.label}</span>
+          <span style="color:var(--text2)">${fmt(v)}</span>
+        </div>` : '';
+      }).join('')}
+    </div>`;
+
+  // UStVA
+  const ustLines = [
+    { lbl:'Umsatzsteuer (Ausgang 19%)',    val: ustAus,   cls:'neg' },
+    { lbl:'– Vorsteuer (aus Einkäufen)',   val: -vorsteuer, cls:'pos' },
+    { lbl:'= Zahllast ans Finanzamt',      val: zahllast, cls: zahllast>=0?'neg':'pos', total:true },
+  ];
+  document.getElementById('stb-ust').innerHTML = ustLines.map(l => `
+    <div class="stb-line${l.total?' total':''}">
+      <span class="lbl">${l.lbl}</span>
+      <span class="val ${l.cls||''}">${fmt(Math.abs(l.val))}${l.total && zahllast<0?' (Erstattung)':''}</span>
+    </div>
+  `).join('') + `
+    <div style="margin-top:12px;padding:10px 12px;background:rgba(239,68,68,0.08);border-radius:8px;font-size:12px;color:var(--text2)">
+      Fällig: ${getUstFaellig()}<br>
+      Bitte dem Steuerberater die Eingangsrechnungen mit MwSt-Ausweis übergeben.
+    </div>`;
+}
+
+function getUstFaellig() {
+  const period = stbMode === 'jahr' ? 'JAHR' : stbQ;
+  const map = {
+    Q1: '10. April ' + stbYear,
+    Q2: '10. Juli ' + stbYear,
+    Q3: '10. Oktober ' + stbYear,
+    Q4: '10. Januar ' + (stbYear+1),
+    JAHR: '31. Mai ' + (stbYear+1),
+  };
+  return map[period] || '–';
+}
+
+// ═══════════════════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════════════════
 document.getElementById('current-date').textContent =
@@ -902,6 +1236,7 @@ buildAngebote();
 buildRechnungen();
 buildTermine();
 buildGuv();
+buildStb();
 </script>
 </body>
 </html>

@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gewinn- und Verlustrechnung – SHK Betrieb 2025</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; background: #f0f2f5; color: #1a1a2e; }
+
+  .header {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    color: white; padding: 30px 40px; display: flex; justify-content: space-between; align-items: center;
+  }
+  .header h1 { font-size: 24px; font-weight: 700; }
+  .header .subtitle { font-size: 13px; color: #a0aec0; margin-top: 4px; }
+  .header .logo { text-align: right; }
+  .header .logo span { font-size: 32px; font-weight: 800; color: #4fc3f7; }
+  .header .logo small { display: block; font-size: 11px; color: #a0aec0; }
+
+  .container { max-width: 1300px; margin: 0 auto; padding: 24px; }
+
+  /* KPI Cards */
+  .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+  .kpi-card {
+    background: white; border-radius: 12px; padding: 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.07); border-left: 4px solid #4fc3f7;
+  }
+  .kpi-card.green { border-left-color: #48bb78; }
+  .kpi-card.red { border-left-color: #fc8181; }
+  .kpi-card.orange { border-left-color: #ed8936; }
+  .kpi-card .label { font-size: 12px; color: #718096; text-transform: uppercase; letter-spacing: 0.5px; }
+  .kpi-card .value { font-size: 26px; font-weight: 700; margin-top: 6px; }
+  .kpi-card .change { font-size: 12px; margin-top: 4px; }
+  .kpi-card .change.up { color: #48bb78; }
+  .kpi-card .change.down { color: #fc8181; }
+
+  /* Charts */
+  .chart-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; margin-bottom: 24px; }
+  .chart-card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.07); }
+  .chart-card h3 { font-size: 14px; font-weight: 600; color: #4a5568; margin-bottom: 16px; }
+
+  /* Tabs */
+  .tab-bar { display: flex; gap: 8px; margin-bottom: 16px; }
+  .tab { padding: 8px 18px; border-radius: 8px; border: none; cursor: pointer; font-size: 13px; font-weight: 600; background: white; color: #718096; box-shadow: 0 1px 4px rgba(0,0,0,0.08); transition: all 0.2s; }
+  .tab.active { background: #0f3460; color: white; }
+
+  /* Table */
+  .table-card { background: white; border-radius: 12px; padding: 0; box-shadow: 0 2px 8px rgba(0,0,0,0.07); overflow: hidden; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th {
+    background: #1a1a2e; color: white; padding: 10px 12px;
+    text-align: right; font-weight: 600; font-size: 12px;
+  }
+  thead th:first-child { text-align: left; }
+  tbody tr:hover { background: #f7fafc; }
+  tbody td { padding: 9px 12px; border-bottom: 1px solid #edf2f7; text-align: right; }
+  tbody td:first-child { text-align: left; font-weight: 500; }
+
+  .section-header td { background: #2d3748; color: white; font-weight: 700; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .subtotal td { background: #edf2f7; font-weight: 700; color: #2d3748; }
+  .total-row td { background: #0f3460; color: white; font-weight: 700; font-size: 14px; }
+  .group-row td:first-child { padding-left: 24px; color: #4a5568; font-size: 12px; }
+
+  .pos { color: #276749; font-weight: 600; }
+  .neg { color: #c53030; font-weight: 600; }
+  .neutral { color: #4a5568; }
+
+  /* Year selector */
+  .controls { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+  .badge { background: #ebf8ff; color: #2b6cb0; font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 20px; }
+
+  .footer { text-align: center; padding: 20px; font-size: 11px; color: #a0aec0; }
+
+  @media print {
+    body { background: white; }
+    .header { background: #1a1a2e !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .chart-grid { display: none; }
+    .tab-bar { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>Gewinn- und Verlustrechnung</h1>
+    <div class="subtitle">Sanitär · Heizung · Klima | Jahresvergleich 2025 vs. 2024</div>
+  </div>
+  <div class="logo">
+    <span>SHK</span>
+    <small>Musterbetrieb GmbH</small>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- KPI Cards -->
+  <div class="kpi-grid">
+    <div class="kpi-card">
+      <div class="label">Gesamtumsatz 2025</div>
+      <div class="value" id="kpi-umsatz">–</div>
+      <div class="change up" id="kpi-umsatz-change">–</div>
+    </div>
+    <div class="kpi-card green">
+      <div class="label">Rohertrag 2025</div>
+      <div class="value" id="kpi-rohertrag">–</div>
+      <div class="change" id="kpi-rohertrag-margin">–</div>
+    </div>
+    <div class="kpi-card orange">
+      <div class="label">EBIT 2025</div>
+      <div class="value" id="kpi-ebit">–</div>
+      <div class="change" id="kpi-ebit-margin">–</div>
+    </div>
+    <div class="kpi-card" id="kpi-jahres-card">
+      <div class="label">Jahresüberschuss 2025</div>
+      <div class="value" id="kpi-jahrsueberschuss">–</div>
+      <div class="change" id="kpi-jahrsueberschuss-change">–</div>
+    </div>
+  </div>
+
+  <!-- Charts -->
+  <div class="chart-grid">
+    <div class="chart-card">
+      <h3>Monatlicher Umsatz & Ergebnis – 2025 vs. 2024</h3>
+      <canvas id="chartMonthly" height="110"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>Kostenstruktur 2025</h3>
+      <canvas id="chartCosts" height="180"></canvas>
+    </div>
+  </div>
+
+  <!-- Table -->
+  <div class="controls">
+    <div class="tab-bar">
+      <button class="tab active" onclick="showView('jahr')">Jahresübersicht</button>
+      <button class="tab" onclick="showView('monat')">Monatlich</button>
+    </div>
+    <div>
+      <span class="badge">Alle Beträge in EUR (netto)</span>
+    </div>
+  </div>
+
+  <div class="table-card">
+    <div id="view-jahr"></div>
+    <div id="view-monat" style="display:none; overflow-x:auto;"></div>
+  </div>
+
+  <div class="footer">
+    Erstellt mit Claude Code · Beispieldaten · Alle Angaben ohne Gewähr · Stand: Juni 2026
+  </div>
+</div>
+
+<script>
+// ─────────────────────────────────────────────
+// DATEN (Beispielwerte für SHK-Betrieb)
+// ─────────────────────────────────────────────
+const MONATE = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
+
+const data = {
+  2025: {
+    einnahmen: {
+      sanitaer:       [18500,16200,22000,24500,26000,28500,29000,27000,25500,23000,20000,18000],
+      heizung:        [22000,19500,18000,14000,12000,10500,11000,12500,16000,20500,22000,24000],
+      klima:          [2000, 2200, 3500, 5500, 8000,11000,13500,12000, 7500, 4000, 2500, 2000],
+      wartung:        [4500, 4500, 4500, 4500, 4500, 4500, 4500, 4500, 4500, 4500, 4500, 4500],
+      notdienst:      [2500, 2200, 1800, 1500, 1500, 1600, 1800, 1700, 1600, 1800, 2200, 2800],
+    },
+    material:         [19800,17500,18200,18800,19600,20500,21200,19800,18400,18200,18400,19200],
+    personal:         [18500,18500,18500,18500,18500,18500,18500,18500,18500,18500,18500,18500],
+    fahrzeuge:        [2800, 2800, 2800, 2800, 2800, 2800, 2800, 2800, 2800, 2800, 2800, 2800],
+    werkzeug:         [600,  300,  800,  400,  500,  700,  600,  400,  300,  500,  400,  800],
+    buero:            [1200, 1200, 1200, 1200, 1200, 1200, 1200, 1200, 1200, 1200, 1200, 1200],
+    software:         [350,  350,  350,  350,  350,  350,  350,  350,  350,  350,  350,  350],
+    versicherung:     [1100, 0,    0,    1100, 0,    0,    1100, 0,    0,    1100, 0,    0   ],
+    steuerberater:    [0,    0,    800,  0,    0,    800,  0,    0,    800,  0,    0,    800 ],
+    marketing:        [400,  400,  600,  400,  400,  600,  400,  400,  400,  400,  400,  600],
+    sonstiges:        [800,  600,  700,  800,  750,  900,  800,  700,  650,  800,  750,  900],
+    zinsen:           [650,  650,  650,  650,  650,  650,  650,  650,  650,  650,  650,  650],
+    steuern:          [0,    0,    0,    0,    0,    2800, 0,    0,    0,    0,    0,    4200],
+  },
+  2024: {
+    einnahmen: {
+      sanitaer:       [16500,14800,19500,21500,23000,25500,26000,24500,22500,21000,18500,16500],
+      heizung:        [20500,18000,16500,12500,11000, 9500,10000,11500,14500,19000,20500,22500],
+      klima:          [1800, 1900, 3000, 4800, 7000, 9500,11800,10500, 6500, 3500, 2200, 1800],
+      wartung:        [4000, 4000, 4000, 4000, 4000, 4000, 4000, 4000, 4000, 4000, 4000, 4000],
+      notdienst:      [2200, 2000, 1600, 1400, 1400, 1500, 1600, 1500, 1500, 1700, 2000, 2500],
+    },
+    material:         [17800,15800,16500,17000,17800,18500,19200,17800,16600,16500,16800,17500],
+    personal:         [17500,17500,17500,17500,17500,17500,17500,17500,17500,17500,17500,17500],
+    fahrzeuge:        [2600, 2600, 2600, 2600, 2600, 2600, 2600, 2600, 2600, 2600, 2600, 2600],
+    werkzeug:         [500,  250,  700,  350,  450,  600,  500,  350,  250,  450,  350,  700],
+    buero:            [1100, 1100, 1100, 1100, 1100, 1100, 1100, 1100, 1100, 1100, 1100, 1100],
+    software:         [300,  300,  300,  300,  300,  300,  300,  300,  300,  300,  300,  300],
+    versicherung:     [1000, 0,    0,    1000, 0,    0,    1000, 0,    0,    1000, 0,    0   ],
+    steuerberater:    [0,    0,    750,  0,    0,    750,  0,    0,    750,  0,    0,    750 ],
+    marketing:        [350,  350,  550,  350,  350,  550,  350,  350,  350,  350,  350,  550],
+    sonstiges:        [700,  550,  600,  700,  680,  800,  720,  650,  580,  700,  680,  800],
+    zinsen:           [750,  750,  750,  750,  750,  750,  750,  750,  750,  750,  750,  750],
+    steuern:          [0,    0,    0,    0,    0,    2400, 0,    0,    0,    0,    0,    3600],
+  }
+};
+
+function sum(arr) { return arr.reduce((a,b) => a+b, 0); }
+function sumCat(cat, year) {
+  return Object.values(data[year].einnahmen[cat] ? {x: data[year].einnahmen[cat]} : {}).flat();
+}
+
+function getMonthlyEinnahmen(year, m) {
+  const e = data[year].einnahmen;
+  return e.sanitaer[m] + e.heizung[m] + e.klima[m] + e.wartung[m] + e.notdienst[m];
+}
+
+function getMonthlyRohertrag(year, m) {
+  return getMonthlyEinnahmen(year, m) - data[year].material[m];
+}
+
+function getMonthlyBetriebskosten(year, m) {
+  return data[year].personal[m] + data[year].fahrzeuge[m] + data[year].werkzeug[m] +
+         data[year].buero[m] + data[year].software[m] + data[year].versicherung[m] +
+         data[year].steuerberater[m] + data[year].marketing[m] + data[year].sonstiges[m];
+}
+
+function getMonthlyEBIT(year, m) {
+  return getMonthlyRohertrag(year, m) - getMonthlyBetriebskosten(year, m);
+}
+
+function getMonthlyErgebnis(year, m) {
+  return getMonthlyEBIT(year, m) - data[year].zinsen[m] - data[year].steuern[m];
+}
+
+function fmt(n) {
+  return n.toLocaleString('de-DE', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' €';
+}
+
+function fmtPct(n, total) {
+  return total === 0 ? '–' : (n/total*100).toFixed(1) + ' %';
+}
+
+function colorClass(n) {
+  if (n > 0) return 'pos';
+  if (n < 0) return 'neg';
+  return 'neutral';
+}
+
+// ─────────────────────────────────────────────
+// KPIs
+// ─────────────────────────────────────────────
+function buildKPIs() {
+  const u25 = MONATE.reduce((s,_,i) => s + getMonthlyEinnahmen(2025,i), 0);
+  const u24 = MONATE.reduce((s,_,i) => s + getMonthlyEinnahmen(2024,i), 0);
+  const r25 = MONATE.reduce((s,_,i) => s + getMonthlyRohertrag(2025,i), 0);
+  const e25 = MONATE.reduce((s,_,i) => s + getMonthlyEBIT(2025,i), 0);
+  const j25 = MONATE.reduce((s,_,i) => s + getMonthlyErgebnis(2025,i), 0);
+  const j24 = MONATE.reduce((s,_,i) => s + getMonthlyErgebnis(2024,i), 0);
+
+  document.getElementById('kpi-umsatz').textContent = fmt(u25);
+  document.getElementById('kpi-umsatz-change').textContent = '▲ +' + ((u25-u24)/u24*100).toFixed(1) + '% vs. 2024';
+  document.getElementById('kpi-rohertrag').textContent = fmt(r25);
+  document.getElementById('kpi-rohertrag-margin').textContent = 'Marge: ' + fmtPct(r25, u25);
+  document.getElementById('kpi-ebit').textContent = fmt(e25);
+  document.getElementById('kpi-ebit-margin').textContent = 'EBIT-Marge: ' + fmtPct(e25, u25);
+  document.getElementById('kpi-jahrsueberschuss').textContent = fmt(j25);
+  const diff = j25 - j24;
+  const el = document.getElementById('kpi-jahrsueberschuss-change');
+  el.textContent = (diff >= 0 ? '▲ +' : '▼ ') + fmt(diff) + ' vs. 2024';
+  el.className = 'change ' + (diff >= 0 ? 'up' : 'down');
+  if (j25 < 0) document.getElementById('kpi-jahres-card').classList.add('red');
+  else document.getElementById('kpi-jahres-card').classList.add('green');
+}
+
+// ─────────────────────────────────────────────
+// CHART: Monatlich
+// ─────────────────────────────────────────────
+function buildChartMonthly() {
+  const umsatz25 = MONATE.map((_,i) => getMonthlyEinnahmen(2025,i));
+  const umsatz24 = MONATE.map((_,i) => getMonthlyEinnahmen(2024,i));
+  const ergebnis25 = MONATE.map((_,i) => getMonthlyErgebnis(2025,i));
+
+  new Chart(document.getElementById('chartMonthly'), {
+    data: {
+      labels: MONATE,
+      datasets: [
+        { type:'bar', label:'Umsatz 2025', data: umsatz25, backgroundColor:'rgba(15,52,96,0.8)', yAxisID:'y' },
+        { type:'bar', label:'Umsatz 2024', data: umsatz24, backgroundColor:'rgba(79,195,247,0.5)', yAxisID:'y' },
+        { type:'line', label:'Ergebnis 2025', data: ergebnis25, borderColor:'#48bb78', backgroundColor:'transparent', borderWidth:2, pointRadius:4, yAxisID:'y2' },
+      ]
+    },
+    options: {
+      responsive:true, interaction:{mode:'index'},
+      scales: {
+        y: { position:'left', ticks:{callback:v=>v/1000+'k €'} },
+        y2: { position:'right', grid:{drawOnChartArea:false}, ticks:{callback:v=>v/1000+'k €'} }
+      },
+      plugins:{ legend:{position:'bottom', labels:{boxWidth:12,font:{size:11}}} }
+    }
+  });
+}
+
+// ─────────────────────────────────────────────
+// CHART: Kostenstruktur
+// ─────────────────────────────────────────────
+function buildChartCosts() {
+  const y = 2025;
+  const costs = [
+    { label:'Material', val: sum(data[y].material) },
+    { label:'Personal', val: sum(data[y].personal) },
+    { label:'Fahrzeuge', val: sum(data[y].fahrzeuge) },
+    { label:'Büro/Verw.', val: sum(data[y].buero) },
+    { label:'Versicherung', val: sum(data[y].versicherung) },
+    { label:'Marketing', val: sum(data[y].marketing) },
+    { label:'Sonstiges', val: sum(data[y].sonstiges) + sum(data[y].werkzeug) + sum(data[y].software) + sum(data[y].steuerberater) },
+  ];
+  new Chart(document.getElementById('chartCosts'), {
+    type:'doughnut',
+    data: {
+      labels: costs.map(c=>c.label),
+      datasets:[{ data: costs.map(c=>c.val),
+        backgroundColor:['#0f3460','#4fc3f7','#48bb78','#ed8936','#9f7aea','#fc8181','#a0aec0'],
+        borderWidth:2, borderColor:'white'
+      }]
+    },
+    options: {
+      plugins:{ legend:{position:'bottom', labels:{boxWidth:10,font:{size:11}}} },
+      cutout:'60%'
+    }
+  });
+}
+
+// ─────────────────────────────────────────────
+// TABLE: Jahresübersicht
+// ─────────────────────────────────────────────
+function buildJahresTable() {
+  function calcYear(year) {
+    const e = data[year].einnahmen;
+    const s = arr => sum(arr);
+    const einnahmen = {
+      sanitaer: s(e.sanitaer), heizung: s(e.heizung), klima: s(e.klima),
+      wartung: s(e.wartung), notdienst: s(e.notdienst)
+    };
+    const gesamt_ein = Object.values(einnahmen).reduce((a,b)=>a+b,0);
+    const material = s(data[year].material);
+    const rohertrag = gesamt_ein - material;
+    const personal = s(data[year].personal);
+    const fahrzeuge = s(data[year].fahrzeuge);
+    const werkzeug = s(data[year].werkzeug);
+    const buero = s(data[year].buero);
+    const software = s(data[year].software);
+    const versicherung = s(data[year].versicherung);
+    const stberater = s(data[year].steuerberater);
+    const marketing = s(data[year].marketing);
+    const sonstiges = s(data[year].sonstiges);
+    const betrieb = personal + fahrzeuge + werkzeug + buero + software + versicherung + stberater + marketing + sonstiges;
+    const ebit = rohertrag - betrieb;
+    const zinsen = s(data[year].zinsen);
+    const ebt = ebit - zinsen;
+    const steuern = s(data[year].steuern);
+    const jahrsueberschuss = ebt - steuern;
+    return { einnahmen, gesamt_ein, material, rohertrag, personal, fahrzeuge, werkzeug, buero, software, versicherung, stberater, marketing, sonstiges, betrieb, ebit, zinsen, ebt, steuern, jahrsueberschuss };
+  }
+
+  const y25 = calcYear(2025);
+  const y24 = calcYear(2024);
+
+  function row(label, v25, v24, cls='', indent=false) {
+    const diff = v25 - v24;
+    const diffPct = v24 !== 0 ? (diff/Math.abs(v24)*100).toFixed(1) : '–';
+    const diffClass = diff >= 0 ? 'pos' : 'neg';
+    const tdCls = cls ? ` class="${cls}"` : '';
+    const nameStyle = indent ? ' style="padding-left:28px;color:#4a5568;font-weight:400"' : '';
+    return `<tr${cls ? ` class="${cls}"` : ''}>
+      <td${nameStyle}>${label}</td>
+      <td>${fmt(v25)}</td>
+      <td>${fmt(v24)}</td>
+      <td class="${diffClass}">${diff >= 0 ? '+' : ''}${fmt(diff)}</td>
+      <td class="${diffClass}">${diff >= 0 ? '+' : ''}${diffPct} %</td>
+      <td>${fmtPct(v25, y25.gesamt_ein)}</td>
+    </tr>`;
+  }
+
+  function sectionHeader(label) {
+    return `<tr class="section-header"><td colspan="6">${label}</td></tr>`;
+  }
+
+  const html = `<table>
+    <thead>
+      <tr>
+        <th style="text-align:left;width:280px">Position</th>
+        <th>2025</th>
+        <th>2024</th>
+        <th>Abw. abs.</th>
+        <th>Abw. %</th>
+        <th>% Umsatz 2025</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${sectionHeader('UMSATZERLÖSE')}
+      ${row('Sanitär (Installation & Reparatur)', y25.einnahmen.sanitaer, y24.einnahmen.sanitaer, 'group-row', true)}
+      ${row('Heizung (Installation & Reparatur)', y25.einnahmen.heizung, y24.einnahmen.heizung, 'group-row', true)}
+      ${row('Klimaanlagen', y25.einnahmen.klima, y24.einnahmen.klima, 'group-row', true)}
+      ${row('Wartungsverträge', y25.einnahmen.wartung, y24.einnahmen.wartung, 'group-row', true)}
+      ${row('Notdienst', y25.einnahmen.notdienst, y24.einnahmen.notdienst, 'group-row', true)}
+      ${row('= GESAMTUMSATZ', y25.gesamt_ein, y24.gesamt_ein, 'subtotal')}
+
+      ${sectionHeader('MATERIALAUFWAND')}
+      ${row('Material & Wareneinsatz', -y25.material, -y24.material, 'group-row', true)}
+      ${row('= ROHERTRAG (Bruttogewinn)', y25.rohertrag, y24.rohertrag, 'subtotal')}
+
+      ${sectionHeader('BETRIEBSAUFWAND')}
+      ${row('Personalkosten (inkl. SV)', -y25.personal, -y24.personal, 'group-row', true)}
+      ${row('Fahrzeugkosten (Leasing/Kraftstoff)', -y25.fahrzeuge, -y24.fahrzeuge, 'group-row', true)}
+      ${row('Werkzeug & Maschinen', -y25.werkzeug, -y24.werkzeug, 'group-row', true)}
+      ${row('Büro & Verwaltung', -y25.buero, -y24.buero, 'group-row', true)}
+      ${row('Software & Tools', -y25.software, -y24.software, 'group-row', true)}
+      ${row('Versicherungen', -y25.versicherung, -y24.versicherung, 'group-row', true)}
+      ${row('Steuerberater / Rechtsberatung', -y25.stberater, -y24.stberater, 'group-row', true)}
+      ${row('Marketing & Werbung', -y25.marketing, -y24.marketing, 'group-row', true)}
+      ${row('Sonstige Betriebsausgaben', -y25.sonstiges, -y24.sonstiges, 'group-row', true)}
+      ${row('= GESAMT BETRIEBSAUFWAND', -y25.betrieb, -y24.betrieb, 'subtotal')}
+
+      ${row('= EBIT (Betriebsergebnis)', y25.ebit, y24.ebit, 'total-row')}
+
+      ${sectionHeader('FINANZERGEBNIS & STEUERN')}
+      ${row('Zinsaufwand (Kredite/Leasing)', -y25.zinsen, -y24.zinsen, 'group-row', true)}
+      ${row('= EBT (Ergebnis vor Steuern)', y25.ebt, y24.ebt, 'subtotal')}
+      ${row('Gewerbesteuer & Einkommensteuer', -y25.steuern, -y24.steuern, 'group-row', true)}
+
+      ${row('= JAHRESÜBERSCHUSS / -FEHLBETRAG', y25.jahrsueberschuss, y24.jahrsueberschuss, 'total-row')}
+    </tbody>
+  </table>`;
+
+  document.getElementById('view-jahr').innerHTML = html;
+}
+
+// ─────────────────────────────────────────────
+// TABLE: Monatlich
+// ─────────────────────────────────────────────
+function buildMonatTable() {
+  const rows = [
+    { label: 'Umsatz', fn: (y,m) => getMonthlyEinnahmen(y,m) },
+    { label: '– Material', fn: (y,m) => -data[y].material[m] },
+    { label: '= Rohertrag', fn: (y,m) => getMonthlyRohertrag(y,m), bold: true },
+    { label: '– Betriebskosten', fn: (y,m) => -getMonthlyBetriebskosten(y,m) },
+    { label: '= EBIT', fn: (y,m) => getMonthlyEBIT(y,m), bold: true },
+    { label: '– Zinsen & Steuern', fn: (y,m) => -(data[y].zinsen[m]+data[y].steuern[m]) },
+    { label: '= Ergebnis', fn: (y,m) => getMonthlyErgebnis(y,m), bold: true, color: true },
+  ];
+
+  let html = `<table style="min-width:1100px"><thead><tr>
+    <th style="text-align:left;width:160px">Position 2025</th>
+    ${MONATE.map(m=>`<th>${m}</th>`).join('')}
+    <th>Gesamt</th>
+  </tr></thead><tbody>`;
+
+  rows.forEach(r => {
+    const vals = MONATE.map((_,i) => r.fn(2025,i));
+    const total = vals.reduce((a,b)=>a+b,0);
+    const style = r.bold ? ' style="font-weight:700"' : '';
+    html += `<tr${r.bold ? ' class="subtotal"' : ''}>`;
+    html += `<td${style}>${r.label}</td>`;
+    vals.forEach(v => {
+      const cls = r.color ? colorClass(v) : '';
+      html += `<td class="${cls}"${style}>${(v/1000).toFixed(1)}k</td>`;
+    });
+    const cls = r.color ? colorClass(total) : '';
+    html += `<td class="${cls}"${style}>${fmt(total)}</td>`;
+    html += '</tr>';
+  });
+
+  html += '</tbody></table>';
+  document.getElementById('view-monat').innerHTML = html;
+}
+
+// ─────────────────────────────────────────────
+// VIEW SWITCHER
+// ─────────────────────────────────────────────
+function showView(name) {
+  document.getElementById('view-jahr').style.display = name === 'jahr' ? '' : 'none';
+  document.getElementById('view-monat').style.display = name === 'monat' ? '' : 'none';
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  event.target.classList.add('active');
+}
+
+// INIT
+buildKPIs();
+buildChartMonthly();
+buildChartCosts();
+buildJahresTable();
+buildMonatTable();
+</script>
+</body>
+</html>

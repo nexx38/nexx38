@@ -778,6 +778,115 @@ input[type=checkbox] {
   body { font-size: 12px; }
 }
 
+/* ── Mobile Responsive ───────────────────────────────── */
+@media (max-width: 768px) {
+
+  /* Header */
+  .brand-norm { display: none; }
+  .project-name-input { width: 160px; font-size: .85rem; }
+  .header-actions .btn span,
+  .header-actions .btn svg + * { display: none; }
+  .header-actions .btn { padding: 7px 10px; }
+
+  /* Nav tabs — scrollable */
+  .app-nav { overflow-x: auto; gap: 0; padding: 0 8px; flex-wrap: nowrap; }
+  .nav-tab  { padding: 12px 12px; font-size: .78rem; white-space: nowrap; flex-shrink: 0; }
+  .tab-number { width: 18px; height: 18px; font-size: .68rem; }
+  .nav-summary { display: none; }
+
+  /* Rooms — stack vertically */
+  .rooms-layout {
+    flex-direction: column;
+    height: auto;
+    min-height: calc(100vh - 110px);
+    overflow: visible;
+  }
+
+  .room-sidebar {
+    width: 100%;
+    height: auto;
+    max-height: 220px;
+    border-right: none;
+    border-bottom: 2px solid var(--border);
+    flex-shrink: 0;
+  }
+
+  .room-list {
+    max-height: 130px;
+  }
+
+  .room-detail {
+    flex: 1;
+    overflow-y: visible;
+    min-height: 0;
+  }
+
+  .room-editor { padding: 14px 16px; }
+
+  /* Result banner wraps on small screens */
+  .room-result-banner {
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 12px 14px;
+  }
+  .room-result-divider { display: none; }
+  .room-result-stat { min-width: 80px; }
+
+  /* Forms: single column on mobile */
+  .form-row   { grid-template-columns: 1fr; }
+  .form-row-3 { grid-template-columns: 1fr 1fr; }
+
+  /* Room editor header wraps */
+  .room-editor-header {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .room-editor-title { font-size: 1.1rem; }
+
+  /* Grid 2 → single column */
+  .grid-2 { grid-template-columns: 1fr; padding: 12px 16px; }
+
+  /* Content padding */
+  .content-header { padding: 20px 16px 0; }
+  .action-bar     { padding: 12px 16px 24px; }
+
+  /* Module grid */
+  .module-content { padding: 16px; }
+  .module-grid-3  { grid-template-columns: 1fr; }
+
+  /* Quote */
+  .quote-layout   { grid-template-columns: 1fr; }
+
+  /* CRM */
+  .crm-layout     { grid-template-columns: 1fr; }
+
+  /* Climate grid */
+  .climate-info-grid { grid-template-columns: 1fr 1fr; }
+
+  /* KPI */
+  .kpi-grid         { grid-template-columns: 1fr 1fr; padding: 12px 16px; }
+  .kpi-value        { font-size: 1.4rem; }
+
+  /* Results */
+  .results-grid     { grid-template-columns: 1fr; padding: 0 16px; }
+
+  /* HP card stats */
+  .hp-card-stats { gap: 8px; }
+  .hp-stat-val   { font-size: .9rem; }
+
+  /* Temp settings bar on mobile */
+  .temp-settings-bar { padding: 10px 14px; gap: 12px; }
+  .temp-settings-bar input { width: 55px; }
+}
+
+@media (max-width: 480px) {
+  .kpi-grid         { grid-template-columns: 1fr; }
+  .climate-info-grid { grid-template-columns: 1fr 1fr; }
+  .form-row-3       { grid-template-columns: 1fr; }
+  .room-result-stat-value { font-size: 1.05rem; }
+  .room-result-stat-label { font-size: .68rem; }
+}
+
 /* ── Scrollbar ───────────────────────────────────────── */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }

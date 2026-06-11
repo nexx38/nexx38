@@ -2917,8 +2917,9 @@ const Scanner = {
 
     const arTab = document.getElementById('scanTabAR');
     if (!arOk) {
-      arTab.disabled = true;
-      arTab.title = 'Erfordert Android Chrome + ARCore';
+      arTab.dataset.arUnsupported = 'true';
+      arTab.style.opacity = '0.45';
+      arTab.title = 'AR nicht verfügbar auf diesem Gerät';
     }
 
     this.switchMode(arOk ? 'ar' : (camOk ? 'camera' : 'file'));
@@ -2935,6 +2936,32 @@ const Scanner = {
   // ── Mode switching ─────────────────────────────────────
   async switchMode(mode) {
     if (this.s.mode === mode) return;
+
+    // If AR tab clicked but AR is not supported, show explanation panel
+    if (mode === 'ar') {
+      const arTab = document.getElementById('scanTabAR');
+      if (arTab?.dataset.arUnsupported === 'true') {
+        // Update tabs visually
+        document.querySelectorAll('.scanner-tab').forEach(t => t.classList.toggle('active', t.dataset.mode === 'ar'));
+        document.querySelectorAll('.scanner-panel').forEach(p => p.classList.remove('active'));
+        document.getElementById('scanPanel_ar').classList.add('active');
+        // Show explanation — don't start AR session
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+        const container = document.getElementById('arNotSupported');
+        const p = container?.querySelector('p');
+        if (p && isIOS) {
+          p.innerHTML = 'WebXR AR wird von Safari/iOS nicht unterstützt.<br><br>'
+            + '<strong>Beste Alternativen auf iPhone:</strong><br>'
+            + '• <em>Polycam</em> (App Store) → LiDAR-Scan → PLY exportieren → hier im Tab "Datei" importieren<br>'
+            + '• <em>RoomScan Pro</em> (App Store) → Grundriss messen<br><br>'
+            + 'Oder Maße manuell im <strong>Kamera-Tab</strong> eingeben.';
+        }
+        if (container) container.style.display = 'flex';
+        const viewport = document.getElementById('arViewport');
+        if (viewport) viewport.style.display = 'none';
+        return;
+      }
+    }
 
     // Stop previous mode
     this._stopAR();

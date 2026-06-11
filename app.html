@@ -2424,7 +2424,7 @@ input[type=checkbox] {
       <circle cx="12" cy="12" r="3"/><path d="M3 9a9 9 0 0 1 9-6 9 9 0 0 1 9 6M3 15a9 9 0 0 0 9 6 9 9 0 0 0 9-6"/>
       <line x1="3" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="21" y2="12"/>
     </svg>
-    <span class="scanner-title">Raum scannen &amp; ausmessen</span>
+    <span class="scanner-title">Raum scannen &amp; ausmessen <small style="opacity:.4;font-weight:400;font-size:.7rem;">v7</small></span>
     <button class="scanner-close" onclick="Scanner.close()">×</button>
   </div>
 
@@ -3050,6 +3050,14 @@ const Scanner = {
 
       session.addEventListener('select', () => this._onARSelect());
       session.addEventListener('end', () => { this.s.arActive = false; });
+
+      // Diagnostic: blend mode tells us how the camera feed is composited
+      console.info('XR blendMode:', session.environmentBlendMode);
+      const badge = document.getElementById('arModeBadge');
+      if (badge) {
+        badge.textContent = 'XR: ' + session.environmentBlendMode;
+        badge.style.display = 'flex';
+      }
 
       this._arLoop();
       this._updateARUI();

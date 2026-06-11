@@ -179,6 +179,14 @@ const Scanner = {
       session.addEventListener('select', () => this._onARSelect());
       session.addEventListener('end', () => { this.s.arActive = false; });
 
+      // Diagnostic: blend mode tells us how the camera feed is composited
+      console.info('XR blendMode:', session.environmentBlendMode);
+      const badge = document.getElementById('arModeBadge');
+      if (badge) {
+        badge.textContent = 'XR: ' + session.environmentBlendMode;
+        badge.style.display = 'flex';
+      }
+
       this._arLoop();
       this._updateARUI();
     } catch (err) {

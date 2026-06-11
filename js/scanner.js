@@ -470,21 +470,28 @@ const Scanner = {
 
   // ── Camera Photo Analysis (A4 Reference) ──────────────
   capturePhoto() {
-    const video  = document.getElementById('cameraVideo');
-    const canvas = document.getElementById('photoCanvas');
-    if (!video || !canvas || !video.videoWidth) {
-      App.toast?.('Kamera nicht bereit', 'error');
-      return;
-    }
-
-    const W = video.videoWidth, H = video.videoHeight;
-    canvas.width = W; canvas.height = H;
-    canvas.getContext('2d').drawImage(video, 0, 0);
-
+    const video    = document.getElementById('cameraVideo');
+    const canvas   = document.getElementById('photoCanvas');
     const statusEl = document.getElementById('photoStatus');
-    if (statusEl) { statusEl.style.display = 'block'; statusEl.textContent = 'Analysiere …'; }
 
-    // Run analysis asynchronously so UI updates first
+    const showStatus = (html) => {
+      if (!statusEl) return;
+      statusEl.style.display = 'block';
+      statusEl.innerHTML = html;
+    };
+
+    if (!video || !canvas) { showStatus('⚠️ Interner Fehler: Element fehlt.'); return; }
+    if (!this.s.cameraStream) { showStatus('⚠️ Kamera nicht aktiv – Kamera-Zugriff prüfen.'); return; }
+
+    showStatus('📷 Foto aufgenommen – analysiere …');
+
+    // videoWidth can be 0 on some mobile browsers even while streaming; fall back to element size
+    const W = video.videoWidth  || video.offsetWidth  || 1280;
+    const H = video.videoHeight || video.offsetHeight || 720;
+    canvas.width = W; canvas.height = H;
+    canvas.getContext('2d').drawImage(video, 0, 0, W, H);
+
+    // Run analysis after a short yield so "Analysiere…" renders
     setTimeout(() => {
       const result = this._analyzePhoto(canvas, W, H);
       this.s.detectedOpenings = result.openings;
@@ -493,19 +500,19 @@ const Scanner = {
       if (result.a4Found) {
         msg = '✅ A4-Referenz erkannt';
         if (result.openings.length > 0) {
-          msg += ` · ${result.openings.length} Öffnung${result.openings.length > 1 ? 'en' : ''} erkannt`;
-          msg += '<br>' + result.openings.map(o =>
-            `<span style="color:var(--text-muted)">${o.type === 'door' ? '🚪' : '🪟'} ` +
-            `${o.width.toFixed(2)} × ${o.height.toFixed(2)} m</span>`
-          ).join('  ');
+          msg += ` · ${result.openings.length} Öffnung${result.openings.length > 1 ? 'en' : ''} erkannt<br>` +
+            result.openings.map(o =>
+              `<span style="color:var(--text-muted)">${o.type === 'door' ? '🚪' : '🪟'} ` +
+              `${o.width.toFixed(2)} × ${o.height.toFixed(2)} m</span>`
+            ).join('  ');
         } else {
-          msg += ' · Keine Öffnungen erkannt – manuell unter Bauteile eintragen';
+          msg += '<br><span style="color:var(--text-muted)">Keine Öffnungen erkannt – manuell unter Bauteile eintragen</span>';
         }
       } else {
         msg = '⚠️ Kein A4-Blatt erkannt.<br>' +
               '<span style="color:var(--text-muted)">Weißes Blatt direkt gegen Wand halten, gut beleuchten.</span>';
       }
-      if (statusEl) statusEl.innerHTML = msg;
+      showStatus(msg);
     }, 30);
   },
 

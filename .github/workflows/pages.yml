@@ -2,7 +2,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: ["claude/heizlastberechnung-project-2dbLv", "main"]
+    branches: ["claude/heizlastberechnung-project-2dbLv", "claude/heating-report-camera-layout-02mu7l", "main"]
   workflow_dispatch:
 
 permissions:

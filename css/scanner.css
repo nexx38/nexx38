@@ -451,6 +451,32 @@
   flex-wrap: wrap;
   justify-content: center;
 }
+.lidar-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 420px;
+  text-align: left;
+}
+.lidar-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  font-size: .85rem;
+  line-height: 1.5;
+  color: rgba(255,255,255,.8);
+}
+.lidar-step-num {
+  flex-shrink: 0;
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  background: rgba(79,195,247,.15);
+  border: 1.5px solid #4FC3F7;
+  color: #4FC3F7;
+  font-size: .8rem;
+  font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+}
 .format-badge {
   background: rgba(79,195,247,.15);
   border: 1px solid rgba(79,195,247,.3);

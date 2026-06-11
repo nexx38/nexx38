@@ -626,19 +626,16 @@
       <circle cx="12" cy="12" r="3"/><path d="M3 9a9 9 0 0 1 9-6 9 9 0 0 1 9 6M3 15a9 9 0 0 0 9 6 9 9 0 0 0 9-6"/>
       <line x1="3" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="21" y2="12"/>
     </svg>
-    <span class="scanner-title">Raum scannen &amp; ausmessen <small style="opacity:.4;font-weight:400;font-size:.7rem;">v7</small></span>
+    <span class="scanner-title">Raum scannen &amp; ausmessen <small style="opacity:.4;font-weight:400;font-size:.7rem;">v8</small></span>
     <button class="scanner-close" onclick="Scanner.close()">×</button>
   </div>
 
   <div class="scanner-tabs">
-    <button class="scanner-tab" id="scanTabAR" data-mode="ar" onclick="Scanner.switchMode('ar')">
-      <div class="tab-dot"></div> AR-Modus
+    <button class="scanner-tab" data-mode="file" onclick="Scanner.switchMode('file')">
+      📱 LiDAR-Scan
     </button>
     <button class="scanner-tab" data-mode="camera" onclick="Scanner.switchMode('camera')">
-      📷 Kamera
-    </button>
-    <button class="scanner-tab" data-mode="file" onclick="Scanner.switchMode('file')">
-      📂 Datei (PLY/XYZ)
+      📷 Kamera-Messung
     </button>
   </div>
 
@@ -701,62 +698,6 @@
       <div class="meas-foot">
         <button class="meas-btn-cancel" onclick="Scanner.stopMeasure()">✕ Abbrechen</button>
         <button class="meas-btn-capture" onclick="Scanner.captureMeasure()">📏 Erfassen</button>
-      </div>
-    </div>
-
-    <!-- ── AR Panel ──────────────────────────────────────── -->
-    <div id="scanPanel_ar" class="scanner-panel">
-      <div id="arNotSupported" class="ar-not-supported" style="display:none;">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-          <circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
-        </svg>
-        <h3>AR nicht verfügbar</h3>
-        <p id="arNotSupportedMsg">WebXR AR erfordert <strong>Google Chrome</strong> + <strong>Google Play-Dienste für AR</strong> (ARCore).<br><br>
-        1. Öffne den <strong>Play Store</strong> → suche <em>"Google Play-Dienste für AR"</em> → installieren/aktualisieren<br>
-        2. Seite in <strong>Chrome</strong> (nicht Honor-Browser) öffnen<br>
-        3. Dann nochmal versuchen</p>
-        <button class="btn-ar-action primary" onclick="Scanner.switchMode('camera')">📷 Kamera-Modus</button>
-      </div>
-
-      <div id="arViewport" class="ar-viewport">
-        <canvas id="arCanvas"></canvas>
-        <div id="arOverlayUI" class="ar-overlay-ui">
-          <!-- 2D drawing layer (lines, dots, progress ring) -->
-          <canvas id="arDrawCanvas" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;"></canvas>
-          <!-- Auto-scan badge (hidden until plane-detection activates) -->
-          <div id="arModeBadge" class="ar-mode-badge" style="display:none;"></div>
-          <!-- Step tracker (manual mode only) -->
-          <div id="arSteps" class="ar-steps">
-            <div class="ar-step active" id="arStep1">1</div>
-            <div class="ar-step" id="arStep2">2</div>
-            <div class="ar-step" id="arStep3">3</div>
-            <div class="ar-step" id="arStep4">4</div>
-          </div>
-          <!-- Crosshair center -->
-          <div class="ar-crosshair" id="arCrosshair">
-            <div class="crosshair-ring"></div>
-            <div class="crosshair-dot"></div>
-          </div>
-          <!-- Instruction bottom -->
-          <div class="ar-instruction" id="arInstruction">
-            Richte die Kamera auf eine Bodenecke des Raums und tippe
-          </div>
-        </div>
-      </div>
-
-      <div class="ar-bottom">
-        <div class="ar-stats">
-          <div class="ar-stat"><div class="ar-stat-val" id="arStatW">—</div><div class="ar-stat-lbl">Breite</div></div>
-          <div class="ar-stat"><div class="ar-stat-val" id="arStatD">—</div><div class="ar-stat-lbl">Tiefe</div></div>
-          <div class="ar-stat"><div class="ar-stat-val" id="arStatA">—</div><div class="ar-stat-lbl">Fläche</div></div>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
-          <label style="font-size:.75rem;color:rgba(255,255,255,.5)">Höhe m</label>
-          <input type="number" id="arHeightInput" value="2.50" step="0.05" min="1" max="6"
-            style="width:70px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);border-radius:6px;color:#fff;padding:6px 8px;font-size:.9rem;font-family:inherit;">
-        </div>
-        <button class="btn-ar-action" id="arUndoBtn" disabled onclick="Scanner.arUndo()">↩ Rückgängig</button>
-        <button class="btn-ar-action primary" id="arConfirmBtn" disabled onclick="Scanner.arConfirm()">✓ Bestätigen</button>
       </div>
     </div>
 
@@ -831,21 +772,34 @@
     <div id="scanPanel_file" class="scanner-panel">
       <div class="file-panel-inner">
 
-        <!-- Upload area -->
+        <!-- Upload area with iPhone/iPad LiDAR workflow -->
         <div id="fileDropZone" class="file-upload-area">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-            <polyline points="17 8 12 3 7 8"/>
-            <line x1="12" y1="3" x2="12" y2="15"/>
-          </svg>
-          <h3>Punktwolke importieren</h3>
-          <p>Ziehe eine Datei hier hinein oder klicke zum Auswählen.<br>
-          Exportiere aus: <strong>Polycam, RoomScan Pro, Canvas, Matterport</strong></p>
+          <h3>📱 LiDAR-Scan mit iPhone / iPad</h3>
+          <div class="lidar-steps">
+            <div class="lidar-step">
+              <span class="lidar-step-num">1</span>
+              <div><strong>Scaniverse</strong> aus dem App Store laden (kostenlos)<br>
+              <a href="https://apps.apple.com/de/app/scaniverse-3d-scanner/id1541433223" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:#4FC3F7;">→ Zum App Store</a></div>
+            </div>
+            <div class="lidar-step">
+              <span class="lidar-step-num">2</span>
+              <div>Raum scannen: App öffnen → <strong>＋ Neuer Scan</strong> → langsam durch den Raum gehen, alle Wände erfassen</div>
+            </div>
+            <div class="lidar-step">
+              <span class="lidar-step-num">3</span>
+              <div>Exportieren: <strong>Teilen → Export → PLY</strong> → in Dateien sichern</div>
+            </div>
+            <div class="lidar-step">
+              <span class="lidar-step-num">4</span>
+              <div><strong>Hier antippen</strong> und die PLY-Datei auswählen — Maße, Fenster und Türen werden automatisch erkannt</div>
+            </div>
+          </div>
           <div class="format-badges">
             <span class="format-badge">.PLY</span>
             <span class="format-badge">.XYZ</span>
             <span class="format-badge">.OBJ</span>
           </div>
+          <p style="font-size:.75rem;opacity:.6;">LiDAR-Sensor: iPhone 12 Pro oder neuer (Pro-Modelle), iPad Pro ab 2020.<br>Ohne LiDAR: Tab „Kamera-Messung" verwenden.</p>
           <input type="file" id="fileInput" accept=".ply,.xyz,.obj">
         </div>
 

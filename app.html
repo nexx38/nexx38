@@ -1356,6 +1356,32 @@ input[type=checkbox] {
   flex-wrap: wrap;
   justify-content: center;
 }
+.lidar-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 420px;
+  text-align: left;
+}
+.lidar-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  font-size: .85rem;
+  line-height: 1.5;
+  color: rgba(255,255,255,.8);
+}
+.lidar-step-num {
+  flex-shrink: 0;
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  background: rgba(79,195,247,.15);
+  border: 1.5px solid #4FC3F7;
+  color: #4FC3F7;
+  font-size: .8rem;
+  font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+}
 .format-badge {
   background: rgba(79,195,247,.15);
   border: 1px solid rgba(79,195,247,.3);
@@ -2616,19 +2642,16 @@ input[type=checkbox] {
       <circle cx="12" cy="12" r="3"/><path d="M3 9a9 9 0 0 1 9-6 9 9 0 0 1 9 6M3 15a9 9 0 0 0 9 6 9 9 0 0 0 9-6"/>
       <line x1="3" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="21" y2="12"/>
     </svg>
-    <span class="scanner-title">Raum scannen &amp; ausmessen <small style="opacity:.4;font-weight:400;font-size:.7rem;">v7</small></span>
+    <span class="scanner-title">Raum scannen &amp; ausmessen <small style="opacity:.4;font-weight:400;font-size:.7rem;">v8</small></span>
     <button class="scanner-close" onclick="Scanner.close()">×</button>
   </div>
 
   <div class="scanner-tabs">
-    <button class="scanner-tab" id="scanTabAR" data-mode="ar" onclick="Scanner.switchMode('ar')">
-      <div class="tab-dot"></div> AR-Modus
+    <button class="scanner-tab" data-mode="file" onclick="Scanner.switchMode('file')">
+      📱 LiDAR-Scan
     </button>
     <button class="scanner-tab" data-mode="camera" onclick="Scanner.switchMode('camera')">
-      📷 Kamera
-    </button>
-    <button class="scanner-tab" data-mode="file" onclick="Scanner.switchMode('file')">
-      📂 Datei (PLY/XYZ)
+      📷 Kamera-Messung
     </button>
   </div>
 
@@ -2691,62 +2714,6 @@ input[type=checkbox] {
       <div class="meas-foot">
         <button class="meas-btn-cancel" onclick="Scanner.stopMeasure()">✕ Abbrechen</button>
         <button class="meas-btn-capture" onclick="Scanner.captureMeasure()">📏 Erfassen</button>
-      </div>
-    </div>
-
-    <!-- ── AR Panel ──────────────────────────────────────── -->
-    <div id="scanPanel_ar" class="scanner-panel">
-      <div id="arNotSupported" class="ar-not-supported" style="display:none;">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-          <circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
-        </svg>
-        <h3>AR nicht verfügbar</h3>
-        <p id="arNotSupportedMsg">WebXR AR erfordert <strong>Google Chrome</strong> + <strong>Google Play-Dienste für AR</strong> (ARCore).<br><br>
-        1. Öffne den <strong>Play Store</strong> → suche <em>"Google Play-Dienste für AR"</em> → installieren/aktualisieren<br>
-        2. Seite in <strong>Chrome</strong> (nicht Honor-Browser) öffnen<br>
-        3. Dann nochmal versuchen</p>
-        <button class="btn-ar-action primary" onclick="Scanner.switchMode('camera')">📷 Kamera-Modus</button>
-      </div>
-
-      <div id="arViewport" class="ar-viewport">
-        <canvas id="arCanvas"></canvas>
-        <div id="arOverlayUI" class="ar-overlay-ui">
-          <!-- 2D drawing layer (lines, dots, progress ring) -->
-          <canvas id="arDrawCanvas" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;"></canvas>
-          <!-- Auto-scan badge (hidden until plane-detection activates) -->
-          <div id="arModeBadge" class="ar-mode-badge" style="display:none;"></div>
-          <!-- Step tracker (manual mode only) -->
-          <div id="arSteps" class="ar-steps">
-            <div class="ar-step active" id="arStep1">1</div>
-            <div class="ar-step" id="arStep2">2</div>
-            <div class="ar-step" id="arStep3">3</div>
-            <div class="ar-step" id="arStep4">4</div>
-          </div>
-          <!-- Crosshair center -->
-          <div class="ar-crosshair" id="arCrosshair">
-            <div class="crosshair-ring"></div>
-            <div class="crosshair-dot"></div>
-          </div>
-          <!-- Instruction bottom -->
-          <div class="ar-instruction" id="arInstruction">
-            Richte die Kamera auf eine Bodenecke des Raums und tippe
-          </div>
-        </div>
-      </div>
-
-      <div class="ar-bottom">
-        <div class="ar-stats">
-          <div class="ar-stat"><div class="ar-stat-val" id="arStatW">—</div><div class="ar-stat-lbl">Breite</div></div>
-          <div class="ar-stat"><div class="ar-stat-val" id="arStatD">—</div><div class="ar-stat-lbl">Tiefe</div></div>
-          <div class="ar-stat"><div class="ar-stat-val" id="arStatA">—</div><div class="ar-stat-lbl">Fläche</div></div>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
-          <label style="font-size:.75rem;color:rgba(255,255,255,.5)">Höhe m</label>
-          <input type="number" id="arHeightInput" value="2.50" step="0.05" min="1" max="6"
-            style="width:70px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);border-radius:6px;color:#fff;padding:6px 8px;font-size:.9rem;font-family:inherit;">
-        </div>
-        <button class="btn-ar-action" id="arUndoBtn" disabled onclick="Scanner.arUndo()">↩ Rückgängig</button>
-        <button class="btn-ar-action primary" id="arConfirmBtn" disabled onclick="Scanner.arConfirm()">✓ Bestätigen</button>
       </div>
     </div>
 
@@ -2821,21 +2788,34 @@ input[type=checkbox] {
     <div id="scanPanel_file" class="scanner-panel">
       <div class="file-panel-inner">
 
-        <!-- Upload area -->
+        <!-- Upload area with iPhone/iPad LiDAR workflow -->
         <div id="fileDropZone" class="file-upload-area">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-            <polyline points="17 8 12 3 7 8"/>
-            <line x1="12" y1="3" x2="12" y2="15"/>
-          </svg>
-          <h3>Punktwolke importieren</h3>
-          <p>Ziehe eine Datei hier hinein oder klicke zum Auswählen.<br>
-          Exportiere aus: <strong>Polycam, RoomScan Pro, Canvas, Matterport</strong></p>
+          <h3>📱 LiDAR-Scan mit iPhone / iPad</h3>
+          <div class="lidar-steps">
+            <div class="lidar-step">
+              <span class="lidar-step-num">1</span>
+              <div><strong>Scaniverse</strong> aus dem App Store laden (kostenlos)<br>
+              <a href="https://apps.apple.com/de/app/scaniverse-3d-scanner/id1541433223" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:#4FC3F7;">→ Zum App Store</a></div>
+            </div>
+            <div class="lidar-step">
+              <span class="lidar-step-num">2</span>
+              <div>Raum scannen: App öffnen → <strong>＋ Neuer Scan</strong> → langsam durch den Raum gehen, alle Wände erfassen</div>
+            </div>
+            <div class="lidar-step">
+              <span class="lidar-step-num">3</span>
+              <div>Exportieren: <strong>Teilen → Export → PLY</strong> → in Dateien sichern</div>
+            </div>
+            <div class="lidar-step">
+              <span class="lidar-step-num">4</span>
+              <div><strong>Hier antippen</strong> und die PLY-Datei auswählen — Maße, Fenster und Türen werden automatisch erkannt</div>
+            </div>
+          </div>
           <div class="format-badges">
             <span class="format-badge">.PLY</span>
             <span class="format-badge">.XYZ</span>
             <span class="format-badge">.OBJ</span>
           </div>
+          <p style="font-size:.75rem;opacity:.6;">LiDAR-Sensor: iPhone 12 Pro oder neuer (Pro-Modelle), iPad Pro ab 2020.<br>Ohne LiDAR: Tab „Kamera-Messung" verwenden.</p>
           <input type="file" id="fileInput" accept=".ply,.xyz,.obj">
         </div>
 
@@ -3142,62 +3122,42 @@ const HLB_CALC = {
 };
 
 /* ────────────────────────────────────────────────────────
-   HeizlastProfi — LiDAR / AR Room Scanner
+   HeizlastProfi — Room Scanner (iPhone / iPad fokussiert)
    Modes:
-     1. AR     — WebXR immersive-ar + hit-testing (Android Chrome)
-     2. Camera — camera preview + guided manual entry
-     3. File   — PLY / XYZ / OBJ point cloud import
+     1. File   — LiDAR-Scan via Scaniverse → PLY/XYZ/OBJ Import
+     2. Camera — Kamera-Vorschau + Sensor-Messung / manuelle Eingabe
    ──────────────────────────────────────────────────────── */
 
 const Scanner = {
 
   // ── State ──────────────────────────────────────────────
   s: {
-    mode: null,          // 'ar' | 'camera' | 'file'
+    mode: null,          // 'file' | 'camera'
     roomId: null,
-    xrSession: null,
-    hitTestSource: null,
-    refSpace: null,
-    viewerSpace: null,
     cameraStream: null,
-    floorPoints: [],     // [{x,y,z}]  world-space floor corners (manual mode)
-    lastHitPos: null,    // current crosshair position
-    viewInfo: null,      // {viewMatrix, projMatrix, viewport} for projection
     result: { width: 0, depth: 0, height: 2.50, area: 0 },
     pcPoints: null,      // parsed point cloud [{x,y,z}]
     pcBounds: null,
     pcRotX: 0.4,
     pcRotY: 0,
     pcDragStart: null,
-    arActive: false,
     animFrame: null,
-    planeDetection: false,  // true when WebXR plane-detection is active
-    scanProgress: 0,        // 0–1 floor scan coverage
   },
 
   // ── Open / Close ───────────────────────────────────────
   async open(roomId) {
     this.s.roomId = roomId;
-    this.s.floorPoints = [];
     this.s.result = { width: 0, depth: 0, height: 2.50, area: 0 };
-    this.s.planeDetection = false;
-    this.s.scanProgress   = 0;
     document.getElementById('scannerOverlay').classList.add('active');
 
-    // Detect support
-    const arOk = await this._checkAR();
-    const camOk = !!(navigator.mediaDevices?.getUserMedia);
+    // iPad mit Desktop-UA meldet sich als MacIntel mit Touchscreen
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent)
+      || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
-    const arTab = document.getElementById('scanTabAR');
-    if (!arOk) {
-      arTab.dataset.arUnsupported = 'true';
-    }
-
-    this.switchMode(arOk ? 'ar' : (camOk ? 'camera' : 'file'));
+    this.switchMode(isIOS ? 'file' : 'camera');
   },
 
   close() {
-    this._stopAR();
     this._stopCamera();
     this.stopMeasure();
     if (this.s.animFrame) { cancelAnimationFrame(this.s.animFrame); this.s.animFrame = null; }
@@ -3209,50 +3169,9 @@ const Scanner = {
   async switchMode(mode) {
     if (this.s.mode === mode) return;
 
-    // If AR tab clicked but AR is not supported, show explanation panel
-    if (mode === 'ar') {
-      const arTab = document.getElementById('scanTabAR');
-      if (arTab?.dataset.arUnsupported === 'true') {
-        // Update tabs visually
-        document.querySelectorAll('.scanner-tab').forEach(t => t.classList.toggle('active', t.dataset.mode === 'ar'));
-        document.querySelectorAll('.scanner-panel').forEach(p => p.classList.remove('active'));
-        document.getElementById('scanPanel_ar').classList.add('active');
-        // Show explanation — don't start AR session
-        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-        const container = document.getElementById('arNotSupported');
-        const p = container?.querySelector('p');
-        if (p) {
-          p.innerHTML = isIOS
-            ? 'WebXR AR wird von Safari/iOS nicht unterstützt.<br><br>'
-              + '<strong>Beste Alternativen auf iPhone:</strong><br>'
-              + '• <em>Scaniverse</em> (App Store, kostenlos) → LiDAR-Scan → PLY exportieren → Tab "Datei"<br>'
-              + '• Maße manuell im <strong>Kamera-Tab</strong> eingeben.'
-            : 'AR benötigt <strong>Google Chrome</strong> + <strong>Google Play-Dienste für AR</strong>.<br><br>'
-              + '1. Stelle sicher, dass du <strong>Google Chrome</strong> verwendest (nicht den Gerätebrowser)<br>'
-              + '2. Öffne den Play Store → suche <em>"Google Play-Dienste für AR"</em> → aktualisieren<br>'
-              + '3. Dann nochmal versuchen';
-        }
-        if (container) container.style.display = 'flex';
-        const viewport = document.getElementById('arViewport');
-        if (viewport) viewport.style.display = 'none';
-        return;
-      }
-    }
-
-    // Stop previous mode
-    this._stopAR();
     this._stopCamera();
-
+    this.stopMeasure();
     this.s.mode = mode;
-    this.s.floorPoints    = [];
-    this.s.planeDetection = false;
-    this.s.scanProgress   = 0;
-
-    // Reset auto-scan badge
-    const badge = document.getElementById('arModeBadge');
-    const steps = document.getElementById('arSteps');
-    if (badge) badge.style.display = 'none';
-    if (steps) steps.style.display = 'flex';
 
     // Update tabs
     document.querySelectorAll('.scanner-tab').forEach(t => t.classList.toggle('active', t.dataset.mode === mode));
@@ -3261,487 +3180,8 @@ const Scanner = {
     document.querySelectorAll('.scanner-panel').forEach(p => p.classList.remove('active'));
     document.getElementById('scanPanel_' + mode).classList.add('active');
 
-    if (mode === 'ar')     await this._startAR();
     if (mode === 'camera') await this._startCamera();
     if (mode === 'file')   this._setupFilePanel();
-  },
-
-  // ── AR Mode ────────────────────────────────────────────
-  async _checkAR() {
-    try {
-      return navigator.xr
-        ? await navigator.xr.isSessionSupported('immersive-ar')
-        : false;
-    } catch { return false; }
-  },
-
-  async _startAR() {
-    const container = document.getElementById('arNotSupported');
-    const viewport  = document.getElementById('arViewport');
-
-    const ok = await this._checkAR();
-    if (!ok) {
-      container.style.display = 'flex';
-      viewport.style.display  = 'none';
-      return;
-    }
-    container.style.display = 'none';
-    viewport.style.display  = 'block';
-
-    try {
-      const session = await navigator.xr.requestSession('immersive-ar', {
-        requiredFeatures: [],
-        optionalFeatures: ['hit-testing', 'dom-overlay', 'plane-detection'],
-        domOverlay: { root: document.getElementById('arOverlayUI') },
-      });
-      this.s.xrSession = session;
-      this.s.arActive  = true;
-      this.s.planeDetection = false;
-      this.s.scanProgress   = 0;
-      this.s.hitTestingActive = false;
-
-      this.s.refSpace    = await session.requestReferenceSpace('local');
-      this.s.viewerSpace = await session.requestReferenceSpace('viewer');
-
-      // hit-testing is optional — only use if granted
-      try {
-        this.s.hitTestSource = await session.requestHitTestSource({ space: this.s.viewerSpace });
-        this.s.hitTestingActive = true;
-      } catch {
-        this.s.hitTestSource = null;
-        this.s.hitTestingActive = false;
-      }
-
-      // WebGL context drives the XR layer; camera feed is composited behind it,
-      // so the framebuffer must be cleared to transparent every frame
-      const canvas = document.getElementById('arCanvas');
-      const gl = canvas.getContext('webgl', { xrCompatible: true, alpha: true });
-      await gl.makeXRCompatible?.();
-      this.s.gl = gl;
-      session.updateRenderState({ baseLayer: new XRWebGLLayer(session, gl, { alpha: true }) });
-
-      session.addEventListener('select', () => this._onARSelect());
-      session.addEventListener('end', () => { this.s.arActive = false; });
-
-      // Diagnostic: blend mode tells us how the camera feed is composited
-      console.info('XR blendMode:', session.environmentBlendMode);
-      const badge = document.getElementById('arModeBadge');
-      if (badge) {
-        badge.textContent = 'XR: ' + session.environmentBlendMode;
-        badge.style.display = 'flex';
-      }
-
-      this._arLoop();
-      this._updateARUI();
-    } catch (err) {
-      console.warn('AR session failed:', err);
-      // Show error in AR panel instead of silent fallback
-      const msg = err?.message || String(err);
-      const isARCoreGone = msg.includes('NOT_SUPPORTED') || msg.includes('NO_DEVICE_SUPPORT') || msg.includes('FAILED_TO_CREATE');
-      const p = container.querySelector('p');
-      if (p) {
-        p.innerHTML = isARCoreGone
-          ? 'ARCore konnte nicht starten.<br><strong>Lösung:</strong> Im Play Store <em>"Google Play-Dienste für AR"</em> installieren oder aktualisieren, dann nochmal versuchen.'
-          : `AR-Session fehlgeschlagen.<br><small style="opacity:.7">${msg}</small><br><br>Bitte <strong>Google Chrome</strong> verwenden und <em>"Google Play-Dienste für AR"</em> im Play Store aktualisieren.`;
-      }
-      container.style.display = 'flex';
-      viewport.style.display  = 'none';
-    }
-  },
-
-  _arLoop() {
-    if (!this.s.xrSession || !this.s.arActive) return;
-    this.s.xrSession.requestAnimationFrame((time, frame) => {
-      this._onARFrame(frame);
-      if (this.s.arActive) this._arLoop();
-    });
-  },
-
-  _onARFrame(frame) {
-    const session = this.s.xrSession;
-    if (!session) return;
-
-    // Clear the XR framebuffer to fully transparent so the camera feed shows through
-    const layer = session.renderState.baseLayer;
-    const gl = this.s.gl;
-    if (layer && gl) {
-      gl.bindFramebuffer(gl.FRAMEBUFFER, layer.framebuffer);
-      gl.clearColor(0, 0, 0, 0);
-      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-    }
-
-    // 2D overlay drawing happens on a separate canvas inside the DOM overlay
-    // (arCanvas already holds the WebGL context and cannot also provide a 2D one)
-    const canvas = document.getElementById('arDrawCanvas');
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    canvas.width  = canvas.clientWidth  || window.innerWidth;
-    canvas.height = canvas.clientHeight || window.innerHeight;
-
-    // Store viewer pose for screen-space projection
-    const viewerPose = frame.getViewerPose(this.s.refSpace);
-    if (viewerPose) {
-      const view = viewerPose.views[0];
-      this.s.viewInfo = {
-        viewMatrix: view.transform.inverse.matrix,
-        projMatrix: view.projectionMatrix,
-        w: canvas.width,
-        h: canvas.height,
-      };
-    }
-
-    // Hit-testing (optional — only when available)
-    const hits = this.s.hitTestSource ? frame.getHitTestResults(this.s.hitTestSource) : [];
-
-    if (hits.length > 0) {
-      const pose = hits[0].getPose(this.s.refSpace);
-      this.s.lastHitPos = { ...pose.transform.position };
-      this._moveCrosshair(true);
-    } else {
-      this._moveCrosshair(false);
-    }
-
-    // Auto plane detection — updates dimensions without user tapping
-    if (frame.detectedPlanes) this._processPlanes(frame);
-
-    // Draw overlay
-    this._drawAROverlay(ctx, canvas.width, canvas.height);
-  },
-
-  _processPlanes(frame) {
-    let best = null;
-    let bestArea = 0;
-
-    for (const plane of frame.detectedPlanes) {
-      if (plane.orientation !== 'horizontal') continue;
-      const pose = frame.getPose(plane.planeSpace, this.s.refSpace);
-      if (!pose) continue;
-
-      // Skip planes significantly above origin (ceiling)
-      if (pose.transform.position.y > 0.4) continue;
-
-      const poly = plane.polygon;
-      const xs = poly.map(p => p.x);
-      const zs = poly.map(p => p.z);
-      const bw = Math.max(...xs) - Math.min(...xs);
-      const bd = Math.max(...zs) - Math.min(...zs);
-
-      // Shoelace polygon area
-      let area = 0;
-      for (let i = 0; i < poly.length; i++) {
-        const j = (i + 1) % poly.length;
-        area += poly[i].x * poly[j].z - poly[j].x * poly[i].z;
-      }
-      area = Math.abs(area) / 2;
-
-      if (area > bestArea) { bestArea = area; best = { w: bw, d: bd, area }; }
-    }
-
-    if (!best || best.area < 0.3) return;
-
-    // First plane detected — switch UI to auto mode
-    if (!this.s.planeDetection) {
-      this.s.planeDetection = true;
-      this._updateARModeUI();
-    }
-
-    this.s.result.width = +Math.max(best.w, 0.5).toFixed(2);
-    this.s.result.depth = +Math.max(best.d, 0.5).toFixed(2);
-    this.s.result.area  = +best.area.toFixed(2);
-    this.s.scanProgress = Math.min(best.area / 20, 1);
-
-    this._updateARUI();
-
-    const btn = document.getElementById('arConfirmBtn');
-    if (btn && best.area >= 2) btn.disabled = false;
-  },
-
-  _updateARModeUI() {
-    const badge = document.getElementById('arModeBadge');
-    const steps = document.getElementById('arSteps');
-    const instr = document.getElementById('arInstruction');
-    if (badge) { badge.textContent = '🔍 Auto-Scan aktiv'; badge.style.display = 'flex'; }
-    if (steps) steps.style.display = 'none';
-    if (instr) instr.textContent = 'Kamera langsam über den Boden schwenken …';
-  },
-
-  _onARSelect() {
-    // In auto-plane mode tapping is ignored — dimensions come from detected planes
-    if (this.s.planeDetection) return;
-
-    if (!this.s.lastHitPos) return;
-    const pts = this.s.floorPoints;
-    if (pts.length >= 4) return;
-
-    pts.push({ ...this.s.lastHitPos });
-    this._calcARDimensions();
-    this._updateARUI();
-  },
-
-  _drawAROverlay(ctx, w, h) {
-    ctx.clearRect(0, 0, w, h);
-    if (!this.s.viewInfo) return;
-
-    // Auto-scan mode: draw progress ring instead of corner dots
-    if (this.s.planeDetection) {
-      const cx = w / 2, cy = h / 2;
-      const r  = Math.min(w, h) * 0.09;
-      // Track ring background
-      ctx.beginPath();
-      ctx.arc(cx, cy, r, 0, Math.PI * 2);
-      ctx.strokeStyle = 'rgba(255,255,255,0.15)';
-      ctx.lineWidth = 5;
-      ctx.stroke();
-      // Progress arc
-      if (this.s.scanProgress > 0) {
-        ctx.beginPath();
-        ctx.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + this.s.scanProgress * Math.PI * 2);
-        ctx.strokeStyle = this.s.scanProgress >= 1 ? '#4CAF50' : '#4FC3F7';
-        ctx.lineWidth = 5;
-        ctx.stroke();
-      }
-      // Center dot
-      ctx.beginPath();
-      ctx.arc(cx, cy, 5, 0, Math.PI * 2);
-      ctx.fillStyle = '#4FC3F7';
-      ctx.fill();
-      return;
-    }
-
-    const pts = this.s.floorPoints;
-    const screenPts = pts.map(p => this._worldToScreen(p));
-
-    // Draw lines between floor points
-    if (screenPts.length > 1) {
-      ctx.beginPath();
-      ctx.strokeStyle = 'rgba(79,195,247,0.9)';
-      ctx.lineWidth = 3;
-      ctx.setLineDash([]);
-      screenPts.forEach((sp, i) => {
-        if (!sp) return;
-        i === 0 ? ctx.moveTo(sp.x, sp.y) : ctx.lineTo(sp.x, sp.y);
-      });
-      if (screenPts.length === 4) ctx.closePath();
-      ctx.stroke();
-
-      // Fill polygon
-      if (screenPts.length >= 3) {
-        ctx.beginPath();
-        screenPts.forEach((sp, i) => {
-          if (!sp) return;
-          i === 0 ? ctx.moveTo(sp.x, sp.y) : ctx.lineTo(sp.x, sp.y);
-        });
-        ctx.closePath();
-        ctx.fillStyle = 'rgba(79,195,247,0.12)';
-        ctx.fill();
-      }
-    }
-
-    // Draw distance labels between consecutive points
-    for (let i = 0; i < pts.length && i + 1 <= pts.length; i++) {
-      const p1 = pts[i];
-      const p2 = i < pts.length - 1 ? pts[i + 1] : (pts.length === 4 ? pts[0] : null);
-      if (!p2) continue;
-      const d = this._dist3D(p1, p2);
-      const sp1 = this._worldToScreen(p1);
-      const sp2 = this._worldToScreen(p2);
-      if (sp1 && sp2) {
-        const mx = (sp1.x + sp2.x) / 2;
-        const my = (sp1.y + sp2.y) / 2;
-        ctx.fillStyle = 'rgba(0,0,0,0.7)';
-        ctx.roundRect?.(mx - 28, my - 12, 56, 24, 6);
-        ctx.fillRect(mx - 28, my - 12, 56, 24);
-        ctx.fillStyle = '#4FC3F7';
-        ctx.font = 'bold 14px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(d.toFixed(2) + ' m', mx, my);
-      }
-    }
-
-    // Draw floor point dots
-    screenPts.forEach((sp, i) => {
-      if (!sp) return;
-      ctx.beginPath();
-      ctx.arc(sp.x, sp.y, 14, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(0,0,0,0.6)';
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(sp.x, sp.y, 12, 0, Math.PI * 2);
-      ctx.fillStyle = '#4FC3F7';
-      ctx.fill();
-      ctx.fillStyle = '#000';
-      ctx.font = 'bold 13px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(i + 1, sp.x, sp.y);
-    });
-
-    // Hit test cursor
-    if (this.s.lastHitPos) {
-      const sp = this._worldToScreen(this.s.lastHitPos);
-      if (sp) {
-        ctx.beginPath();
-        ctx.arc(sp.x, sp.y, 24, 0, Math.PI * 2);
-        ctx.strokeStyle = 'rgba(79,195,247,0.7)';
-        ctx.lineWidth = 2;
-        ctx.setLineDash([6, 4]);
-        ctx.stroke();
-        ctx.setLineDash([]);
-        ctx.beginPath();
-        ctx.arc(sp.x, sp.y, 4, 0, Math.PI * 2);
-        ctx.fillStyle = '#4FC3F7';
-        ctx.fill();
-      }
-    }
-  },
-
-  _worldToScreen(worldPos) {
-    const vi = this.s.viewInfo;
-    if (!vi) return null;
-    const { viewMatrix, projMatrix, w, h } = vi;
-
-    const p = [worldPos.x, worldPos.y, worldPos.z, 1.0];
-    const vp = this._m4v4(viewMatrix, p);
-    const cp = this._m4v4(projMatrix, vp);
-    if (cp[3] <= 0) return null;
-
-    const nx = cp[0] / cp[3];
-    const ny = cp[1] / cp[3];
-    return {
-      x: (nx + 1) * 0.5 * w,
-      y: (1 - ny) * 0.5 * h,
-    };
-  },
-
-  _m4v4(m, v) {
-    return [
-      m[0]*v[0] + m[4]*v[1] + m[8]*v[2]  + m[12]*v[3],
-      m[1]*v[0] + m[5]*v[1] + m[9]*v[2]  + m[13]*v[3],
-      m[2]*v[0] + m[6]*v[1] + m[10]*v[2] + m[14]*v[3],
-      m[3]*v[0] + m[7]*v[1] + m[11]*v[2] + m[15]*v[3],
-    ];
-  },
-
-  _moveCrosshair(active) {
-    const el = document.getElementById('arCrosshair');
-    if (el) el.style.opacity = active ? '1' : '0.3';
-  },
-
-  _calcARDimensions() {
-    const pts = this.s.floorPoints;
-    if (pts.length < 2) return;
-
-    // With 2 points: just a length measurement
-    if (pts.length === 2) {
-      this.s.result.width = this._dist3D(pts[0], pts[1]);
-      this.s.result.area  = 0;
-    }
-    // With 3+ points: compute polygon area in xz plane
-    if (pts.length >= 3) {
-      // Shoelace formula in xz plane
-      let area = 0;
-      const n = pts.length;
-      for (let i = 0; i < n; i++) {
-        const j = (i + 1) % n;
-        area += pts[i].x * pts[j].z - pts[j].x * pts[i].z;
-      }
-      this.s.result.area = Math.abs(area) / 2;
-
-      // Width and depth from bounding box
-      const xs = pts.map(p => p.x), zs = pts.map(p => p.z);
-      this.s.result.width = Math.max(...xs) - Math.min(...xs);
-      this.s.result.depth = Math.max(...zs) - Math.min(...zs);
-    }
-  },
-
-  _updateARUI() {
-    const pts = this.s.floorPoints;
-    const n = pts.length;
-    const r = this.s.result;
-
-    if (!this.s.planeDetection) {
-      // Manual mode: update step indicators and instruction
-      for (let i = 1; i <= 4; i++) {
-        const el = document.getElementById('arStep' + i);
-        if (!el) continue;
-        el.classList.toggle('done',   i <= n);
-        el.classList.toggle('active', i === n + 1);
-      }
-      const instr = document.getElementById('arInstruction');
-      if (instr) {
-        const msgs = [
-          'Richte die Kamera auf eine Bodenecke des Raums und tippe',
-          'Gehe zur nächsten Ecke und tippe (Ecke 2 von 4)',
-          'Gehe zur dritten Ecke und tippe (Ecke 3 von 4)',
-          'Gehe zur letzten Ecke und tippe (Ecke 4 von 4)',
-          'Messung abgeschlossen — Höhe eingeben und bestätigen',
-        ];
-        instr.textContent = msgs[Math.min(n, 4)];
-      }
-    } else {
-      // Auto mode: update instruction based on scan progress
-      const instr = document.getElementById('arInstruction');
-      if (instr) {
-        if (r.area >= 2) {
-          instr.textContent = `✓ ${r.width.toFixed(2)} m × ${r.depth.toFixed(2)} m erkannt — Höhe prüfen & bestätigen`;
-        } else {
-          instr.textContent = 'Kamera langsam über den Boden schwenken …';
-        }
-      }
-    }
-
-    // Stats
-    const elW = document.getElementById('arStatW');
-    const elD = document.getElementById('arStatD');
-    const elA = document.getElementById('arStatA');
-    if (elW) elW.textContent = r.width > 0 ? r.width.toFixed(2) + ' m' : '—';
-    if (elD) elD.textContent = r.depth > 0 ? r.depth.toFixed(2) + ' m' : '—';
-    if (elA) elA.textContent = r.area  > 0 ? r.area.toFixed(1)  + ' m²': '—';
-
-    // Confirm / Undo buttons
-    const btn = document.getElementById('arConfirmBtn');
-    if (btn && !this.s.planeDetection) btn.disabled = n < 2;
-
-    const undoBtn = document.getElementById('arUndoBtn');
-    if (undoBtn) undoBtn.disabled = this.s.planeDetection || n === 0;
-  },
-
-  arUndo() {
-    if (this.s.planeDetection) return;
-    if (this.s.floorPoints.length > 0) {
-      this.s.floorPoints.pop();
-      this._calcARDimensions();
-      this._updateARUI();
-    }
-  },
-
-  arConfirm() {
-    // Auto mode: need at least 2 m² detected; manual: need at least 2 points
-    if (!this.s.planeDetection && this.s.floorPoints.length < 2) return;
-    if (this.s.planeDetection && this.s.result.area < 0.5) return;
-    const h = parseFloat(document.getElementById('arHeightInput')?.value) || 2.50;
-    this.s.result.height = h;
-    this._stopAR();
-    this._showConfirm();
-  },
-
-  _stopAR() {
-    if (this.s.xrSession) {
-      this.s.xrSession.end().catch(() => {});
-      this.s.xrSession = null;
-    }
-    this.s.arActive = false;
-    this.s.hitTestSource = null;
-  },
-
-  _showARError(msg) {
-    const el = document.getElementById('arNotSupported');
-    if (el) {
-      el.style.display = 'flex';
-      const p = el.querySelector('p');
-      if (p) p.textContent = msg || 'AR wird auf diesem Gerät nicht unterstützt.';
-    }
   },
 
   // ── Camera Mode ────────────────────────────────────────

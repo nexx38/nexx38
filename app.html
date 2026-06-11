@@ -2511,6 +2511,15 @@ input[type=checkbox] {
               </div>
             </div>
             <div class="room-sketch"><canvas id="sketchCanvas"></canvas></div>
+            <div style="margin-top:10px;">
+              <button class="btn-ar-action" style="width:100%;justify-content:center;gap:6px;font-size:.82rem;padding:8px 12px;" onclick="Scanner.capturePhoto()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px;flex-shrink:0;"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                Foto + A4-Referenz
+              </button>
+              <div style="font-size:.7rem;color:var(--text-muted);text-align:center;margin-top:3px;line-height:1.4;">A4-Blatt gegen Wand halten → auto. Fenstererkennung</div>
+              <div id="photoStatus" style="display:none;margin-top:6px;padding:7px 9px;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:6px;font-size:.79rem;line-height:1.5;"></div>
+            </div>
+            <canvas id="photoCanvas" style="display:none;"></canvas>
           </div>
           <div class="camera-form-footer">
             <button class="btn-ar-action primary" style="width:100%;justify-content:center;display:flex;"
@@ -2874,6 +2883,7 @@ const Scanner = {
     pcDragStart: null,
     arActive: false,
     animFrame: null,
+    detectedOpenings: [],
   },
 
   // ── Open / Close ───────────────────────────────────────
@@ -2914,6 +2924,7 @@ const Scanner = {
 
     this.s.mode = mode;
     this.s.floorPoints = [];
+    this.s.detectedOpenings = [];
 
     // Update tabs
     document.querySelectorAll('.scanner-tab').forEach(t => t.classList.toggle('active', t.dataset.mode === mode));
@@ -3307,8 +3318,168 @@ const Scanner = {
       height: h,
       area:   +(w * d).toFixed(2),
     };
+    if (!this.s.detectedOpenings) this.s.detectedOpenings = [];
     this._stopCamera();
     this._showConfirm();
+  },
+
+  // ── Camera Photo Analysis (A4 Reference) ──────────────
+  capturePhoto() {
+    const video  = document.getElementById('cameraVideo');
+    const canvas = document.getElementById('photoCanvas');
+    if (!video || !canvas || !video.videoWidth) {
+      App.toast?.('Kamera nicht bereit', 'error');
+      return;
+    }
+
+    const W = video.videoWidth, H = video.videoHeight;
+    canvas.width = W; canvas.height = H;
+    canvas.getContext('2d').drawImage(video, 0, 0);
+
+    const statusEl = document.getElementById('photoStatus');
+    if (statusEl) { statusEl.style.display = 'block'; statusEl.textContent = 'Analysiere …'; }
+
+    // Run analysis asynchronously so UI updates first
+    setTimeout(() => {
+      const result = this._analyzePhoto(canvas, W, H);
+      this.s.detectedOpenings = result.openings;
+
+      let msg;
+      if (result.a4Found) {
+        msg = '✅ A4-Referenz erkannt';
+        if (result.openings.length > 0) {
+          msg += ` · ${result.openings.length} Öffnung${result.openings.length > 1 ? 'en' : ''} erkannt`;
+          msg += '<br>' + result.openings.map(o =>
+            `<span style="color:var(--text-muted)">${o.type === 'door' ? '🚪' : '🪟'} ` +
+            `${o.width.toFixed(2)} × ${o.height.toFixed(2)} m</span>`
+          ).join('  ');
+        } else {
+          msg += ' · Keine Öffnungen erkannt – manuell unter Bauteile eintragen';
+        }
+      } else {
+        msg = '⚠️ Kein A4-Blatt erkannt.<br>' +
+              '<span style="color:var(--text-muted)">Weißes Blatt direkt gegen Wand halten, gut beleuchten.</span>';
+      }
+      if (statusEl) statusEl.innerHTML = msg;
+    }, 30);
+  },
+
+  _analyzePhoto(canvas, W, H) {
+    // Downsample to max 320px wide for performance
+    const tw = Math.min(320, W);
+    const th = Math.round(H * tw / W);
+
+    const sc = document.createElement('canvas');
+    sc.width = tw; sc.height = th;
+    sc.getContext('2d').drawImage(canvas, 0, 0, tw, th);
+    const px = sc.getContext('2d').getImageData(0, 0, tw, th).data;
+
+    // Grayscale
+    const g = new Uint8Array(tw * th);
+    for (let i = 0; i < tw * th; i++) {
+      g[i] = (px[i*4]*77 + px[i*4+1]*150 + px[i*4+2]*29) >> 8;
+    }
+
+    // Median brightness (sorted subset for speed)
+    const sample = [];
+    const step = Math.max(1, Math.floor((tw * th) / 2000));
+    for (let i = 0; i < tw * th; i += step) sample.push(g[i]);
+    sample.sort((a, b) => a - b);
+    const median = sample[(sample.length / 2) | 0];
+
+    // Bright region threshold: notably brighter than wall baseline
+    const BRIGHT_THR = Math.max(180, Math.min(230, median + 55));
+    const brightRegions = this._labelRegions(g, tw, th, v => v >= BRIGHT_THR);
+
+    // Find A4: largest bright region with aspect ratio close to sqrt(2)
+    const A4_R = 297 / 210; // ≈ 1.414
+    let a4 = null, bestScore = 0;
+    const minA4Px = tw * th * 0.015; // at least 1.5% of image
+
+    for (const r of brightRegions) {
+      if (r.size < minA4Px) continue;
+      const ar = r.w / r.h;
+      const arDiff = Math.min(
+        Math.abs(ar - A4_R) / A4_R,
+        Math.abs(ar - 1 / A4_R) / (1 / A4_R)
+      );
+      if (arDiff > 0.38) continue;
+      const score = r.size * (1 - arDiff);
+      if (score > bestScore) { bestScore = score; a4 = r; }
+    }
+
+    let pxPerM = null;
+    if (a4) {
+      const longPx = Math.max(a4.w, a4.h);
+      pxPerM = longPx / 0.297; // A4 long side = 297mm
+    }
+
+    const openings = [];
+    if (pxPerM) {
+      const year = parseInt(window.state?.project?.constructionYear) || 2000;
+      const getU = t => t === 'door'
+        ? (year < 1990 ? 3.0 : year < 2010 ? 1.8 : 0.9)
+        : (year < 1975 ? 2.8 : year < 1995 ? 1.8 : year < 2010 ? 1.1 : 0.7);
+
+      // Bright regions = windows (outdoor light) or A4
+      for (const r of brightRegions) {
+        if (r === a4) continue;
+        const rw = r.w / pxPerM, rh = r.h / pxPerM;
+        if (rw < 0.25 || rw > 3.0 || rh < 0.25 || rh > 2.8) continue;
+        if (r.size / (r.w * r.h) < 0.38) continue; // not rectangular enough
+        const type = rh > 1.8 && rw < 1.2 ? 'door' : 'window';
+        openings.push({
+          type, wall: 'Foto', width: +rw.toFixed(2), height: +rh.toFixed(2),
+          area: +(rw * rh).toFixed(2), sillHeight: 0.90, uDefault: getU(type),
+        });
+      }
+
+      // Dark regions = possible recessed doors or night windows
+      const DARK_THR = Math.min(70, Math.max(20, median - 50));
+      if (median > 80) {
+        const darkRegions = this._labelRegions(g, tw, th, v => v <= DARK_THR);
+        for (const r of darkRegions) {
+          const rw = r.w / pxPerM, rh = r.h / pxPerM;
+          if (rw < 0.25 || rw > 3.0 || rh < 0.25 || rh > 2.8) continue;
+          if (r.size / (r.w * r.h) < 0.40) continue;
+          const type = rh > 1.8 && rw < 1.2 ? 'door' : 'window';
+          // Avoid duplicates with bright detections (same bounding box area)
+          const dup = openings.some(o => Math.abs(o.width - rw) < 0.15 && Math.abs(o.height - rh) < 0.15);
+          if (!dup) openings.push({
+            type, wall: 'Foto (dunkel)', width: +rw.toFixed(2), height: +rh.toFixed(2),
+            area: +(rw * rh).toFixed(2), sillHeight: 0.90, uDefault: getU(type),
+          });
+        }
+      }
+    }
+
+    // Keep up to 5 largest, sorted by area
+    openings.sort((a, b) => b.area - a.area);
+    return { a4Found: !!a4, pxPerM, openings: openings.slice(0, 5) };
+  },
+
+  _labelRegions(gray, w, h, pred) {
+    const vis = new Uint8Array(w * h);
+    const regions = [];
+
+    for (let si = 0; si < w * h; si++) {
+      if (vis[si] || !pred(gray[si])) continue;
+      const q = [si]; vis[si] = 1;
+      let sz = 0, x0 = w, x1 = 0, y0 = h, y1 = 0, qi = 0;
+      while (qi < q.length) {
+        const idx = q[qi++]; sz++;
+        const x = idx % w, y = (idx / w) | 0;
+        if (x < x0) x0 = x; if (x > x1) x1 = x;
+        if (y < y0) y0 = y; if (y > y1) y1 = y;
+        if (x > 0   && !vis[idx-1] && pred(gray[idx-1])) { vis[idx-1]=1; q.push(idx-1); }
+        if (x < w-1 && !vis[idx+1] && pred(gray[idx+1])) { vis[idx+1]=1; q.push(idx+1); }
+        if (y > 0   && !vis[idx-w] && pred(gray[idx-w])) { vis[idx-w]=1; q.push(idx-w); }
+        if (y < h-1 && !vis[idx+w] && pred(gray[idx+w])) { vis[idx+w]=1; q.push(idx+w); }
+      }
+      if (sz >= 60) regions.push({ size: sz, w: x1-x0+1, h: y1-y0+1, minX: x0, maxX: x1, minY: y0, maxY: y1 });
+    }
+
+    return regions.sort((a, b) => b.size - a.size).slice(0, 12);
   },
 
   _drawRoomSketch() {

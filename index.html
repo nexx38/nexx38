@@ -733,6 +733,15 @@
               </div>
             </div>
             <div class="room-sketch"><canvas id="sketchCanvas"></canvas></div>
+            <div style="margin-top:10px;">
+              <button class="btn-ar-action" style="width:100%;justify-content:center;gap:6px;font-size:.82rem;padding:8px 12px;" onclick="Scanner.capturePhoto()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:15px;height:15px;flex-shrink:0;"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                Foto + A4-Referenz
+              </button>
+              <div style="font-size:.7rem;color:var(--text-muted);text-align:center;margin-top:3px;line-height:1.4;">A4-Blatt gegen Wand halten → auto. Fenstererkennung</div>
+              <div id="photoStatus" style="display:none;margin-top:6px;padding:7px 9px;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:6px;font-size:.79rem;line-height:1.5;"></div>
+            </div>
+            <canvas id="photoCanvas" style="display:none;"></canvas>
           </div>
           <div class="camera-form-footer">
             <button class="btn-ar-action primary" style="width:100%;justify-content:center;display:flex;"

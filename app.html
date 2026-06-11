@@ -3278,17 +3278,42 @@ const Scanner = {
 
   // ── Camera Mode ────────────────────────────────────────
   async _startCamera() {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } },
-      });
-      const video = document.getElementById('cameraVideo');
-      if (video) { video.srcObject = stream; video.play(); }
-      this.s.cameraStream = stream;
-      document.getElementById('cameraPlaceholder').style.display = 'none';
-    } catch {
-      document.getElementById('cameraPlaceholder').style.display = 'flex';
+    const video       = document.getElementById('cameraVideo');
+    const placeholder = document.getElementById('cameraPlaceholder');
+
+    // Try progressively simpler constraints so we always get a stream if a camera exists
+    const tries = [
+      { video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } },
+      { video: { facingMode: 'environment' } },
+      { video: true },
+    ];
+
+    let stream = null, lastErr = null;
+    for (const c of tries) {
+      try { stream = await navigator.mediaDevices.getUserMedia(c); break; }
+      catch (e) { lastErr = e; }
     }
+
+    if (!stream) {
+      if (placeholder) {
+        placeholder.style.display = 'flex';
+        placeholder.querySelector('p') && (placeholder.querySelector('p').textContent =
+          (lastErr?.name === 'NotAllowedError')
+            ? 'Kamera-Zugriff verweigert – Berechtigung in den Browser-Einstellungen erteilen.'
+            : 'Kamera nicht verfügbar (' + (lastErr?.name || 'Fehler') + ')');
+      }
+      this._drawRoomSketch();
+      this._setupCameraListeners();
+      return;
+    }
+
+    if (video) {
+      video.srcObject = stream;
+      try { await video.play(); } catch { /* autoplay policy — stream still set */ }
+    }
+    this.s.cameraStream = stream;
+    if (placeholder) placeholder.style.display = 'none';
+
     this._drawRoomSketch();
     this._setupCameraListeners();
   },
@@ -3337,6 +3362,7 @@ const Scanner = {
 
     if (!video || !canvas) { showStatus('⚠️ Interner Fehler: Element fehlt.'); return; }
     if (!this.s.cameraStream) { showStatus('⚠️ Kamera nicht aktiv – Kamera-Zugriff prüfen.'); return; }
+    if (video.readyState < 2) { showStatus('⚠️ Kamera lädt noch – kurz warten und nochmal tippen.'); return; }
 
     showStatus('📷 Foto aufgenommen – analysiere …');
 

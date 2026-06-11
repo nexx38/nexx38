@@ -17,7 +17,7 @@ const Scanner = {
     refSpace: null,
     viewerSpace: null,
     cameraStream: null,
-    floorPoints: [],     // [{x,y,z}]  world-space floor corners
+    floorPoints: [],     // [{x,y,z}]  world-space floor corners (manual mode)
     lastHitPos: null,    // current crosshair position
     viewInfo: null,      // {viewMatrix, projMatrix, viewport} for projection
     result: { width: 0, depth: 0, height: 2.50, area: 0 },
@@ -28,6 +28,8 @@ const Scanner = {
     pcDragStart: null,
     arActive: false,
     animFrame: null,
+    planeDetection: false,  // true when WebXR plane-detection is active
+    scanProgress: 0,        // 0–1 floor scan coverage
   },
 
   // ── Open / Close ───────────────────────────────────────
@@ -35,6 +37,8 @@ const Scanner = {
     this.s.roomId = roomId;
     this.s.floorPoints = [];
     this.s.result = { width: 0, depth: 0, height: 2.50, area: 0 };
+    this.s.planeDetection = false;
+    this.s.scanProgress   = 0;
     document.getElementById('scannerOverlay').classList.add('active');
 
     // Detect support
@@ -67,7 +71,15 @@ const Scanner = {
     this._stopCamera();
 
     this.s.mode = mode;
-    this.s.floorPoints = [];
+    this.s.floorPoints    = [];
+    this.s.planeDetection = false;
+    this.s.scanProgress   = 0;
+
+    // Reset auto-scan badge
+    const badge = document.getElementById('arModeBadge');
+    const steps = document.getElementById('arSteps');
+    if (badge) badge.style.display = 'none';
+    if (steps) steps.style.display = 'flex';
 
     // Update tabs
     document.querySelectorAll('.scanner-tab').forEach(t => t.classList.toggle('active', t.dataset.mode === mode));
@@ -106,11 +118,13 @@ const Scanner = {
     try {
       const session = await navigator.xr.requestSession('immersive-ar', {
         requiredFeatures: ['hit-testing'],
-        optionalFeatures: ['dom-overlay', 'depth-sensing'],
+        optionalFeatures: ['dom-overlay', 'plane-detection'],
         domOverlay: { root: document.getElementById('arOverlayUI') },
       });
       this.s.xrSession = session;
       this.s.arActive  = true;
+      this.s.planeDetection = false;
+      this.s.scanProgress   = 0;
 
       this.s.refSpace    = await session.requestReferenceSpace('local');
       this.s.viewerSpace = await session.requestReferenceSpace('viewer');
@@ -177,11 +191,74 @@ const Scanner = {
       this._moveCrosshair(false);
     }
 
+    // Auto plane detection — updates dimensions without user tapping
+    if (frame.detectedPlanes) this._processPlanes(frame);
+
     // Draw overlay
     this._drawAROverlay(ctx, canvas.width, canvas.height);
   },
 
+  _processPlanes(frame) {
+    let best = null;
+    let bestArea = 0;
+
+    for (const plane of frame.detectedPlanes) {
+      if (plane.orientation !== 'horizontal') continue;
+      const pose = frame.getPose(plane.planeSpace, this.s.refSpace);
+      if (!pose) continue;
+
+      // Skip planes significantly above origin (ceiling)
+      if (pose.transform.position.y > 0.4) continue;
+
+      const poly = plane.polygon;
+      const xs = poly.map(p => p.x);
+      const zs = poly.map(p => p.z);
+      const bw = Math.max(...xs) - Math.min(...xs);
+      const bd = Math.max(...zs) - Math.min(...zs);
+
+      // Shoelace polygon area
+      let area = 0;
+      for (let i = 0; i < poly.length; i++) {
+        const j = (i + 1) % poly.length;
+        area += poly[i].x * poly[j].z - poly[j].x * poly[i].z;
+      }
+      area = Math.abs(area) / 2;
+
+      if (area > bestArea) { bestArea = area; best = { w: bw, d: bd, area }; }
+    }
+
+    if (!best || best.area < 0.3) return;
+
+    // First plane detected — switch UI to auto mode
+    if (!this.s.planeDetection) {
+      this.s.planeDetection = true;
+      this._updateARModeUI();
+    }
+
+    this.s.result.width = +Math.max(best.w, 0.5).toFixed(2);
+    this.s.result.depth = +Math.max(best.d, 0.5).toFixed(2);
+    this.s.result.area  = +best.area.toFixed(2);
+    this.s.scanProgress = Math.min(best.area / 20, 1);
+
+    this._updateARUI();
+
+    const btn = document.getElementById('arConfirmBtn');
+    if (btn && best.area >= 2) btn.disabled = false;
+  },
+
+  _updateARModeUI() {
+    const badge = document.getElementById('arModeBadge');
+    const steps = document.getElementById('arSteps');
+    const instr = document.getElementById('arInstruction');
+    if (badge) { badge.textContent = '🔍 Auto-Scan aktiv'; badge.style.display = 'flex'; }
+    if (steps) steps.style.display = 'none';
+    if (instr) instr.textContent = 'Kamera langsam über den Boden schwenken …';
+  },
+
   _onARSelect() {
+    // In auto-plane mode tapping is ignored — dimensions come from detected planes
+    if (this.s.planeDetection) return;
+
     if (!this.s.lastHitPos) return;
     const pts = this.s.floorPoints;
     if (pts.length >= 4) return;
@@ -194,6 +271,32 @@ const Scanner = {
   _drawAROverlay(ctx, w, h) {
     ctx.clearRect(0, 0, w, h);
     if (!this.s.viewInfo) return;
+
+    // Auto-scan mode: draw progress ring instead of corner dots
+    if (this.s.planeDetection) {
+      const cx = w / 2, cy = h / 2;
+      const r  = Math.min(w, h) * 0.09;
+      // Track ring background
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+      ctx.lineWidth = 5;
+      ctx.stroke();
+      // Progress arc
+      if (this.s.scanProgress > 0) {
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + this.s.scanProgress * Math.PI * 2);
+        ctx.strokeStyle = this.s.scanProgress >= 1 ? '#4CAF50' : '#4FC3F7';
+        ctx.lineWidth = 5;
+        ctx.stroke();
+      }
+      // Center dot
+      ctx.beginPath();
+      ctx.arc(cx, cy, 5, 0, Math.PI * 2);
+      ctx.fillStyle = '#4FC3F7';
+      ctx.fill();
+      return;
+    }
 
     const pts = this.s.floorPoints;
     const screenPts = pts.map(p => this._worldToScreen(p));
@@ -347,25 +450,35 @@ const Scanner = {
     const n = pts.length;
     const r = this.s.result;
 
-    // Step indicators
-    for (let i = 1; i <= 4; i++) {
-      const el = document.getElementById('arStep' + i);
-      if (!el) continue;
-      el.classList.toggle('done',   i <= n);
-      el.classList.toggle('active', i === n + 1);
-    }
-
-    // Instruction text
-    const instr = document.getElementById('arInstruction');
-    if (instr) {
-      const msgs = [
-        'Richte die Kamera auf eine Bodenecke des Raums und tippe',
-        'Gehe zur nächsten Ecke und tippe (Ecke 2 von 4)',
-        'Gehe zur dritten Ecke und tippe (Ecke 3 von 4)',
-        'Gehe zur letzten Ecke und tippe (Ecke 4 von 4)',
-        'Messung abgeschlossen — Höhe eingeben und bestätigen',
-      ];
-      instr.textContent = msgs[Math.min(n, 4)];
+    if (!this.s.planeDetection) {
+      // Manual mode: update step indicators and instruction
+      for (let i = 1; i <= 4; i++) {
+        const el = document.getElementById('arStep' + i);
+        if (!el) continue;
+        el.classList.toggle('done',   i <= n);
+        el.classList.toggle('active', i === n + 1);
+      }
+      const instr = document.getElementById('arInstruction');
+      if (instr) {
+        const msgs = [
+          'Richte die Kamera auf eine Bodenecke des Raums und tippe',
+          'Gehe zur nächsten Ecke und tippe (Ecke 2 von 4)',
+          'Gehe zur dritten Ecke und tippe (Ecke 3 von 4)',
+          'Gehe zur letzten Ecke und tippe (Ecke 4 von 4)',
+          'Messung abgeschlossen — Höhe eingeben und bestätigen',
+        ];
+        instr.textContent = msgs[Math.min(n, 4)];
+      }
+    } else {
+      // Auto mode: update instruction based on scan progress
+      const instr = document.getElementById('arInstruction');
+      if (instr) {
+        if (r.area >= 2) {
+          instr.textContent = `✓ ${r.width.toFixed(2)} m × ${r.depth.toFixed(2)} m erkannt — Höhe prüfen & bestätigen`;
+        } else {
+          instr.textContent = 'Kamera langsam über den Boden schwenken …';
+        }
+      }
     }
 
     // Stats
@@ -376,16 +489,16 @@ const Scanner = {
     if (elD) elD.textContent = r.depth > 0 ? r.depth.toFixed(2) + ' m' : '—';
     if (elA) elA.textContent = r.area  > 0 ? r.area.toFixed(1)  + ' m²': '—';
 
-    // Confirm button
+    // Confirm / Undo buttons
     const btn = document.getElementById('arConfirmBtn');
-    if (btn) btn.disabled = n < 2;
+    if (btn && !this.s.planeDetection) btn.disabled = n < 2;
 
-    // Undo button
     const undoBtn = document.getElementById('arUndoBtn');
-    if (undoBtn) undoBtn.disabled = n === 0;
+    if (undoBtn) undoBtn.disabled = this.s.planeDetection || n === 0;
   },
 
   arUndo() {
+    if (this.s.planeDetection) return;
     if (this.s.floorPoints.length > 0) {
       this.s.floorPoints.pop();
       this._calcARDimensions();
@@ -394,7 +507,9 @@ const Scanner = {
   },
 
   arConfirm() {
-    if (this.s.floorPoints.length < 2) return;
+    // Auto mode: need at least 2 m² detected; manual: need at least 2 points
+    if (!this.s.planeDetection && this.s.floorPoints.length < 2) return;
+    if (this.s.planeDetection && this.s.result.area < 0.5) return;
     const h = parseFloat(document.getElementById('arHeightInput')?.value) || 2.50;
     this.s.result.height = h;
     this._stopAR();

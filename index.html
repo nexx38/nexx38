@@ -659,8 +659,10 @@
       <div id="arViewport" class="ar-viewport">
         <canvas id="arCanvas"></canvas>
         <div id="arOverlayUI" class="ar-overlay-ui">
-          <!-- Step tracker top -->
-          <div class="ar-steps">
+          <!-- Auto-scan badge (hidden until plane-detection activates) -->
+          <div id="arModeBadge" class="ar-mode-badge" style="display:none;"></div>
+          <!-- Step tracker (manual mode only) -->
+          <div id="arSteps" class="ar-steps">
             <div class="ar-step active" id="arStep1">1</div>
             <div class="ar-step" id="arStep2">2</div>
             <div class="ar-step" id="arStep3">3</div>

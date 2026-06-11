@@ -179,6 +179,26 @@
 .ar-step.done  { background: #4FC3F7; border-color: #4FC3F7; color: #000; }
 .ar-step.active { border-color: #4FC3F7; color: #4FC3F7; }
 
+/* Auto-scan mode badge */
+.ar-mode-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(79,195,247,.18);
+  border: 1px solid rgba(79,195,247,.5);
+  border-radius: 20px;
+  padding: 5px 12px;
+  font-size: .78rem;
+  font-weight: 600;
+  color: #4FC3F7;
+  backdrop-filter: blur(6px);
+  animation: ar-badge-pulse 2s ease-in-out infinite;
+}
+@keyframes ar-badge-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: .65; }
+}
+
 /* AR measurement badge */
 .ar-measurement {
   position: absolute;

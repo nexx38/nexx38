@@ -1,0 +1,907 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SHK – Betriebssoftware</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --dark: #0f172a;
+  --dark2: #1e293b;
+  --dark3: #334155;
+  --blue: #3b82f6;
+  --blue-light: #60a5fa;
+  --green: #22c55e;
+  --red: #ef4444;
+  --orange: #f59e0b;
+  --text: #f1f5f9;
+  --text2: #94a3b8;
+  --border: #334155;
+  --card: #1e293b;
+  --sidebar-w: 240px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'Segoe UI', Arial, sans-serif; background: var(--dark); color: var(--text); display: flex; height: 100vh; overflow: hidden; }
+
+/* ── Sidebar ── */
+.sidebar {
+  width: var(--sidebar-w); background: var(--dark2); display: flex; flex-direction: column;
+  border-right: 1px solid var(--border); flex-shrink: 0;
+}
+.logo { padding: 20px 20px 16px; border-bottom: 1px solid var(--border); }
+.logo .brand { font-size: 22px; font-weight: 800; color: var(--blue-light); letter-spacing: 1px; }
+.logo .sub { font-size: 11px; color: var(--text2); margin-top: 2px; }
+nav { flex: 1; padding: 12px 8px; }
+.nav-section { font-size: 10px; color: var(--text2); text-transform: uppercase; letter-spacing: 1px; padding: 12px 12px 4px; }
+.nav-item {
+  display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 8px;
+  cursor: pointer; font-size: 13px; font-weight: 500; color: var(--text2);
+  transition: all 0.15s; margin-bottom: 2px; border: none; background: none; width: 100%; text-align: left;
+}
+.nav-item:hover { background: var(--dark3); color: var(--text); }
+.nav-item.active { background: rgba(59,130,246,0.15); color: var(--blue-light); }
+.nav-item .icon { font-size: 16px; width: 20px; text-align: center; }
+.sidebar-footer { padding: 12px 16px; border-top: 1px solid var(--border); font-size: 11px; color: var(--text2); }
+
+/* ── Main ── */
+.main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.topbar {
+  background: var(--dark2); border-bottom: 1px solid var(--border);
+  padding: 12px 24px; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;
+}
+.topbar h1 { font-size: 18px; font-weight: 700; }
+.topbar .sub { font-size: 12px; color: var(--text2); }
+.badge-live { background: rgba(34,197,94,0.15); color: var(--green); font-size: 11px; font-weight: 600; padding: 3px 10px; border-radius: 20px; border: 1px solid rgba(34,197,94,0.3); }
+
+.content { flex: 1; overflow-y: auto; padding: 24px; }
+
+/* ── Cards & Grid ── */
+.kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px; }
+.card {
+  background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 18px;
+}
+.kpi-card .label { font-size: 11px; color: var(--text2); text-transform: uppercase; letter-spacing: 0.5px; }
+.kpi-card .value { font-size: 24px; font-weight: 700; margin-top: 6px; color: var(--text); }
+.kpi-card .change { font-size: 12px; margin-top: 4px; }
+.kpi-card .change.up { color: var(--green); }
+.kpi-card .change.down { color: var(--red); }
+.kpi-card .change.neutral { color: var(--text2); }
+.kpi-card.blue { border-left: 3px solid var(--blue); }
+.kpi-card.green { border-left: 3px solid var(--green); }
+.kpi-card.orange { border-left: 3px solid var(--orange); }
+.kpi-card.red { border-left: 3px solid var(--red); }
+
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+.three-col { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; margin-bottom: 24px; }
+
+.card h3 { font-size: 13px; font-weight: 600; color: var(--text2); margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; }
+.card h3 span { color: var(--text); }
+.section-title { font-size: 16px; font-weight: 700; margin-bottom: 16px; color: var(--text); }
+
+/* ── Tables ── */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+thead th { color: var(--text2); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+tbody td { padding: 10px 12px; border-bottom: 1px solid rgba(51,65,85,0.5); }
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover { background: rgba(255,255,255,0.02); }
+
+/* Status badges */
+.status { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+.status.abgerechnet { background: rgba(34,197,94,0.15); color: var(--green); }
+.status.ausstehend { background: rgba(245,158,11,0.15); color: var(--orange); }
+.status.abgelehnt { background: rgba(239,68,68,0.15); color: var(--red); }
+.status.storniert { background: rgba(148,163,184,0.15); color: var(--text2); }
+.status.offen { background: rgba(59,130,246,0.15); color: var(--blue-light); }
+.status.bezahlt { background: rgba(34,197,94,0.15); color: var(--green); }
+
+/* ── GuV Table ── */
+.guv-table td:not(:first-child) { text-align: right; font-variant-numeric: tabular-nums; }
+.guv-section td { background: var(--dark3); color: var(--text2); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; padding: 6px 12px; }
+.guv-subtotal td { background: rgba(59,130,246,0.08); font-weight: 700; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.guv-total td { background: rgba(59,130,246,0.2); font-weight: 700; font-size: 14px; color: var(--blue-light); }
+.guv-table .indent td:first-child { padding-left: 28px; color: var(--text2); font-size: 12px; }
+.pos { color: var(--green); font-weight: 600; }
+.neg { color: var(--red); font-weight: 600; }
+
+/* ── Buttons ── */
+.btn { padding: 7px 14px; border-radius: 8px; border: none; cursor: pointer; font-size: 13px; font-weight: 600; transition: all 0.15s; }
+.btn-primary { background: var(--blue); color: white; }
+.btn-primary:hover { background: #2563eb; }
+.btn-ghost { background: transparent; color: var(--text2); border: 1px solid var(--border); }
+.btn-ghost:hover { background: var(--dark3); color: var(--text); }
+.btn-sm { padding: 4px 10px; font-size: 12px; }
+
+/* ── Tabs ── */
+.tabs { display: flex; gap: 4px; margin-bottom: 16px; background: var(--dark3); padding: 4px; border-radius: 8px; width: fit-content; }
+.tab { padding: 6px 16px; border-radius: 6px; border: none; cursor: pointer; font-size: 13px; font-weight: 500; background: transparent; color: var(--text2); transition: all 0.15s; }
+.tab.active { background: var(--dark2); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
+
+/* ── Search ── */
+.search-box { display: flex; gap: 8px; margin-bottom: 16px; }
+.search-input { flex: 1; background: var(--dark3); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; color: var(--text); font-size: 13px; outline: none; }
+.search-input:focus { border-color: var(--blue); }
+.search-input::placeholder { color: var(--text2); }
+
+/* ── Page sections ── */
+.page { display: none; }
+.page.active { display: block; }
+
+/* ── Avatar ── */
+.avatar { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; flex-shrink: 0; }
+
+/* ── Timeline ── */
+.timeline { display: flex; flex-direction: column; gap: 12px; }
+.timeline-item { display: flex; gap: 12px; align-items: flex-start; }
+.timeline-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--blue); margin-top: 5px; flex-shrink: 0; }
+.timeline-dot.green { background: var(--green); }
+.timeline-dot.orange { background: var(--orange); }
+.timeline-item .meta { font-size: 11px; color: var(--text2); }
+
+/* ── Progress bar ── */
+.progress-bar { height: 6px; background: var(--dark3); border-radius: 3px; overflow: hidden; margin-top: 6px; }
+.progress-fill { height: 100%; border-radius: 3px; background: var(--blue); }
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--dark3); border-radius: 3px; }
+
+/* ── Responsive ── */
+@media (max-width: 900px) {
+  .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  .two-col, .three-col { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════
+     SIDEBAR
+═══════════════════════════════════════════ -->
+<aside class="sidebar">
+  <div class="logo">
+    <div class="brand">SHK</div>
+    <div class="sub">Betriebssoftware</div>
+  </div>
+  <nav>
+    <div class="nav-section">Hauptmenü</div>
+    <button class="nav-item active" onclick="navigate('dashboard')">
+      <span class="icon">📊</span> Dashboard
+    </button>
+    <button class="nav-item" onclick="navigate('kunden')">
+      <span class="icon">👥</span> Kunden
+    </button>
+    <button class="nav-item" onclick="navigate('angebote')">
+      <span class="icon">📋</span> Angebote
+    </button>
+    <button class="nav-item" onclick="navigate('rechnungen')">
+      <span class="icon">🧾</span> Rechnungen
+    </button>
+    <button class="nav-item" onclick="navigate('termine')">
+      <span class="icon">📅</span> Termine
+    </button>
+    <div class="nav-section" style="margin-top:8px">Finanzen</div>
+    <button class="nav-item" onclick="navigate('guv')">
+      <span class="icon">📈</span> Gewinn & Verlust
+    </button>
+  </nav>
+  <div class="sidebar-footer">
+    Neuss · SHK Betrieb<br>
+    <span style="color:var(--green)">● </span>Verbunden
+  </div>
+</aside>
+
+<!-- ═══════════════════════════════════════════
+     MAIN
+═══════════════════════════════════════════ -->
+<div class="main">
+  <div class="topbar">
+    <div>
+      <div class="topbar h1" id="page-title" style="font-size:18px;font-weight:700">Dashboard</div>
+      <div class="topbar sub" id="page-sub">Übersicht · Stand heute</div>
+    </div>
+    <div style="display:flex;gap:10px;align-items:center">
+      <span class="badge-live">● Live</span>
+      <div style="font-size:13px;color:var(--text2)" id="current-date"></div>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- ══════════════════════════════════
+         DASHBOARD
+    ══════════════════════════════════ -->
+    <div class="page active" id="page-dashboard">
+
+      <div class="kpi-grid">
+        <div class="card kpi-card blue">
+          <div class="label">Umsatz 2025 (netto)</div>
+          <div class="value">7.392 €</div>
+          <div class="change up">▲ +783% vs. 2024</div>
+        </div>
+        <div class="card kpi-card green">
+          <div class="label">Offene Angebote</div>
+          <div class="value">1</div>
+          <div class="change neutral">Wert: 9.659 € brutto</div>
+        </div>
+        <div class="card kpi-card orange">
+          <div class="label">Aktive Kunden</div>
+          <div class="value">10</div>
+          <div class="change neutral">Neuss · Düsseldorf · Umgebung</div>
+        </div>
+        <div class="card kpi-card blue">
+          <div class="label">Abgerechnete Aufträge 2025</div>
+          <div class="value">10</div>
+          <div class="change up">▲ +8 vs. 2024 (2 Aufträge)</div>
+        </div>
+      </div>
+
+      <div class="three-col">
+        <div class="card">
+          <h3>Umsatz nach Monat 2025 <span style="font-size:11px;color:var(--text2)">aus DB</span></h3>
+          <canvas id="chartDashRevenue" height="160"></canvas>
+        </div>
+        <div class="card">
+          <h3>Aufträge nach Status</h3>
+          <canvas id="chartStatus" height="180"></canvas>
+        </div>
+      </div>
+
+      <div class="two-col">
+        <div class="card">
+          <h3>Letzte Angebote <button class="btn btn-ghost btn-sm" onclick="navigate('angebote')">alle →</button></h3>
+          <div class="table-wrap">
+            <table>
+              <thead><tr>
+                <th>Nr.</th><th>Kunde</th><th>Titel</th><th>Betrag</th><th>Status</th>
+              </tr></thead>
+              <tbody id="dash-recent-offers"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="card">
+          <h3>Top Kunden 2025 (nach Umsatz)</h3>
+          <div id="dash-top-kunden"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════
+         KUNDEN
+    ══════════════════════════════════ -->
+    <div class="page" id="page-kunden">
+      <div class="section-title">Kundenstamm</div>
+      <div class="search-box">
+        <input class="search-input" id="kunden-search" placeholder="🔍  Kunden suchen (Name, Ort, PLZ)..." oninput="filterKunden()">
+        <button class="btn btn-ghost">Filter</button>
+      </div>
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th></th><th>Name</th><th>Ort</th><th>PLZ</th><th>Telefon / Mobil</th><th>E-Mail</th><th>Aufträge</th><th></th>
+            </tr></thead>
+            <tbody id="kunden-table"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════
+         ANGEBOTE
+    ══════════════════════════════════ -->
+    <div class="page" id="page-angebote">
+      <div class="section-title">Angebote & Aufträge</div>
+
+      <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr)">
+        <div class="card kpi-card green">
+          <div class="label">Abgerechnet 2025</div>
+          <div class="value" id="ang-abger-val">–</div>
+          <div class="change neutral" id="ang-abger-cnt">–</div>
+        </div>
+        <div class="card kpi-card orange">
+          <div class="label">Ausstehend</div>
+          <div class="value" id="ang-aussteh-val">–</div>
+          <div class="change neutral" id="ang-aussteh-cnt">–</div>
+        </div>
+        <div class="card kpi-card red">
+          <div class="label">Abgelehnt</div>
+          <div class="value" id="ang-abgel-val">–</div>
+          <div class="change neutral" id="ang-abgel-cnt">–</div>
+        </div>
+        <div class="card kpi-card blue">
+          <div class="label">Gesamt (alle)</div>
+          <div class="value" id="ang-ges-val">–</div>
+          <div class="change neutral" id="ang-ges-cnt">–</div>
+        </div>
+      </div>
+
+      <div class="tabs">
+        <button class="tab active" onclick="filterAngebote('alle', this)">Alle</button>
+        <button class="tab" onclick="filterAngebote('Abgerechnet', this)">Abgerechnet</button>
+        <button class="tab" onclick="filterAngebote('Ausstehend', this)">Ausstehend</button>
+        <button class="tab" onclick="filterAngebote('Abgelehnt', this)">Abgelehnt</button>
+        <button class="tab" onclick="filterAngebote('Storniert', this)">Storniert</button>
+      </div>
+
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Nr.</th><th>Datum</th><th>Kunde</th><th>Beschreibung</th><th>Brutto</th><th>Netto</th><th>Status</th>
+            </tr></thead>
+            <tbody id="angebote-table"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════
+         RECHNUNGEN
+    ══════════════════════════════════ -->
+    <div class="page" id="page-rechnungen">
+      <div class="section-title">Rechnungen</div>
+      <div class="card">
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Nr.</th><th>Erstellt</th><th>Kunde</th><th>Betrag</th><th>Status</th><th>Zahlungsziel</th><th>Mahnstufe</th>
+            </tr></thead>
+            <tbody id="rechnungen-table"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════
+         TERMINE
+    ══════════════════════════════════ -->
+    <div class="page" id="page-termine">
+      <div class="section-title">Termine & Einsätze</div>
+      <div class="card">
+        <p style="color:var(--text2);font-size:13px;padding:12px 0">
+          Kommende Termine werden direkt aus der Datenbank geladen.<br>
+          <span style="color:var(--blue-light)">→ Termine können über das Kalender-Icon in der Kundenverwaltung hinzugefügt werden.</span>
+        </p>
+        <div id="termine-list" style="margin-top:16px"></div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════
+         GuV
+    ══════════════════════════════════ -->
+    <div class="page" id="page-guv">
+      <div class="section-title">Gewinn- und Verlustrechnung</div>
+
+      <div class="kpi-grid" style="grid-template-columns:repeat(4,1fr)">
+        <div class="card kpi-card blue">
+          <div class="label">Umsatz 2025 (netto)</div>
+          <div class="value">7.392 €</div>
+          <div class="change up">▲ +783% vs. 2024</div>
+        </div>
+        <div class="card kpi-card green">
+          <div class="label">Rohertrag 2025</div>
+          <div class="value" id="guv-rohertrag">–</div>
+          <div class="change neutral" id="guv-rohertrag-m">–</div>
+        </div>
+        <div class="card kpi-card orange">
+          <div class="label">Ausstehend (Angebote)</div>
+          <div class="value">8.116 €</div>
+          <div class="change neutral">netto · noch nicht abgerechnet</div>
+        </div>
+        <div class="card kpi-card blue">
+          <div class="label">Ø Auftragswert 2025</div>
+          <div class="value">739 €</div>
+          <div class="change neutral">netto · 10 Aufträge</div>
+        </div>
+      </div>
+
+      <div class="tabs">
+        <button class="tab active" onclick="switchGuvTab('jahres', this)">Jahresübersicht</button>
+        <button class="tab" onclick="switchGuvTab('monat', this)">Monatlich</button>
+        <button class="tab" onclick="switchGuvTab('chart', this)">Diagramme</button>
+      </div>
+
+      <div id="guv-view-jahres">
+        <div class="card">
+          <div style="margin-bottom:12px;padding:10px 12px;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);border-radius:8px;font-size:12px;color:var(--orange)">
+            ⚠️ <strong>Hinweis:</strong> Die Umsatzzahlen stammen direkt aus der Datenbank (Abgerechnet-Status).
+            Betriebskosten bitte manuell im Feld "Eigene Kosten eintragen" ergänzen.
+          </div>
+          <div class="table-wrap">
+            <table class="guv-table" id="guv-jahres-table"></table>
+          </div>
+        </div>
+      </div>
+
+      <div id="guv-view-monat" style="display:none">
+        <div class="card">
+          <div class="table-wrap">
+            <table class="guv-table" id="guv-monat-table"></table>
+          </div>
+        </div>
+      </div>
+
+      <div id="guv-view-chart" style="display:none">
+        <div class="two-col">
+          <div class="card">
+            <h3>Monatlicher Umsatz 2025 vs. 2024</h3>
+            <canvas id="chartGuvRevenue" height="160"></canvas>
+          </div>
+          <div class="card">
+            <h3>Umsatz nach Kunde 2025</h3>
+            <canvas id="chartGuvKunde" height="160"></canvas>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /main -->
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// ECHTE DATEN AUS DER DATENBANK
+// ═══════════════════════════════════════════════════════════════
+const KUNDEN = [
+  { id:'da5ed699', vorname:'Özgür',   nachname:'Akarsu',     strasse:'Oberbilker Allee 280',        plz:'40227', ort:'Düsseldorf', mobil:'',             email:'' },
+  { id:'db642ec9', vorname:'Frank',   nachname:'Ballmüller', strasse:'Himmelgeister Straße 1',       plz:'41468', ort:'Neuss',      mobil:'',             email:'' },
+  { id:'77098c3c', vorname:'Klaus',   nachname:'Faßbender',  strasse:'Daimlerstraße 59',             plz:'41462', ort:'Neuss',      mobil:'',             email:'' },
+  { id:'4ed85ff0', vorname:'Denis',   nachname:'Gensch',     strasse:'Diestelwiesgen 7b',            plz:'53797', ort:'Lohmar',     mobil:'015755034935', email:'denis.gensch@web.de' },
+  { id:'bfbcc57c', vorname:'Georg',   nachname:'Gensch',     strasse:'Diestelwiesgen 13',            plz:'53797', ort:'Lohmar',     mobil:'',             email:'' },
+  { id:'511ed405', vorname:'Katharina',nachname:'Himmelreich',strasse:'Droste-Hülshoff-Straße 13',  plz:'41464', ort:'Neuss',      mobil:'',             email:'' },
+  { id:'cda443ef', vorname:'Dirk',    nachname:'Hubernagel', strasse:'Pfarrer-Smeddinck-Straße 13', plz:'41468', ort:'Neuss',      mobil:'01784070787',  email:'' },
+  { id:'4666d216', vorname:'Kai',     nachname:'Jahnel',     strasse:'Am Hohen Weg 16',             plz:'41462', ort:'Neuss',      mobil:'01788806688',  email:'jahnelk@web.de' },
+  { id:'bd5c3683', vorname:'Albert',  nachname:'Jumerovski', strasse:'Schubertstraße 28',           plz:'41516', ort:'Grevenbroich',mobil:'',            email:'' },
+  { id:'a2f4a15d', vorname:'Vefa',    nachname:'Karagöz',    strasse:'Adenauer Allee 9',            plz:'41564', ort:'Kaarst',     mobil:'',             email:'' },
+];
+
+const ANGEBOTE = [
+  // 2024
+  { nr:'A-003', datum:'2024-09-04', kundeId:'bfbcc57c', titel:'Angebot',                                    brutto:757.07,   status:'Abgerechnet' },
+  { nr:'A-004', datum:'2024-10-01', kundeId:'bfbcc57c', titel:'Angebot',                                    brutto:239.77,   status:'Abgerechnet' },
+  // 2025
+  { nr:'A-028', datum:'2025-04-08', kundeId:'511ed405', titel:'Angebot',                                    brutto:1890.90,  status:'Abgerechnet' },
+  { nr:'A-041', datum:'2025-06-24', kundeId:'77098c3c', titel:'Angebot',                                    brutto:311.90,   status:'Abgerechnet' },
+  { nr:'A-050', datum:'2025-08-04', kundeId:'cda443ef', titel:'Angebot',                                    brutto:325.22,   status:'Abgerechnet' },
+  { nr:'A-054', datum:'2025-09-17', kundeId:'db642ec9', titel:'Angebot',                                    brutto:169.00,   status:'Abgerechnet' },
+  { nr:'A-055', datum:'2025-09-22', kundeId:'db642ec9', titel:'Angebot – Wartungsset inkl. Einbau',         brutto:161.06,   status:'Abgerechnet' },
+  { nr:'A-057', datum:'2025-09-28', kundeId:'db642ec9', titel:'Angebot',                                    brutto:2403.90,  status:'Abgerechnet' },
+  { nr:'A-058', datum:'2025-10-01', kundeId:'a2f4a15d', titel:'Angebot',                                    brutto:320.65,   status:'Abgerechnet' },
+  { nr:'A-061', datum:'2025-10-14', kundeId:'511ed405', titel:'Angebot',                                    brutto:331.57,   status:'Abgerechnet' },
+  { nr:'A-063', datum:'2025-10-23', kundeId:'cda443ef', titel:'Installationsarbeiten – Sicherheitsventil',  brutto:228.36,   status:'Abgerechnet' },
+  { nr:'A-064', datum:'2025-10-20', kundeId:'cda443ef', titel:'Angebot',                                    brutto:485.88,   status:'Abgelehnt'   },
+  { nr:'A-069', datum:'2025-11-08', kundeId:'4666d216', titel:'Angebot für Warmwasserspeicher',             brutto:2655.38,  status:'Abgerechnet' },
+  // 2026
+  { nr:'A-082', datum:'2026-02-23', kundeId:'cda443ef', titel:'Angebot Kamerainspektion',                  brutto:197.80,   status:'Abgerechnet' },
+  { nr:'A-083', datum:'2026-03-02', kundeId:'cda443ef', titel:'Angebot Wartung Enthärtungsanlage',          brutto:248.01,   status:'Abgerechnet' },
+  { nr:'A-084', datum:'2026-02-23', kundeId:'cda443ef', titel:'Angebot: Schadensbehebung Rohrbruch',        brutto:486.65,   status:'Abgerechnet' },
+  { nr:'A-092', datum:'2026-04-26', kundeId:'4666d216', titel:'Angebot',                                    brutto:9658.86,  status:'Ausstehend'  },
+];
+
+const RECHNUNGEN = [
+  { nr:'R-004', datum:'2024-10-29', kundeId:'4666d216', brutto:594.33,  status:'Storniert', zahlungsziel:null, mahnstufe:0 },
+  { nr:'R-006', datum:'2024-10-29', kundeId:'4666d216', brutto:-594.33, status:'Storniert', zahlungsziel:null, mahnstufe:0 },
+];
+
+// ═══════════════════════════════════════════════════════════════
+// HILFSFUNKTIONEN
+// ═══════════════════════════════════════════════════════════════
+function kundeById(id) { return KUNDEN.find(k => k.id === id) || {}; }
+function kundeName(id) { const k = kundeById(id); return `${k.vorname||''} ${k.nachname||''}`.trim(); }
+function netto(brutto) { return brutto / 1.19; }
+function fmt(n) { return n.toLocaleString('de-DE', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' €'; }
+function fmtShort(n) { return (Math.abs(n) >= 1000 ? (n/1000).toLocaleString('de-DE',{minimumFractionDigits:1,maximumFractionDigits:1})+'k' : n.toLocaleString('de-DE',{minimumFractionDigits:0})) + ' €'; }
+function fmtDate(d) { if (!d) return '–'; return new Date(d).toLocaleDateString('de-DE'); }
+function avatarColor(name) {
+  const colors = ['#3b82f6','#8b5cf6','#ec4899','#14b8a6','#f59e0b','#22c55e','#ef4444','#6366f1'];
+  let hash = 0; for (let c of name) hash = c.charCodeAt(0) + ((hash<<5)-hash);
+  return colors[Math.abs(hash) % colors.length];
+}
+function statusBadge(s) {
+  const map = {'Abgerechnet':'abgerechnet','Ausstehend':'ausstehend','Abgelehnt':'abgelehnt','Storniert':'storniert','Offen':'offen','Bezahlt':'bezahlt'};
+  return `<span class="status ${map[s]||''}">${s}</span>`;
+}
+
+// Revenue by month 2025 (netto)
+function umsatzByMonth(year) {
+  const months = Array(12).fill(0);
+  ANGEBOTE.forEach(a => {
+    if (a.status !== 'Abgerechnet') return;
+    const d = new Date(a.datum);
+    if (d.getFullYear() !== year) return;
+    months[d.getMonth()] += netto(a.brutto);
+  });
+  return months;
+}
+function umsatzByKunde(year) {
+  const map = {};
+  ANGEBOTE.forEach(a => {
+    if (a.status !== 'Abgerechnet') return;
+    if (new Date(a.datum).getFullYear() !== year) return;
+    map[a.kundeId] = (map[a.kundeId]||0) + netto(a.brutto);
+  });
+  return Object.entries(map).sort((a,b)=>b[1]-a[1]);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// NAVIGATION
+// ═══════════════════════════════════════════════════════════════
+const PAGE_TITLES = {
+  dashboard:   ['Dashboard', 'Übersicht · Stand heute'],
+  kunden:      ['Kunden', `${KUNDEN.length} Einträge im Kundenstamm`],
+  angebote:    ['Angebote & Aufträge', 'Alle Angebote aus der Datenbank'],
+  rechnungen:  ['Rechnungen', 'Offene und abgeschlossene Rechnungen'],
+  termine:     ['Termine', 'Einsätze & Besprechungen'],
+  guv:         ['Gewinn & Verlust', 'GuV · Echte Daten aus der DB'],
+};
+
+function navigate(page) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + page).classList.add('active');
+  document.querySelector(`[onclick="navigate('${page}')"]`).classList.add('active');
+  const [title, sub] = PAGE_TITLES[page] || [page, ''];
+  document.getElementById('page-title').textContent = title;
+  document.getElementById('page-sub').textContent = sub;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DASHBOARD
+// ═══════════════════════════════════════════════════════════════
+function buildDashboard() {
+  // Recent offers
+  const recent = [...ANGEBOTE].sort((a,b) => new Date(b.datum)-new Date(a.datum)).slice(0,5);
+  document.getElementById('dash-recent-offers').innerHTML = recent.map(a => `
+    <tr>
+      <td style="font-weight:600;color:var(--blue-light)">${a.nr}</td>
+      <td>${kundeName(a.kundeId)}</td>
+      <td style="color:var(--text2);max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${a.titel}</td>
+      <td style="font-weight:600">${fmt(a.brutto)}</td>
+      <td>${statusBadge(a.status)}</td>
+    </tr>
+  `).join('');
+
+  // Top kunden
+  const topK = umsatzByKunde(2025).slice(0, 5);
+  const maxVal = topK[0]?.[1] || 1;
+  document.getElementById('dash-top-kunden').innerHTML = topK.map(([id, val]) => {
+    const k = kundeById(id);
+    const name = kundeName(id);
+    const initials = `${k.vorname?.[0]||''}${k.nachname?.[0]||''}`;
+    const pct = (val/maxVal*100).toFixed(0);
+    return `<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+      <div class="avatar" style="background:${avatarColor(name)}">${initials}</div>
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:600">${name}</div>
+        <div class="progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+      </div>
+      <div style="font-size:13px;font-weight:700;color:var(--green)">${fmt(val)}</div>
+    </div>`;
+  }).join('');
+
+  // Chart: revenue by month
+  const rev25 = umsatzByMonth(2025);
+  const rev24 = umsatzByMonth(2024);
+  const MONATE = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
+
+  new Chart(document.getElementById('chartDashRevenue'), {
+    type: 'bar',
+    data: {
+      labels: MONATE,
+      datasets: [
+        { label:'2025', data: rev25, backgroundColor:'rgba(59,130,246,0.7)', borderRadius:4 },
+        { label:'2024', data: rev24, backgroundColor:'rgba(59,130,246,0.2)', borderRadius:4 },
+      ]
+    },
+    options: {
+      responsive:true,
+      plugins:{ legend:{ labels:{ color:'#94a3b8', boxWidth:10 } } },
+      scales:{
+        x:{ ticks:{color:'#64748b'}, grid:{color:'rgba(255,255,255,0.03)'} },
+        y:{ ticks:{color:'#64748b', callback:v=>v+'€'}, grid:{color:'rgba(255,255,255,0.05)'} }
+      }
+    }
+  });
+
+  // Chart: status
+  const statusCount = { Abgerechnet:0, Ausstehend:0, Abgelehnt:0, Storniert:0 };
+  ANGEBOTE.forEach(a => { if (statusCount[a.status]!==undefined) statusCount[a.status]++; });
+  new Chart(document.getElementById('chartStatus'), {
+    type:'doughnut',
+    data:{
+      labels:['Abgerechnet','Ausstehend','Abgelehnt','Storniert'],
+      datasets:[{ data:Object.values(statusCount),
+        backgroundColor:['#22c55e','#f59e0b','#ef4444','#64748b'],
+        borderWidth:2, borderColor:'#1e293b'
+      }]
+    },
+    options:{
+      plugins:{ legend:{ position:'bottom', labels:{ color:'#94a3b8', boxWidth:10, font:{size:11} } } },
+      cutout:'62%'
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════
+// KUNDEN
+// ═══════════════════════════════════════════════════════════════
+function buildKunden() {
+  renderKundenTable(KUNDEN);
+}
+
+function renderKundenTable(list) {
+  const auftragCount = {};
+  ANGEBOTE.forEach(a => { if (a.status === 'Abgerechnet') auftragCount[a.kundeId] = (auftragCount[a.kundeId]||0)+1; });
+
+  document.getElementById('kunden-table').innerHTML = list.map(k => {
+    const name = kundeName(k.id);
+    const initials = `${k.vorname?.[0]||''}${k.nachname?.[0]||''}`;
+    const cnt = auftragCount[k.id] || 0;
+    return `<tr>
+      <td><div class="avatar" style="background:${avatarColor(name)};font-size:12px">${initials}</div></td>
+      <td><div style="font-weight:600">${k.vorname} ${k.nachname}</div><div style="font-size:11px;color:var(--text2)">${k.strasse}</div></td>
+      <td>${k.ort}</td>
+      <td>${k.plz}</td>
+      <td>${k.mobil || k.telefon || '–'}</td>
+      <td>${k.email || '–'}</td>
+      <td><span style="font-weight:600;color:${cnt>0?'var(--green)':'var(--text2)'}">${cnt}</span></td>
+      <td><button class="btn btn-ghost btn-sm" onclick="showKundeDetail('${k.id}')">Details</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function filterKunden() {
+  const q = document.getElementById('kunden-search').value.toLowerCase();
+  const filtered = KUNDEN.filter(k =>
+    `${k.vorname} ${k.nachname} ${k.ort} ${k.plz}`.toLowerCase().includes(q)
+  );
+  renderKundenTable(filtered);
+}
+
+function showKundeDetail(id) {
+  const k = kundeById(id);
+  const offers = ANGEBOTE.filter(a => a.kundeId === id);
+  navigate('angebote');
+  setTimeout(() => filterAngebote('alle', document.querySelector('.tab')), 100);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ANGEBOTE
+// ═══════════════════════════════════════════════════════════════
+let currentAngeboteFilter = 'alle';
+
+function buildAngebote() {
+  // KPIs
+  const abger = ANGEBOTE.filter(a => a.status==='Abgerechnet' && new Date(a.datum).getFullYear()===2025);
+  const aussteh = ANGEBOTE.filter(a => a.status==='Ausstehend');
+  const abgel = ANGEBOTE.filter(a => a.status==='Abgelehnt');
+  const sum = arr => arr.reduce((s,a)=>s+a.brutto,0);
+
+  document.getElementById('ang-abger-val').textContent = fmt(sum(abger));
+  document.getElementById('ang-abger-cnt').textContent = `${abger.length} Aufträge`;
+  document.getElementById('ang-aussteh-val').textContent = fmt(sum(aussteh));
+  document.getElementById('ang-aussteh-cnt').textContent = `${aussteh.length} Angebote`;
+  document.getElementById('ang-abgel-val').textContent = fmt(sum(abgel));
+  document.getElementById('ang-abgel-cnt').textContent = `${abgel.length} Angebote`;
+  document.getElementById('ang-ges-val').textContent = fmt(sum(ANGEBOTE.filter(a=>a.status!=='Abgelehnt'&&a.status!=='Storniert')));
+  document.getElementById('ang-ges-cnt').textContent = `${ANGEBOTE.length} gesamt`;
+
+  filterAngebote('alle', document.querySelector('.tabs .tab'));
+}
+
+function filterAngebote(filter, btn) {
+  currentAngeboteFilter = filter;
+  document.querySelectorAll('#page-angebote .tab').forEach(t => t.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+
+  const list = filter === 'alle' ? ANGEBOTE : ANGEBOTE.filter(a => a.status === filter);
+  const sorted = [...list].sort((a,b) => new Date(b.datum)-new Date(a.datum));
+
+  document.getElementById('angebote-table').innerHTML = sorted.map(a => `
+    <tr>
+      <td style="font-weight:600;color:var(--blue-light)">${a.nr}</td>
+      <td style="color:var(--text2)">${fmtDate(a.datum)}</td>
+      <td style="font-weight:500">${kundeName(a.kundeId)}</td>
+      <td style="color:var(--text2);max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${a.titel}</td>
+      <td style="font-weight:600">${fmt(a.brutto)}</td>
+      <td style="color:var(--text2)">${fmt(netto(a.brutto))}</td>
+      <td>${statusBadge(a.status)}</td>
+    </tr>
+  `).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RECHNUNGEN
+// ═══════════════════════════════════════════════════════════════
+function buildRechnungen() {
+  document.getElementById('rechnungen-table').innerHTML = RECHNUNGEN.map(r => `
+    <tr>
+      <td style="font-weight:600;color:var(--blue-light)">${r.nr}</td>
+      <td style="color:var(--text2)">${fmtDate(r.datum)}</td>
+      <td>${kundeName(r.kundeId)}</td>
+      <td style="font-weight:600;color:${r.brutto<0?'var(--red)':'var(--text)'}">${fmt(r.brutto)}</td>
+      <td>${statusBadge(r.status)}</td>
+      <td>${r.zahlungsziel ? fmtDate(r.zahlungsziel) : '–'}</td>
+      <td>${r.mahnstufe === 0 ? '–' : r.mahnstufe}</td>
+    </tr>
+  `).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TERMINE
+// ═══════════════════════════════════════════════════════════════
+function buildTermine() {
+  document.getElementById('termine-list').innerHTML = `
+    <div style="color:var(--text2);font-size:13px;padding:20px;text-align:center;border:1px dashed var(--border);border-radius:8px">
+      Termine werden live aus der Datenbank geladen.<br>
+      <span style="color:var(--blue-light);cursor:pointer" onclick="loadTermine()">→ Jetzt laden</span>
+    </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// GuV
+// ═══════════════════════════════════════════════════════════════
+const GUV_MONTHS = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
+
+function guvData(year) {
+  const months = Array(12).fill(0).map((_,m) => {
+    const rev = ANGEBOTE
+      .filter(a => a.status==='Abgerechnet' && new Date(a.datum).getFullYear()===year && new Date(a.datum).getMonth()===m)
+      .reduce((s,a) => s + netto(a.brutto), 0);
+    return { umsatz: rev };
+  });
+  return months;
+}
+
+function buildGuv() {
+  const d25 = guvData(2025);
+  const d24 = guvData(2024);
+  const sum = arr => arr.reduce((s,v)=>s+v,0);
+  const u25 = d25.map(m=>m.umsatz);
+  const u24 = d24.map(m=>m.umsatz);
+  const totalU25 = sum(u25), totalU24 = sum(u24);
+
+  // KPI
+  document.getElementById('guv-rohertrag').textContent = fmt(totalU25);
+  document.getElementById('guv-rohertrag-m').textContent = 'Marge: 100% (Kosten nicht eingetragen)';
+
+  // Jahrestabelle
+  function guvRow(label, v25, v24, cls='', indent=false) {
+    const diff = v25 - v24;
+    const diffPct = v24 !== 0 ? ((diff/Math.abs(v24))*100).toFixed(1) : '–';
+    const diffCls = diff >= 0 ? 'pos' : 'neg';
+    const indStyle = indent ? ' style="padding-left:28px;color:var(--text2);font-size:12px"' : '';
+    const tr = cls ? ` class="${cls}"` : '';
+    return `<tr${tr}>
+      <td${indStyle}>${label}</td>
+      <td>${fmt(v25)}</td>
+      <td>${fmt(v24)}</td>
+      <td class="${diffCls}">${diff>=0?'+':''}${fmt(diff)}</td>
+      <td class="${diffCls}">${diff>=0?'+':''}${diffPct === '–' ? '–' : diffPct + ' %'}</td>
+    </tr>`;
+  }
+
+  const jt = document.getElementById('guv-jahres-table');
+  jt.innerHTML = `<thead><tr>
+    <th style="text-align:left;width:260px">Position</th>
+    <th>2025 (netto)</th><th>2024 (netto)</th><th>Abw. abs.</th><th>Abw. %</th>
+  </tr></thead><tbody>
+    <tr class="guv-section"><td colspan="5">UMSATZERLÖSE (aus DB – abgerechnete Angebote)</td></tr>
+    ${ANGEBOTE.filter(a=>a.status==='Abgerechnet').reduce((map,a)=>{
+      const kid=a.kundeId; map[kid]=(map[kid]||{t25:0,t24:0});
+      const y=new Date(a.datum).getFullYear();
+      if(y===2025) map[kid].t25+=netto(a.brutto);
+      else if(y===2024) map[kid].t24+=netto(a.brutto);
+      return map;
+    },{})==={} ? '' : Object.entries(ANGEBOTE.filter(a=>a.status==='Abgerechnet').reduce((map,a)=>{
+      const kid=a.kundeId; if(!map[kid]) map[kid]={t25:0,t24:0};
+      const y=new Date(a.datum).getFullYear();
+      if(y===2025) map[kid].t25+=netto(a.brutto);
+      else if(y===2024) map[kid].t24+=netto(a.brutto);
+      return map;
+    },{})).sort((a,b)=>b[1].t25-a[1].t25).map(([id,v]) =>
+      guvRow(kundeName(id), v.t25, v.t24, 'indent', true)
+    ).join('')}
+    ${guvRow('= GESAMTUMSATZ (netto)', totalU25, totalU24, 'guv-subtotal')}
+    <tr class="guv-section"><td colspan="5">MATERIALAUFWAND & BETRIEBSKOSTEN</td></tr>
+    <tr class="indent"><td style="padding-left:28px;color:var(--text2);font-size:12px">Materialkosten</td><td colspan="4" style="color:var(--orange);font-size:12px">→ bitte eintragen</td></tr>
+    <tr class="indent"><td style="padding-left:28px;color:var(--text2);font-size:12px">Personalkosten</td><td colspan="4" style="color:var(--orange);font-size:12px">→ bitte eintragen</td></tr>
+    <tr class="indent"><td style="padding-left:28px;color:var(--text2);font-size:12px">Fahrzeugkosten</td><td colspan="4" style="color:var(--orange);font-size:12px">→ bitte eintragen</td></tr>
+    <tr class="indent"><td style="padding-left:28px;color:var(--text2);font-size:12px">Sonstige Kosten</td><td colspan="4" style="color:var(--orange);font-size:12px">→ bitte eintragen</td></tr>
+    ${guvRow('= EBIT (Betriebsergebnis)', totalU25, totalU24, 'guv-total')}
+  </tbody>`;
+
+  // Monatstabelle
+  const mt = document.getElementById('guv-monat-table');
+  mt.innerHTML = `<thead><tr>
+    <th style="text-align:left;min-width:140px">Position 2025</th>
+    ${GUV_MONTHS.map(m=>`<th>${m}</th>`).join('')}
+    <th>Gesamt</th>
+  </tr></thead><tbody>
+    <tr class="guv-subtotal">
+      <td>Umsatz (netto)</td>
+      ${u25.map(v=>`<td style="text-align:right">${v>0?fmtShort(v):'–'}</td>`).join('')}
+      <td style="text-align:right;font-weight:700">${fmt(totalU25)}</td>
+    </tr>
+    <tr class="indent">
+      <td style="padding-left:28px;color:var(--text2);font-size:12px">kumuliert</td>
+      ${u25.map((_,i)=>u25.slice(0,i+1).reduce((s,v)=>s+v,0)).map(v=>`<td style="text-align:right;color:var(--text2);font-size:12px">${v>0?fmtShort(v):'–'}</td>`).join('')}
+      <td></td>
+    </tr>
+    <tr style="height:8px"></tr>
+    <tr class="indent">
+      <td style="padding-left:28px;color:var(--text2);font-size:12px">2024 Vergleich</td>
+      ${u24.map(v=>`<td style="text-align:right;color:var(--text2);font-size:12px">${v>0?fmtShort(v):'–'}</td>`).join('')}
+      <td style="text-align:right;color:var(--text2);font-size:12px">${fmt(totalU24)}</td>
+    </tr>
+  </tbody>`;
+}
+
+let guvChartRev = null, guvChartKunde = null;
+
+function buildGuvCharts() {
+  if (guvChartRev) { guvChartRev.destroy(); guvChartKunde.destroy(); }
+  const u25 = umsatzByMonth(2025);
+  const u24 = umsatzByMonth(2024);
+  guvChartRev = new Chart(document.getElementById('chartGuvRevenue'), {
+    type:'bar',
+    data:{
+      labels: GUV_MONTHS,
+      datasets:[
+        { label:'2025', data:u25, backgroundColor:'rgba(59,130,246,0.8)', borderRadius:4 },
+        { label:'2024', data:u24, backgroundColor:'rgba(59,130,246,0.25)', borderRadius:4 },
+      ]
+    },
+    options:{
+      plugins:{ legend:{ labels:{ color:'#94a3b8', boxWidth:10 } } },
+      scales:{ x:{ ticks:{color:'#64748b'}, grid:{color:'rgba(255,255,255,0.03)'} },
+               y:{ ticks:{color:'#64748b',callback:v=>v+'€'}, grid:{color:'rgba(255,255,255,0.05)'} } }
+    }
+  });
+
+  const topK = umsatzByKunde(2025);
+  guvChartKunde = new Chart(document.getElementById('chartGuvKunde'), {
+    type:'bar',
+    data:{
+      labels: topK.map(([id])=>kundeName(id)),
+      datasets:[{ label:'Umsatz netto 2025', data:topK.map(([,v])=>v),
+        backgroundColor:['#3b82f6','#8b5cf6','#22c55e','#f59e0b','#ec4899'],
+        borderRadius:4
+      }]
+    },
+    options:{
+      indexAxis:'y',
+      plugins:{ legend:{ display:false } },
+      scales:{ x:{ ticks:{color:'#64748b',callback:v=>v+'€'}, grid:{color:'rgba(255,255,255,0.05)'} },
+               y:{ ticks:{color:'#94a3b8'} } }
+    }
+  });
+}
+
+function switchGuvTab(tab, btn) {
+  ['jahres','monat','chart'].forEach(t => {
+    document.getElementById('guv-view-'+t).style.display = t===tab?'':'none';
+  });
+  document.querySelectorAll('#page-guv .tab').forEach(t => t.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  if (tab === 'chart') buildGuvCharts();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════════
+document.getElementById('current-date').textContent =
+  new Date().toLocaleDateString('de-DE', {weekday:'short', day:'2-digit', month:'long', year:'numeric'});
+
+buildDashboard();
+buildKunden();
+buildAngebote();
+buildRechnungen();
+buildTermine();
+buildGuv();
+</script>
+</body>
+</html>

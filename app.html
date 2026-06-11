@@ -1492,6 +1492,88 @@ input[type=checkbox] {
   .pc-sidebar { width: 100%; height: 200px; border-left: none; border-top: 1px solid rgba(255,255,255,.1); }
 }
 
+/* ── Sensor Measure Mode ─────────────────────────────────── */
+.measure-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 5;
+  pointer-events: none;
+}
+.measure-step {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(79,195,247,.2);
+  border: 1px solid rgba(79,195,247,.5);
+  color: #4FC3F7;
+  font-weight: 700;
+  font-size: .85rem;
+  border-radius: 16px;
+  padding: 4px 14px;
+}
+.measure-crosshair {
+  position: relative;
+  width: 70px;
+  height: 70px;
+}
+.measure-cross-h, .measure-cross-v {
+  position: absolute;
+  background: #4FC3F7;
+  box-shadow: 0 0 6px rgba(0,0,0,.8);
+}
+.measure-cross-h { top: 50%; left: 0; right: 0; height: 2px; transform: translateY(-50%); }
+.measure-cross-v { left: 50%; top: 0; bottom: 0; width: 2px; transform: translateX(-50%); }
+.measure-cross-dot {
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: #FF5252;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 0 6px rgba(0,0,0,.8);
+}
+.measure-readout {
+  margin-top: 14px;
+  background: rgba(0,0,0,.75);
+  border: 1.5px solid #4FC3F7;
+  color: #4FC3F7;
+  font-size: 1.3rem;
+  font-weight: 800;
+  border-radius: 10px;
+  padding: 6px 22px;
+}
+.measure-instruction {
+  margin-top: 10px;
+  background: rgba(0,0,0,.7);
+  color: #fff;
+  font-size: .82rem;
+  border-radius: 8px;
+  padding: 7px 14px;
+  max-width: 85%;
+  text-align: center;
+}
+.measure-actions {
+  position: absolute;
+  bottom: 16px;
+  left: 0; right: 0;
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  pointer-events: auto;
+}
+.measure-start-box {
+  background: rgba(79,195,247,.08);
+  border: 1px solid rgba(79,195,247,.3);
+  border-radius: 10px;
+  padding: 12px;
+  margin-bottom: 14px;
+}
+
 /* ────────────────────────────────────────────────────────
    Module Styles — Heat Pump, Hydraulics, Radiators,
                    Quote, CRM
@@ -2511,10 +2593,44 @@ input[type=checkbox] {
             </svg>
             Kamera nicht verfügbar
           </div>
+
+          <!-- Sensor measure overlay (tilt-based distance) -->
+          <div id="measureOverlay" class="measure-overlay" style="display:none;">
+            <div class="measure-step" id="measureStep">1/4</div>
+            <div class="measure-crosshair">
+              <div class="measure-cross-h"></div>
+              <div class="measure-cross-v"></div>
+              <div class="measure-cross-dot"></div>
+            </div>
+            <div class="measure-readout" id="measureReadout">— m</div>
+            <div class="measure-instruction" id="measureInstruction">Fußkante der Wand anvisieren</div>
+            <div class="measure-actions">
+              <button class="btn-ar-action" onclick="Scanner.stopMeasure()">✕ Abbrechen</button>
+              <button class="btn-ar-action primary" onclick="Scanner.captureMeasure()">📏 Messen</button>
+            </div>
+          </div>
         </div>
         <div class="camera-form-panel">
           <div class="camera-form-header">📐 Raummaße eingeben</div>
           <div class="camera-form-body">
+
+            <!-- Auto measure starter -->
+            <div class="measure-start-box">
+              <div style="font-weight:600;font-size:.85rem;margin-bottom:6px;">📡 Sensor-Messung (ohne AR)</div>
+              <div style="font-size:.76rem;color:rgba(255,255,255,.55);line-height:1.4;margin-bottom:8px;">
+                Stell dich in die <strong>Raummitte</strong>. Ziele mit dem Fadenkreuz auf die <strong>Fußkante</strong> jeder Wand — die Entfernung wird aus dem Neigungswinkel berechnet.
+              </div>
+              <div class="scan-input-group" style="margin-bottom:8px;">
+                <label class="scan-label">Kamerahöhe (Augenhöhe)</label>
+                <div class="scan-input-unit">
+                  <input type="number" id="measureCamHeight" value="1.50" step="0.05" min="0.5" max="2.2">
+                  <span>m</span>
+                </div>
+              </div>
+              <button class="btn-ar-action primary" style="width:100%;justify-content:center;display:flex;"
+                onclick="Scanner.startMeasure()">📡 Auto-Messung starten</button>
+            </div>
+
             <div class="scan-input-group">
               <label class="scan-label">Breite</label>
               <div class="scan-input-unit">
@@ -2928,6 +3044,7 @@ const Scanner = {
   close() {
     this._stopAR();
     this._stopCamera();
+    this.stopMeasure();
     if (this.s.animFrame) { cancelAnimationFrame(this.s.animFrame); this.s.animFrame = null; }
     document.getElementById('scannerOverlay').classList.remove('active');
     this.s.mode = null;
@@ -3490,6 +3607,7 @@ const Scanner = {
   },
 
   _stopCamera() {
+    this.stopMeasure();
     if (this.s.cameraStream) {
       this.s.cameraStream.getTracks().forEach(t => t.stop());
       this.s.cameraStream = null;
@@ -3502,6 +3620,126 @@ const Scanner = {
     ['camWidth', 'camDepth', 'camHeight'].forEach(id => {
       document.getElementById(id)?.addEventListener('input', () => this._drawRoomSketch());
     });
+  },
+
+  // ── Sensor Measure Mode (tilt-based, no AR needed) ─────
+  // Distance to a floor point: d = cameraHeight · tan(tilt)
+  // where tilt is the angle between straight-down and the view direction.
+  // deviceorientation beta: 0° = phone flat (camera straight down), 90° = upright.
+  m: {
+    active: false,
+    step: 0,
+    dists: [],
+    beta: null,
+    camHeight: 1.5,
+    handler: null,
+  },
+
+  startMeasure() {
+    // iOS 13+ requires explicit permission via user gesture
+    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+      DeviceOrientationEvent.requestPermission()
+        .then(state => {
+          if (state === 'granted') this._beginMeasure();
+          else App.toast?.('Sensor-Zugriff verweigert', 'error');
+        })
+        .catch(() => App.toast?.('Sensor-Zugriff nicht möglich', 'error'));
+    } else {
+      this._beginMeasure();
+    }
+  },
+
+  _beginMeasure() {
+    this.m.active = true;
+    this.m.step = 0;
+    this.m.dists = [];
+    this.m.beta = null;
+    this.m.camHeight = parseFloat(document.getElementById('measureCamHeight')?.value) || 1.5;
+
+    const overlay = document.getElementById('measureOverlay');
+    if (overlay) overlay.style.display = 'flex';
+
+    this.m.handler = (e) => this._onOrientation(e);
+    window.addEventListener('deviceorientation', this.m.handler);
+
+    // Warn if no sensor data arrives
+    setTimeout(() => {
+      if (this.m.active && this.m.beta === null) {
+        App.toast?.('Kein Neigungssensor gefunden — bitte Maße manuell eingeben', 'error');
+        this.stopMeasure();
+      }
+    }, 2000);
+
+    this._updateMeasureUI();
+  },
+
+  stopMeasure() {
+    this.m.active = false;
+    if (this.m.handler) {
+      window.removeEventListener('deviceorientation', this.m.handler);
+      this.m.handler = null;
+    }
+    const overlay = document.getElementById('measureOverlay');
+    if (overlay) overlay.style.display = 'none';
+  },
+
+  _onOrientation(e) {
+    if (e.beta == null || !this.m.active) return;
+    this.m.beta = e.beta;
+    const d = this._measureDistance();
+    const el = document.getElementById('measureReadout');
+    if (el) el.textContent = d > 0 ? d.toFixed(2) + ' m' : '— m';
+  },
+
+  _measureDistance() {
+    const b = this.m.beta;
+    // Valid range: clearly tilted towards the floor but not horizontal
+    if (b == null || b < 8 || b > 83) return 0;
+    return this.m.camHeight * Math.tan(b * Math.PI / 180);
+  },
+
+  captureMeasure() {
+    const d = this._measureDistance();
+    if (d <= 0) {
+      App.toast?.('Bitte auf die Fußkante der Wand zielen (Handy neigen)', 'error');
+      return;
+    }
+    this.m.dists.push(d);
+    this.m.step++;
+
+    if (this.m.step >= 4) {
+      this._finishMeasure();
+    } else {
+      this._updateMeasureUI();
+    }
+  },
+
+  _finishMeasure() {
+    const [front, back, left, right] = this.m.dists;
+    const depth = +(front + back).toFixed(2);
+    const width = +(left + right).toFixed(2);
+
+    const wEl = document.getElementById('camWidth');
+    const dEl = document.getElementById('camDepth');
+    if (wEl) wEl.value = width;
+    if (dEl) dEl.value = depth;
+
+    this._drawRoomSketch();
+    this.stopMeasure();
+    App.toast?.(`📐 Gemessen: ${width.toFixed(2)} × ${depth.toFixed(2)} m`, 'success');
+  },
+
+  _updateMeasureUI() {
+    const msgs = [
+      'Fußkante der Wand VOR dir anvisieren',
+      'Umdrehen — Wand HINTER dir anvisieren',
+      'Wand LINKS von dir anvisieren',
+      'Wand RECHTS von dir anvisieren',
+    ];
+    const stepEl  = document.getElementById('measureStep');
+    const instrEl = document.getElementById('measureInstruction');
+    if (stepEl)  stepEl.textContent  = (this.m.step + 1) + '/4';
+    if (instrEl) instrEl.textContent = msgs[this.m.step];
   },
 
   cameraConfirm() {

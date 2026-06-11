@@ -56,6 +56,7 @@ const Scanner = {
   close() {
     this._stopAR();
     this._stopCamera();
+    this.stopMeasure();
     if (this.s.animFrame) { cancelAnimationFrame(this.s.animFrame); this.s.animFrame = null; }
     document.getElementById('scannerOverlay').classList.remove('active');
     this.s.mode = null;
@@ -618,6 +619,7 @@ const Scanner = {
   },
 
   _stopCamera() {
+    this.stopMeasure();
     if (this.s.cameraStream) {
       this.s.cameraStream.getTracks().forEach(t => t.stop());
       this.s.cameraStream = null;
@@ -630,6 +632,126 @@ const Scanner = {
     ['camWidth', 'camDepth', 'camHeight'].forEach(id => {
       document.getElementById(id)?.addEventListener('input', () => this._drawRoomSketch());
     });
+  },
+
+  // ── Sensor Measure Mode (tilt-based, no AR needed) ─────
+  // Distance to a floor point: d = cameraHeight · tan(tilt)
+  // where tilt is the angle between straight-down and the view direction.
+  // deviceorientation beta: 0° = phone flat (camera straight down), 90° = upright.
+  m: {
+    active: false,
+    step: 0,
+    dists: [],
+    beta: null,
+    camHeight: 1.5,
+    handler: null,
+  },
+
+  startMeasure() {
+    // iOS 13+ requires explicit permission via user gesture
+    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+      DeviceOrientationEvent.requestPermission()
+        .then(state => {
+          if (state === 'granted') this._beginMeasure();
+          else App.toast?.('Sensor-Zugriff verweigert', 'error');
+        })
+        .catch(() => App.toast?.('Sensor-Zugriff nicht möglich', 'error'));
+    } else {
+      this._beginMeasure();
+    }
+  },
+
+  _beginMeasure() {
+    this.m.active = true;
+    this.m.step = 0;
+    this.m.dists = [];
+    this.m.beta = null;
+    this.m.camHeight = parseFloat(document.getElementById('measureCamHeight')?.value) || 1.5;
+
+    const overlay = document.getElementById('measureOverlay');
+    if (overlay) overlay.style.display = 'flex';
+
+    this.m.handler = (e) => this._onOrientation(e);
+    window.addEventListener('deviceorientation', this.m.handler);
+
+    // Warn if no sensor data arrives
+    setTimeout(() => {
+      if (this.m.active && this.m.beta === null) {
+        App.toast?.('Kein Neigungssensor gefunden — bitte Maße manuell eingeben', 'error');
+        this.stopMeasure();
+      }
+    }, 2000);
+
+    this._updateMeasureUI();
+  },
+
+  stopMeasure() {
+    this.m.active = false;
+    if (this.m.handler) {
+      window.removeEventListener('deviceorientation', this.m.handler);
+      this.m.handler = null;
+    }
+    const overlay = document.getElementById('measureOverlay');
+    if (overlay) overlay.style.display = 'none';
+  },
+
+  _onOrientation(e) {
+    if (e.beta == null || !this.m.active) return;
+    this.m.beta = e.beta;
+    const d = this._measureDistance();
+    const el = document.getElementById('measureReadout');
+    if (el) el.textContent = d > 0 ? d.toFixed(2) + ' m' : '— m';
+  },
+
+  _measureDistance() {
+    const b = this.m.beta;
+    // Valid range: clearly tilted towards the floor but not horizontal
+    if (b == null || b < 8 || b > 83) return 0;
+    return this.m.camHeight * Math.tan(b * Math.PI / 180);
+  },
+
+  captureMeasure() {
+    const d = this._measureDistance();
+    if (d <= 0) {
+      App.toast?.('Bitte auf die Fußkante der Wand zielen (Handy neigen)', 'error');
+      return;
+    }
+    this.m.dists.push(d);
+    this.m.step++;
+
+    if (this.m.step >= 4) {
+      this._finishMeasure();
+    } else {
+      this._updateMeasureUI();
+    }
+  },
+
+  _finishMeasure() {
+    const [front, back, left, right] = this.m.dists;
+    const depth = +(front + back).toFixed(2);
+    const width = +(left + right).toFixed(2);
+
+    const wEl = document.getElementById('camWidth');
+    const dEl = document.getElementById('camDepth');
+    if (wEl) wEl.value = width;
+    if (dEl) dEl.value = depth;
+
+    this._drawRoomSketch();
+    this.stopMeasure();
+    App.toast?.(`📐 Gemessen: ${width.toFixed(2)} × ${depth.toFixed(2)} m`, 'success');
+  },
+
+  _updateMeasureUI() {
+    const msgs = [
+      'Fußkante der Wand VOR dir anvisieren',
+      'Umdrehen — Wand HINTER dir anvisieren',
+      'Wand LINKS von dir anvisieren',
+      'Wand RECHTS von dir anvisieren',
+    ];
+    const stepEl  = document.getElementById('measureStep');
+    const instrEl = document.getElementById('measureInstruction');
+    if (stepEl)  stepEl.textContent  = (this.m.step + 1) + '/4';
+    if (instrEl) instrEl.textContent = msgs[this.m.step];
   },
 
   cameraConfirm() {

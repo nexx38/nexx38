@@ -416,6 +416,7 @@ const App = {
               Raum löschen
             </button>
           </div>
+        </div>
 
         ${banner}
 

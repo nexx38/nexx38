@@ -2449,8 +2449,10 @@ input[type=checkbox] {
           <circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
         </svg>
         <h3>AR nicht verfügbar</h3>
-        <p>WebXR AR erfordert Android Chrome mit ARCore (Pixel, Samsung Galaxy etc.).<br>
-        Auf iOS bitte Kamera-Modus oder Datei-Import verwenden.</p>
+        <p id="arNotSupportedMsg">WebXR AR erfordert <strong>Google Chrome</strong> + <strong>Google Play-Dienste für AR</strong> (ARCore).<br><br>
+        1. Öffne den <strong>Play Store</strong> → suche <em>"Google Play-Dienste für AR"</em> → installieren/aktualisieren<br>
+        2. Seite in <strong>Chrome</strong> (nicht Honor-Browser) öffnen<br>
+        3. Dann nochmal versuchen</p>
         <button class="btn-ar-action primary" onclick="Scanner.switchMode('camera')">📷 Kamera-Modus</button>
       </div>
 
@@ -3011,8 +3013,17 @@ const Scanner = {
       this._updateARUI();
     } catch (err) {
       console.warn('AR session failed:', err);
-      // Auto-fallback to camera mode if AR session creation fails
-      await this.switchMode('camera');
+      // Show error in AR panel instead of silent fallback
+      const msg = err?.message || String(err);
+      const isARCoreGone = msg.includes('NOT_SUPPORTED') || msg.includes('NO_DEVICE_SUPPORT') || msg.includes('FAILED_TO_CREATE');
+      const p = container.querySelector('p');
+      if (p) {
+        p.innerHTML = isARCoreGone
+          ? 'ARCore konnte nicht starten.<br><strong>Lösung:</strong> Im Play Store <em>"Google Play-Dienste für AR"</em> installieren oder aktualisieren, dann nochmal versuchen.'
+          : `AR-Session fehlgeschlagen.<br><small style="opacity:.7">${msg}</small><br><br>Bitte <strong>Google Chrome</strong> verwenden und <em>"Google Play-Dienste für AR"</em> im Play Store aktualisieren.`;
+      }
+      container.style.display = 'flex';
+      viewport.style.display  = 'none';
     }
   },
 

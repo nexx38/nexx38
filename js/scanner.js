@@ -143,8 +143,17 @@ const Scanner = {
       this._updateARUI();
     } catch (err) {
       console.warn('AR session failed:', err);
-      // Auto-fallback to camera mode if AR session creation fails
-      await this.switchMode('camera');
+      // Show error in AR panel instead of silent fallback
+      const msg = err?.message || String(err);
+      const isARCoreGone = msg.includes('NOT_SUPPORTED') || msg.includes('NO_DEVICE_SUPPORT') || msg.includes('FAILED_TO_CREATE');
+      const p = container.querySelector('p');
+      if (p) {
+        p.innerHTML = isARCoreGone
+          ? 'ARCore konnte nicht starten.<br><strong>Lösung:</strong> Im Play Store <em>"Google Play-Dienste für AR"</em> installieren oder aktualisieren, dann nochmal versuchen.'
+          : `AR-Session fehlgeschlagen.<br><small style="opacity:.7">${msg}</small><br><br>Bitte <strong>Google Chrome</strong> verwenden und <em>"Google Play-Dienste für AR"</em> im Play Store aktualisieren.`;
+      }
+      container.style.display = 'flex';
+      viewport.style.display  = 'none';
     }
   },
 

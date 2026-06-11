@@ -644,6 +644,66 @@
 
   <div class="scanner-main">
 
+    <!-- ── Sensor Measure Overlay (covers full scanner-main) ── -->
+    <div id="measureOverlay" class="measure-overlay" style="display:none;">
+      <!-- Top header: step dots + label + diagram -->
+      <div class="meas-head">
+        <div class="meas-dots-row">
+          <div class="meas-dot" id="measDot1"></div>
+          <div class="meas-dot-line"></div>
+          <div class="meas-dot" id="measDot2"></div>
+        </div>
+        <div class="meas-label" id="measLabel">Schritt 1 · Breite messen</div>
+        <svg id="measDiagram" class="meas-diagram" viewBox="0 0 160 96" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <marker id="mArrow" markerWidth="8" markerHeight="8" refX="4" refY="4" orient="auto">
+              <path d="M0,0 L8,4 L0,8Z" fill="#4FC3F7"/>
+            </marker>
+          </defs>
+          <!-- Room outline -->
+          <rect x="8" y="8" width="144" height="80" rx="4" fill="none" stroke="rgba(79,195,247,.3)" stroke-width="2"/>
+          <!-- Dynamic content updated by JS via id="measDiagramContent" -->
+          <g id="measDiagramContent">
+            <!-- Far wall (top) -->
+            <line x1="8" y1="8" x2="152" y2="8" stroke="#4FC3F7" stroke-width="3.5"/>
+            <text x="80" y="6" text-anchor="middle" fill="#4FC3F7" font-size="7" font-family="sans-serif">Wand B</text>
+            <!-- Near wall label -->
+            <text x="80" y="94" text-anchor="middle" fill="rgba(79,195,247,.55)" font-size="7" font-family="sans-serif">Wand A (du stehst hier)</text>
+            <!-- Person -->
+            <circle cx="80" cy="80" r="7" fill="#4FC3F7"/>
+            <!-- Arrow upward -->
+            <line x1="80" y1="72" x2="80" y2="18" stroke="#4FC3F7" stroke-width="2.5" marker-end="url(#mArrow)"/>
+            <!-- Dimension label -->
+            <text x="94" y="50" fill="rgba(255,255,255,.5)" font-size="9" font-family="sans-serif" font-style="italic">Breite</text>
+          </g>
+        </svg>
+      </div>
+
+      <!-- Crosshair (centered over camera, camera shows through overlay) -->
+      <div class="meas-view">
+        <div class="meas-cross">
+          <div class="meas-ch"></div>
+          <div class="meas-cv"></div>
+          <div class="meas-cd"></div>
+        </div>
+      </div>
+
+      <!-- Distance readout + stability badge -->
+      <div class="meas-readout-wrap">
+        <div class="meas-readout" id="measureReadout">— m</div>
+        <div class="meas-stable-badge" id="measStable" style="visibility:hidden;">✓ stabil</div>
+      </div>
+
+      <!-- Instruction -->
+      <div class="meas-instr" id="measureInstruction">Stell dich direkt an Wand A.<br>Neige das Handy leicht nach vorne auf die gegenüberliegende Wand.</div>
+
+      <!-- Bottom buttons -->
+      <div class="meas-foot">
+        <button class="meas-btn-cancel" onclick="Scanner.stopMeasure()">✕ Abbrechen</button>
+        <button class="meas-btn-capture" onclick="Scanner.captureMeasure()">📏 Erfassen</button>
+      </div>
+    </div>
+
     <!-- ── AR Panel ──────────────────────────────────────── -->
     <div id="scanPanel_ar" class="scanner-panel">
       <div id="arNotSupported" class="ar-not-supported" style="display:none;">
@@ -714,41 +774,26 @@
             Kamera nicht verfügbar
           </div>
 
-          <!-- Sensor measure overlay (tilt-based distance) -->
-          <div id="measureOverlay" class="measure-overlay" style="display:none;">
-            <div class="measure-step" id="measureStep">1/4</div>
-            <div class="measure-crosshair">
-              <div class="measure-cross-h"></div>
-              <div class="measure-cross-v"></div>
-              <div class="measure-cross-dot"></div>
-            </div>
-            <div class="measure-readout" id="measureReadout">— m</div>
-            <div class="measure-instruction" id="measureInstruction">Fußkante der Wand anvisieren</div>
-            <div class="measure-actions">
-              <button class="btn-ar-action" onclick="Scanner.stopMeasure()">✕ Abbrechen</button>
-              <button class="btn-ar-action primary" onclick="Scanner.captureMeasure()">📏 Messen</button>
-            </div>
-          </div>
         </div>
         <div class="camera-form-panel">
           <div class="camera-form-header">📐 Raummaße eingeben</div>
           <div class="camera-form-body">
 
-            <!-- Auto measure starter -->
+            <!-- Sensor measure starter -->
             <div class="measure-start-box">
-              <div style="font-weight:600;font-size:.85rem;margin-bottom:6px;">📡 Sensor-Messung (ohne AR)</div>
-              <div style="font-size:.76rem;color:rgba(255,255,255,.55);line-height:1.4;margin-bottom:8px;">
-                Stell dich in die <strong>Raummitte</strong>. Ziele mit dem Fadenkreuz auf die <strong>Fußkante</strong> jeder Wand — die Entfernung wird aus dem Neigungswinkel berechnet.
+              <div style="font-weight:700;font-size:.9rem;margin-bottom:5px;">📡 Handy-Messung</div>
+              <div style="font-size:.78rem;color:rgba(255,255,255,.55);line-height:1.5;margin-bottom:10px;">
+                Nur <strong>2 Schritte</strong>: An Wand stellen → Erfassen → 90° drehen → Erfassen.
               </div>
-              <div class="scan-input-group" style="margin-bottom:8px;">
-                <label class="scan-label">Kamerahöhe (Augenhöhe)</label>
+              <div class="scan-input-group" style="margin-bottom:10px;">
+                <label class="scan-label">Deine Augenhöhe</label>
                 <div class="scan-input-unit">
-                  <input type="number" id="measureCamHeight" value="1.50" step="0.05" min="0.5" max="2.2">
+                  <input type="number" id="measureCamHeight" value="1.60" step="0.05" min="0.8" max="2.2">
                   <span>m</span>
                 </div>
               </div>
               <button class="btn-ar-action primary" style="width:100%;justify-content:center;display:flex;"
-                onclick="Scanner.startMeasure()">📡 Auto-Messung starten</button>
+                onclick="Scanner.startMeasure()">📡 Messung starten</button>
             </div>
 
             <div class="scan-input-group">

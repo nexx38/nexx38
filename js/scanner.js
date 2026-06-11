@@ -635,16 +635,19 @@ const Scanner = {
   },
 
   // ── Sensor Measure Mode (tilt-based, no AR needed) ─────
-  // Distance to a floor point: d = cameraHeight · tan(tilt)
-  // where tilt is the angle between straight-down and the view direction.
-  // deviceorientation beta: 0° = phone flat (camera straight down), 90° = upright.
+  // d = cameraHeight × tan(beta_rad)
+  // beta from deviceorientation: 0°=flat, 90°=upright portrait
+  // Step 1: stand at Wand A, aim at Wand B → room width
+  // Step 2: turn 90°, aim at adjacent wall → room depth
   m: {
     active: false,
-    step: 0,
+    step: 0,      // 0 = measuring width, 1 = measuring depth
     dists: [],
     beta: null,
-    camHeight: 1.5,
+    camHeight: 1.6,
     handler: null,
+    history: [],  // rolling window for stability detection
+    stable: false,
   },
 
   startMeasure() {
@@ -653,7 +656,7 @@ const Scanner = {
       DeviceOrientationEvent.requestPermission()
         .then(state => {
           if (state === 'granted') this._beginMeasure();
-          else App.toast?.('Sensor-Zugriff verweigert', 'error');
+          else App.toast?.('Sensor-Zugriff verweigert — bitte in Einstellungen erlauben', 'error');
         })
         .catch(() => App.toast?.('Sensor-Zugriff nicht möglich', 'error'));
     } else {
@@ -662,11 +665,13 @@ const Scanner = {
   },
 
   _beginMeasure() {
-    this.m.active = true;
-    this.m.step = 0;
-    this.m.dists = [];
-    this.m.beta = null;
-    this.m.camHeight = parseFloat(document.getElementById('measureCamHeight')?.value) || 1.5;
+    this.m.active  = true;
+    this.m.step    = 0;
+    this.m.dists   = [];
+    this.m.beta    = null;
+    this.m.history = [];
+    this.m.stable  = false;
+    this.m.camHeight = parseFloat(document.getElementById('measureCamHeight')?.value) || 1.6;
 
     const overlay = document.getElementById('measureOverlay');
     if (overlay) overlay.style.display = 'flex';
@@ -674,10 +679,10 @@ const Scanner = {
     this.m.handler = (e) => this._onOrientation(e);
     window.addEventListener('deviceorientation', this.m.handler);
 
-    // Warn if no sensor data arrives
+    // Warn if no sensor data arrives within 2 s
     setTimeout(() => {
       if (this.m.active && this.m.beta === null) {
-        App.toast?.('Kein Neigungssensor gefunden — bitte Maße manuell eingeben', 'error');
+        App.toast?.('Kein Neigungssensor — bitte Maße manuell eingeben', 'error');
         this.stopMeasure();
       }
     }, 2000);
@@ -699,27 +704,52 @@ const Scanner = {
     if (e.beta == null || !this.m.active) return;
     this.m.beta = e.beta;
     const d = this._measureDistance();
-    const el = document.getElementById('measureReadout');
-    if (el) el.textContent = d > 0 ? d.toFixed(2) + ' m' : '— m';
+
+    // Rolling stability: keep last 12 readings, stable if spread < 12 cm
+    if (d > 0) {
+      this.m.history.push(d);
+      if (this.m.history.length > 12) this.m.history.shift();
+      if (this.m.history.length >= 6) {
+        const avg  = this.m.history.reduce((a, b) => a + b, 0) / this.m.history.length;
+        const maxDev = Math.max(...this.m.history.map(v => Math.abs(v - avg)));
+        this.m.stable = maxDev < 0.12;
+      } else {
+        this.m.stable = false;
+      }
+    } else {
+      this.m.history = [];
+      this.m.stable  = false;
+    }
+
+    // Update readout
+    const readout = document.getElementById('measureReadout');
+    if (readout) {
+      readout.textContent  = d > 0 ? d.toFixed(2) + ' m' : '— m';
+      readout.style.color  = this.m.stable ? '#4CAF50' : '#4FC3F7';
+    }
+    const badge = document.getElementById('measStable');
+    if (badge) badge.style.visibility = this.m.stable ? 'visible' : 'hidden';
   },
 
   _measureDistance() {
     const b = this.m.beta;
-    // Valid range: clearly tilted towards the floor but not horizontal
-    if (b == null || b < 8 || b > 83) return 0;
+    // beta: 0=flat, 90=upright. Valid aiming range: ~30–85°
+    if (b == null || b < 15 || b > 87) return 0;
     return this.m.camHeight * Math.tan(b * Math.PI / 180);
   },
 
   captureMeasure() {
     const d = this._measureDistance();
     if (d <= 0) {
-      App.toast?.('Bitte auf die Fußkante der Wand zielen (Handy neigen)', 'error');
+      App.toast?.('Handy etwas nach vorne neigen um die Wand anzuvisieren', 'error');
       return;
     }
     this.m.dists.push(d);
     this.m.step++;
+    this.m.history = [];
+    this.m.stable  = false;
 
-    if (this.m.step >= 4) {
+    if (this.m.step >= 2) {
       this._finishMeasure();
     } else {
       this._updateMeasureUI();
@@ -727,9 +757,8 @@ const Scanner = {
   },
 
   _finishMeasure() {
-    const [front, back, left, right] = this.m.dists;
-    const depth = +(front + back).toFixed(2);
-    const width = +(left + right).toFixed(2);
+    const width = +this.m.dists[0].toFixed(2);
+    const depth = +this.m.dists[1].toFixed(2);
 
     const wEl = document.getElementById('camWidth');
     const dEl = document.getElementById('camDepth');
@@ -742,16 +771,51 @@ const Scanner = {
   },
 
   _updateMeasureUI() {
-    const msgs = [
-      'Fußkante der Wand VOR dir anvisieren',
-      'Umdrehen — Wand HINTER dir anvisieren',
-      'Wand LINKS von dir anvisieren',
-      'Wand RECHTS von dir anvisieren',
-    ];
-    const stepEl  = document.getElementById('measureStep');
-    const instrEl = document.getElementById('measureInstruction');
-    if (stepEl)  stepEl.textContent  = (this.m.step + 1) + '/4';
-    if (instrEl) instrEl.textContent = msgs[this.m.step];
+    const step = this.m.step; // 0 = width, 1 = depth
+
+    // Dot indicators
+    const dot1 = document.getElementById('measDot1');
+    const dot2 = document.getElementById('measDot2');
+    if (dot1) { dot1.classList.toggle('active', step === 0); dot1.classList.toggle('done', step > 0); }
+    if (dot2) { dot2.classList.toggle('active', step === 1); dot2.classList.toggle('done', step > 1); }
+
+    // Label
+    const label = document.getElementById('measLabel');
+    if (label) label.textContent = step === 0 ? 'Schritt 1 · Breite messen' : 'Schritt 2 · Tiefe messen';
+
+    // Instruction
+    const instr = document.getElementById('measureInstruction');
+    if (instr) {
+      instr.innerHTML = step === 0
+        ? 'Stell dich direkt an <strong>Wand A</strong>.<br>Neige das Handy leicht nach vorne auf die gegenüberliegende Wand.'
+        : 'Dreh dich um <strong>90°</strong>.<br>Stell dich an die nächste Wand und zeige auf die gegenüberliegende.';
+    }
+
+    // Reset readout
+    const readout = document.getElementById('measureReadout');
+    if (readout) { readout.textContent = '— m'; readout.style.color = '#4FC3F7'; }
+    const badge = document.getElementById('measStable');
+    if (badge) badge.style.visibility = 'hidden';
+
+    // Update diagram SVG
+    const content = document.getElementById('measDiagramContent');
+    if (content) {
+      content.innerHTML = step === 0
+        // Step 1: person at bottom wall, arrow points up
+        ? `<line x1="8" y1="8" x2="152" y2="8" stroke="#4FC3F7" stroke-width="3.5"/>
+           <text x="80" y="6" text-anchor="middle" fill="#4FC3F7" font-size="7" font-family="sans-serif">Wand B</text>
+           <text x="80" y="94" text-anchor="middle" fill="rgba(79,195,247,.55)" font-size="7" font-family="sans-serif">Wand A (du stehst hier)</text>
+           <circle cx="80" cy="80" r="7" fill="#4FC3F7"/>
+           <line x1="80" y1="72" x2="80" y2="18" stroke="#4FC3F7" stroke-width="2.5" marker-end="url(#mArrow)"/>
+           <text x="94" y="50" fill="rgba(255,255,255,.5)" font-size="9" font-family="sans-serif" font-style="italic">Breite</text>`
+        // Step 2: person at right wall, arrow points left
+        : `<line x1="8" y1="8" x2="8" y2="88" stroke="#4FC3F7" stroke-width="3.5"/>
+           <text x="6" y="50" text-anchor="middle" fill="#4FC3F7" font-size="7" font-family="sans-serif" transform="rotate(-90,6,50)">Wand C</text>
+           <text x="158" y="50" text-anchor="middle" fill="rgba(79,195,247,.55)" font-size="7" font-family="sans-serif" transform="rotate(-90,158,50)">hier</text>
+           <circle cx="144" cy="48" r="7" fill="#4FC3F7"/>
+           <line x1="136" y1="48" x2="20" y2="48" stroke="#4FC3F7" stroke-width="2.5" marker-end="url(#mArrow)"/>
+           <text x="80" y="40" text-anchor="middle" fill="rgba(255,255,255,.5)" font-size="9" font-family="sans-serif" font-style="italic">Tiefe</text>`;
+    }
   },
 
   cameraConfirm() {

@@ -146,18 +146,27 @@ const Scanner = {
 
     try {
       const session = await navigator.xr.requestSession('immersive-ar', {
-        requiredFeatures: ['hit-testing'],
-        optionalFeatures: ['dom-overlay', 'plane-detection'],
+        requiredFeatures: [],
+        optionalFeatures: ['hit-testing', 'dom-overlay', 'plane-detection'],
         domOverlay: { root: document.getElementById('arOverlayUI') },
       });
       this.s.xrSession = session;
       this.s.arActive  = true;
       this.s.planeDetection = false;
       this.s.scanProgress   = 0;
+      this.s.hitTestingActive = false;
 
       this.s.refSpace    = await session.requestReferenceSpace('local');
       this.s.viewerSpace = await session.requestReferenceSpace('viewer');
-      this.s.hitTestSource = await session.requestHitTestSource({ space: this.s.viewerSpace });
+
+      // hit-testing is optional — only use if granted
+      try {
+        this.s.hitTestSource = await session.requestHitTestSource({ space: this.s.viewerSpace });
+        this.s.hitTestingActive = true;
+      } catch {
+        this.s.hitTestSource = null;
+        this.s.hitTestingActive = false;
+      }
 
       // WebGL context for XR rendering (canvas is just for 2D overlay drawing)
       const canvas = document.getElementById('arCanvas');
@@ -196,9 +205,8 @@ const Scanner = {
 
   _onARFrame(frame) {
     const session = this.s.xrSession;
-    if (!session || !this.s.hitTestSource) return;
+    if (!session) return;
 
-    const hits = frame.getHitTestResults(this.s.hitTestSource);
     const canvas = document.getElementById('arCanvas');
     const ctx = canvas.getContext('2d');
 
@@ -220,6 +228,9 @@ const Scanner = {
         h: canvas.height,
       };
     }
+
+    // Hit-testing (optional — only when available)
+    const hits = this.s.hitTestSource ? frame.getHitTestResults(this.s.hitTestSource) : [];
 
     if (hits.length > 0) {
       const pose = hits[0].getPose(this.s.refSpace);

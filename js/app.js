@@ -151,12 +151,39 @@ const App = {
   },
 
   deleteRoom(id) {
+    const name = state.rooms.find(r => r.id === id)?.name || 'Raum';
     state.rooms = state.rooms.filter(r => r.id !== id);
     if (state.selectedRoomId === id) {
       state.selectedRoomId = state.rooms.length ? state.rooms[state.rooms.length - 1].id : null;
     }
     this.render();
     this.renderRoomDetail();
+    this.toast(`"${name}" gelöscht`, 'success');
+  },
+
+  newProject() {
+    if (!confirm('Neues Projekt starten?\nAlle Räume und Daten werden gelöscht.')) return;
+    // Reset state
+    Object.assign(state.project, {
+      name: 'Mein Projekt', city: 'Berlin', outdoorTemp: -14,
+      buildingType: 'residential', constructionYear: 2000,
+      indoorTemp: 20, thermalBridges: 5, heatingSystem: 'radiator',
+    });
+    state.rooms = [];
+    state.selectedRoomId = null;
+    _idCounter = 1;
+    // Reset project form fields
+    const pn = document.getElementById('projectName');
+    if (pn) pn.value = 'Mein Projekt';
+    const cs = document.getElementById('citySelect');
+    if (cs) cs.value = 'Berlin';
+    const bt = document.getElementById('buildingType');
+    if (bt) bt.value = 'residential';
+    this.updateClimateInfo();
+    this.render();
+    this.renderRoomDetail();
+    this.switchTab('rooms');
+    this.toast('Neues Projekt gestartet', 'success');
   },
 
   selectRoom(id) {

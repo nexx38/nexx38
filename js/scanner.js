@@ -48,8 +48,6 @@ const Scanner = {
     const arTab = document.getElementById('scanTabAR');
     if (!arOk) {
       arTab.dataset.arUnsupported = 'true';
-      arTab.style.opacity = '0.45';
-      arTab.title = 'AR nicht verfügbar auf diesem Gerät';
     }
 
     this.switchMode(arOk ? 'ar' : (camOk ? 'camera' : 'file'));
@@ -79,12 +77,16 @@ const Scanner = {
         const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
         const container = document.getElementById('arNotSupported');
         const p = container?.querySelector('p');
-        if (p && isIOS) {
-          p.innerHTML = 'WebXR AR wird von Safari/iOS nicht unterstützt.<br><br>'
-            + '<strong>Beste Alternativen auf iPhone:</strong><br>'
-            + '• <em>Polycam</em> (App Store) → LiDAR-Scan → PLY exportieren → hier im Tab "Datei" importieren<br>'
-            + '• <em>RoomScan Pro</em> (App Store) → Grundriss messen<br><br>'
-            + 'Oder Maße manuell im <strong>Kamera-Tab</strong> eingeben.';
+        if (p) {
+          p.innerHTML = isIOS
+            ? 'WebXR AR wird von Safari/iOS nicht unterstützt.<br><br>'
+              + '<strong>Beste Alternativen auf iPhone:</strong><br>'
+              + '• <em>Scaniverse</em> (App Store, kostenlos) → LiDAR-Scan → PLY exportieren → Tab "Datei"<br>'
+              + '• Maße manuell im <strong>Kamera-Tab</strong> eingeben.'
+            : 'AR benötigt <strong>Google Chrome</strong> + <strong>Google Play-Dienste für AR</strong>.<br><br>'
+              + '1. Stelle sicher, dass du <strong>Google Chrome</strong> verwendest (nicht den Gerätebrowser)<br>'
+              + '2. Öffne den Play Store → suche <em>"Google Play-Dienste für AR"</em> → aktualisieren<br>'
+              + '3. Dann nochmal versuchen';
         }
         if (container) container.style.display = 'flex';
         const viewport = document.getElementById('arViewport');

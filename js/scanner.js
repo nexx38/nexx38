@@ -168,11 +168,13 @@ const Scanner = {
         this.s.hitTestingActive = false;
       }
 
-      // WebGL context for XR rendering (canvas is just for 2D overlay drawing)
+      // WebGL context drives the XR layer; camera feed is composited behind it,
+      // so the framebuffer must be cleared to transparent every frame
       const canvas = document.getElementById('arCanvas');
-      const gl = canvas.getContext('webgl', { xrCompatible: true });
+      const gl = canvas.getContext('webgl', { xrCompatible: true, alpha: true });
       await gl.makeXRCompatible?.();
-      session.updateRenderState({ baseLayer: new XRWebGLLayer(session, gl) });
+      this.s.gl = gl;
+      session.updateRenderState({ baseLayer: new XRWebGLLayer(session, gl, { alpha: true }) });
 
       session.addEventListener('select', () => this._onARSelect());
       session.addEventListener('end', () => { this.s.arActive = false; });
@@ -207,15 +209,22 @@ const Scanner = {
     const session = this.s.xrSession;
     if (!session) return;
 
-    const canvas = document.getElementById('arCanvas');
-    const ctx = canvas.getContext('2d');
-
-    // Resize canvas to session viewport
+    // Clear the XR framebuffer to fully transparent so the camera feed shows through
     const layer = session.renderState.baseLayer;
-    if (layer) {
-      canvas.width  = layer.framebufferWidth;
-      canvas.height = layer.framebufferHeight;
+    const gl = this.s.gl;
+    if (layer && gl) {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, layer.framebuffer);
+      gl.clearColor(0, 0, 0, 0);
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     }
+
+    // 2D overlay drawing happens on a separate canvas inside the DOM overlay
+    // (arCanvas already holds the WebGL context and cannot also provide a 2D one)
+    const canvas = document.getElementById('arDrawCanvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    canvas.width  = canvas.clientWidth  || window.innerWidth;
+    canvas.height = canvas.clientHeight || window.innerHeight;
 
     // Store viewer pose for screen-space projection
     const viewerPose = frame.getViewerPose(this.s.refSpace);

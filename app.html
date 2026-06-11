@@ -2620,6 +2620,7 @@ input[type=checkbox] {
         <p style="font-size:.85rem;color:rgba(255,255,255,.5);max-width:340px;line-height:1.6;">
           Die Maße werden in den Raum-Editor übertragen. Du kannst sie dort noch anpassen.
         </p>
+        <div id="detectedOpenings" style="width:100%;max-width:420px;margin:12px auto 0;text-align:left;max-height:260px;overflow-y:auto;"></div>
         <div class="confirm-buttons">
           <button class="btn-ar-action" onclick="Scanner.switchMode('camera')">↩ Nochmal messen</button>
           <button class="btn-ar-action primary" onclick="Scanner.confirmApply()">✓ In Raum übernehmen</button>
@@ -3743,6 +3744,13 @@ const Scanner = {
   },
 
   fileConfirm() {
+    // Run opening detection if we have a point cloud
+    if (this.s.pcPoints && this.s.pcBounds) {
+      const detected = this._detectOpenings(this.s.pcPoints, this.s.pcBounds);
+      this.s.detectedOpenings = detected;
+    } else {
+      this.s.detectedOpenings = [];
+    }
     this._showConfirm();
   },
 
@@ -3756,23 +3764,194 @@ const Scanner = {
     document.getElementById('confirmDepth').textContent  = r.depth.toFixed(2)  + ' m';
     document.getElementById('confirmHeight').textContent = r.height.toFixed(2) + ' m';
     document.getElementById('confirmArea').textContent   = (r.area > 0 ? r.area : r.width * r.depth).toFixed(1) + ' m²';
+
+    // Render detected openings
+    const openings = this.s.detectedOpenings || [];
+    const container = document.getElementById('detectedOpenings');
+    if (!container) return;
+    if (!openings.length) {
+      container.innerHTML = '<div style="color:var(--text-muted);font-size:.82rem;text-align:center;padding:8px 0;">Keine Fenster/Türen automatisch erkannt.<br>Bitte manuell unter Bauteile eintragen.</div>';
+      return;
+    }
+    container.innerHTML = `
+      <div style="font-weight:600;margin-bottom:8px;font-size:.9rem;">🔍 Erkannte Öffnungen (${openings.length})</div>
+      ${openings.map((o, i) => `
+        <label style="display:flex;align-items:center;gap:10px;padding:8px;background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;cursor:pointer;">
+          <input type="checkbox" id="opening_${i}" checked style="width:16px;height:16px;accent-color:var(--primary);">
+          <div style="flex:1">
+            <div style="font-weight:600;font-size:.85rem;">${o.type === 'door' ? '🚪 Außentür' : '🪟 Fenster'} – ${o.wall}</div>
+            <div style="font-size:.78rem;color:var(--text-muted);">${o.width.toFixed(2)} m × ${o.height.toFixed(2)} m = ${o.area.toFixed(2)} m²${o.type === 'window' ? ' · Brüstung ~' + o.sillHeight.toFixed(2) + ' m' : ''}</div>
+          </div>
+          <div style="font-size:.75rem;color:var(--primary);font-weight:600;">U = ${o.uDefault.toFixed(2)}</div>
+        </label>
+      `).join('')}
+    `;
   },
 
   confirmApply() {
     const r = this.s.result;
     const area = r.area > 0 ? r.area : +(r.width * r.depth).toFixed(2);
 
-    // Push to room form
-    const areaEl  = document.getElementById('rArea');
+    // Push room dimensions
+    const areaEl   = document.getElementById('rArea');
     const heightEl = document.getElementById('rHeight');
     if (areaEl)   areaEl.value  = area.toFixed(1);
     if (heightEl) heightEl.value = r.height.toFixed(2);
-
-    // Trigger recalculation
     App.onRoomFormChange?.();
-    App.toast?.('Raummaße übernommen: ' + area.toFixed(1) + ' m² · h = ' + r.height.toFixed(2) + ' m', 'success');
 
+    // Add checked openings as components
+    const openings = this.s.detectedOpenings || [];
+    const room = App.getRoom?.(window.state?.selectedRoomId);
+    let added = 0;
+    if (room) {
+      openings.forEach((o, i) => {
+        const cb = document.getElementById('opening_' + i);
+        if (!cb?.checked) return;
+        room.components.push({
+          id: 'id_sc_' + Date.now() + '_' + i,
+          type: o.type === 'door' ? 'door' : 'window',
+          description: o.type === 'door' ? ('Tür ' + o.wall) : ('Fenster ' + o.wall),
+          area: +o.area.toFixed(2),
+          uValue: o.uDefault,
+          adjacentTemp: null,
+        });
+        added++;
+      });
+      if (added) {
+        App.render?.();
+        App.renderRoomDetail?.();
+        App._autoSave?.();
+      }
+    }
+
+    const msg = `Raummaße übernommen: ${area.toFixed(1)} m² · h=${r.height.toFixed(2)} m` +
+                (added ? ` · ${added} Bauteil${added > 1 ? 'e' : ''} hinzugefügt` : '');
+    App.toast?.(msg, 'success');
     this.close();
+  },
+
+  // ── Window / Door Detection from Point Cloud ───────────
+  _detectOpenings(pts, bounds) {
+    const WALL_THR = 0.14; // max distance from wall face [m]
+    const GRID     = 0.07; // grid cell size [m]
+    const MIN_W    = 0.35; // min opening width [m]
+    const MIN_H    = 0.35; // min opening height [m]
+    const MAX_H    = 2.80; // max opening height [m]
+    const DENSITY  = 0.08; // occupied if ≥ this fraction of nearby wall pts
+
+    const floorY = bounds.minY;
+    const roomH  = bounds.maxY - bounds.minY;
+    if (roomH < 1.5) return []; // bad scan
+
+    const year = parseInt(window.state?.project?.constructionYear) || 2000;
+    const getUDefault = (type) => {
+      if (type === 'window') return year < 1975 ? 2.80 : year < 1995 ? 1.80 : year < 2010 ? 1.10 : 0.70;
+      return year < 1990 ? 3.00 : year < 2010 ? 1.80 : 0.90;
+    };
+
+    const wallDefs = [
+      { name: 'Nordwand', ai: 2, fv: bounds.minZ, ui: 0, uMin: bounds.minX, uMax: bounds.maxX },
+      { name: 'Südwand',  ai: 2, fv: bounds.maxZ, ui: 0, uMin: bounds.minX, uMax: bounds.maxX },
+      { name: 'Westwand', ai: 0, fv: bounds.minX, ui: 2, uMin: bounds.minZ, uMax: bounds.maxZ },
+      { name: 'Ostwand',  ai: 0, fv: bounds.maxX, ui: 2, uMin: bounds.minZ, uMax: bounds.maxZ },
+    ];
+
+    const results = [];
+
+    for (const w of wallDefs) {
+      const cols = Math.max(1, Math.ceil((w.uMax - w.uMin) / GRID));
+      const rows = Math.max(1, Math.ceil(roomH / GRID));
+      const occ  = new Float32Array(cols * rows); // sum of near-wall pts per cell
+      const tot  = new Float32Array(cols * rows); // total pts per cell (any depth)
+      let wallPts = 0;
+
+      const n = pts.length / 3;
+      for (let k = 0; k < n; k++) {
+        const ax = pts[k*3 + w.ai];
+        const ux = pts[k*3 + w.ui];
+        const vy = pts[k*3 + 1] - floorY;
+        if (vy < -0.1 || vy > roomH + 0.1) continue;
+        const ci = Math.min(cols-1, Math.max(0, Math.floor((ux - w.uMin) / GRID)));
+        const ri = Math.min(rows-1, Math.max(0, Math.floor(vy / GRID)));
+        tot[ri * cols + ci]++;
+        if (Math.abs(ax - w.fv) < WALL_THR) { occ[ri * cols + ci]++; wallPts++; }
+      }
+      if (wallPts < 150) continue; // not enough data for this wall
+
+      // Build binary occupancy: cell is "wall" if enough wall pts relative to total
+      const wall = new Uint8Array(cols * rows);
+      for (let c = 0; c < cols * rows; c++) {
+        if (tot[c] > 0 && occ[c] / tot[c] >= DENSITY) wall[c] = 1;
+      }
+
+      // For each column: find vertical void spans (runs of empty rows surrounded by wall rows)
+      const colVoids = [];
+      for (let ci = 0; ci < cols; ci++) {
+        const colVoid = [];
+        let vStart = -1;
+        for (let ri = 0; ri <= rows; ri++) {
+          const isWall = ri < rows && wall[ri * cols + ci] === 1;
+          if (!isWall && vStart < 0) { vStart = ri; }
+          if (isWall && vStart >= 0) {
+            const h = (ri - vStart) * GRID;
+            if (h >= MIN_H && h <= MAX_H) {
+              colVoid.push({ rStart: vStart, rEnd: ri, h });
+            }
+            vStart = -1;
+          }
+        }
+        colVoids.push(colVoid);
+      }
+
+      // Merge adjacent columns with matching voids → rectangular openings
+      const used = new Set();
+      for (let ci = 0; ci < cols; ci++) {
+        for (let vi = 0; vi < colVoids[ci].length; vi++) {
+          const key = `${ci}_${vi}`;
+          if (used.has(key)) continue;
+          const base = colVoids[ci][vi];
+
+          // Extend right as long as columns have matching void
+          let ciEnd = ci;
+          while (ciEnd + 1 < cols) {
+            const next = colVoids[ciEnd + 1].find(v =>
+              Math.abs(v.rStart - base.rStart) <= 1 && Math.abs(v.rEnd - base.rEnd) <= 1);
+            if (!next) break;
+            ciEnd++;
+          }
+
+          const width = (ciEnd - ci + 1) * GRID;
+          if (width < MIN_W) continue;
+
+          // Mark as used
+          for (let c2 = ci; c2 <= ciEnd; c2++) {
+            const match = colVoids[c2].findIndex(v =>
+              Math.abs(v.rStart - base.rStart) <= 1 && Math.abs(v.rEnd - base.rEnd) <= 1);
+            if (match >= 0) used.add(`${c2}_${match}`);
+          }
+
+          const sillH = base.rStart * GRID;
+          const openH = base.h;
+          const type  = sillH < 0.15 && openH > 1.8 ? 'door' : 'window';
+          const uCtr  = w.uMin + (ci + (ciEnd - ci) / 2) * GRID;
+
+          results.push({
+            wall:        w.name,
+            type,
+            width:       +width.toFixed(2),
+            height:      +openH.toFixed(2),
+            area:        +(width * openH).toFixed(2),
+            sillHeight:  +sillH.toFixed(2),
+            uCenter:     +uCtr.toFixed(2),
+            uDefault:    getUDefault(type),
+          });
+        }
+      }
+    }
+
+    // Sort: doors first, then by area descending
+    results.sort((a, b) => (a.type === 'door' ? 0 : 1) - (b.type === 'door' ? 0 : 1) || b.area - a.area);
+    return results;
   },
 
   // ── Utils ──────────────────────────────────────────────

@@ -3,6 +3,10 @@
 # Ausführen auf dem VPS: bash /root/shk-planer/deploy.sh
 set -e
 
+# nvm laden (für PM2 in non-interaktiven SSH-Sessions)
+export NVM_DIR="${HOME}/.nvm"
+[ -s "${NVM_DIR}/nvm.sh" ] && \. "${NVM_DIR}/nvm.sh"
+
 PLANER_DIR="/root/shk-planer"
 cd "$PLANER_DIR"
 
@@ -41,9 +45,12 @@ echo "✓ Tabellen erstellt."
 
 # ── 2. Server-Abhängigkeiten ───────────────────────────────────────────────
 echo ""
-echo "▶ Schritt 2: Server-Abhängigkeiten installieren…"
-cd "$PLANER_DIR"
-npm install --omit=dev
+echo "▶ Schritt 2: Server-Abhängigkeiten installieren (Docker)…"
+docker run --rm \
+  -v "$PLANER_DIR:/app" \
+  -w /app \
+  node:20-alpine \
+  sh -c "npm install --omit=dev"
 echo "✓ Server-Pakete installiert."
 
 # ── 3. PWA-Icons generieren ────────────────────────────────────────────────

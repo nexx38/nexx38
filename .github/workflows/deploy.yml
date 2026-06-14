@@ -5,6 +5,7 @@ on:
     branches: [claude/shk-tagesplaner-pwa-GWi78, main]
     paths:
       - 'shk-planer/**'
+  workflow_dispatch:
 
 jobs:
   deploy:

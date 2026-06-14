@@ -87,8 +87,10 @@ echo "✓ Frontend kopiert."
 echo ""
 echo "▶ Schritt 5: Backend-Docker-Container starten…"
 cd "$PLANER_DIR"
-# Port 3002 freigeben (falls PM2 oder anderer Prozess noch läuft)
-fuser -k 3002/tcp 2>/dev/null || true
+# Port 3002 freigeben: PM2/node-Prozess beenden
+pkill -9 -f "node server.js" 2>/dev/null || true
+pkill -9 -f "node /root/shk-planer" 2>/dev/null || true
+sleep 2
 docker stop shk-planer-backend 2>/dev/null || true
 docker rm   shk-planer-backend 2>/dev/null || true
 docker build -t shk-planer-backend .

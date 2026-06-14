@@ -170,14 +170,22 @@ function parseIcalDt(dt) {
   };
 }
 
-// Holt Termine direkt aus iCloud für den Zeitraum [von, bis] (Datum-Strings)
-async function fetchIcloudEvents(von, bis) {
+// Lädt die aktiven iCloud-Zugangsdaten (apple_id, app_passwort, kalender_url, auth)
+async function getKalenderCred() {
   const cred = await pool.query(
     "SELECT apple_id, app_passwort, kalender_url FROM kalender_einstellungen WHERE aktiv = true ORDER BY id LIMIT 1"
   );
-  if (!cred.rows.length || !cred.rows[0].kalender_url) return [];
+  if (!cred.rows.length || !cred.rows[0].kalender_url) return null;
   const { apple_id, app_passwort, kalender_url } = cred.rows[0];
   const auth = 'Basic ' + Buffer.from(`${apple_id}:${app_passwort}`).toString('base64');
+  return { apple_id, app_passwort, kalender_url, auth };
+}
+
+// Holt Termine direkt aus iCloud für den Zeitraum [von, bis] (Datum-Strings)
+async function fetchIcloudEvents(von, bis) {
+  const cred = await getKalenderCred();
+  if (!cred) return [];
+  const { kalender_url, auth } = cred;
   const vonDt = (von || '').replace(/-/g, '') + 'T000000Z';
   const bisDt = (bis || '').replace(/-/g, '') + 'T235959Z';
   const body = `<?xml version="1.0" encoding="utf-8"?>
@@ -270,6 +278,125 @@ app.get('/api/termine', async (req, res) => {
     (a.zeit_von || '99:99').localeCompare(b.zeit_von || '99:99')
   );
   res.json(all);
+});
+
+// ── iCloud schreiben: anlegen / ändern / löschen ──────────────────────────
+
+function icalEscape(s) {
+  return String(s || '')
+    .replace(/\\/g, '\\\\')
+    .replace(/;/g, '\\;')
+    .replace(/,/g, '\\,')
+    .replace(/\r?\n/g, '\\n');
+}
+
+// Baut DTSTART/DTEND-Wert: "YYYYMMDDTHHMMSS" (lokale Zeit) oder "YYYYMMDD" (ganztägig)
+function toIcalDt(datum, zeit) {
+  const d = (datum || '').replace(/-/g, '');
+  if (!zeit) return { value: d, allday: true };
+  const t = zeit.replace(/:/g, '').padEnd(6, '0').slice(0, 6);
+  return { value: `${d}T${t}`, allday: false };
+}
+
+function buildIcs({ uid, titel, datum, zeit_von, zeit_bis, notizen }) {
+  const now = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+  const start = toIcalDt(datum, zeit_von);
+  let endVal;
+  if (start.allday) {
+    endVal = start.value;
+  } else if (zeit_bis) {
+    endVal = toIcalDt(datum, zeit_bis).value;
+  } else {
+    const [h, m] = zeit_von.split(':').map(Number);
+    const eh = String((h + 1) % 24).padStart(2, '0');
+    endVal = `${datum.replace(/-/g, '')}T${eh}${String(m).padStart(2, '0')}00`;
+  }
+  const dtLines = start.allday
+    ? `DTSTART;VALUE=DATE:${start.value}\r\nDTEND;VALUE=DATE:${endVal}`
+    : `DTSTART:${start.value}\r\nDTEND:${endVal}`;
+  return [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//SHK Planer//DE',
+    'CALSCALE:GREGORIAN',
+    'BEGIN:VEVENT',
+    `UID:${uid}`,
+    `DTSTAMP:${now}`,
+    dtLines,
+    `SUMMARY:${icalEscape(titel)}`,
+    `DESCRIPTION:${icalEscape(notizen)}`,
+    'END:VEVENT',
+    'END:VCALENDAR',
+  ].join('\r\n');
+}
+
+function eventUrl(kalender_url, uid) {
+  return kalender_url.replace(/\/$/, '') + '/' + uid + '.ics';
+}
+
+async function putTermin(uid, data) {
+  const cred = await getKalenderCred();
+  if (!cred) throw new Error('Keine iCloud-Zugangsdaten');
+  const ics = buildIcs({ uid, ...data });
+  const r = await caldavRequest(eventUrl(cred.kalender_url, uid), 'PUT', cred.auth, ics, {
+    'Content-Type': 'text/calendar; charset=utf-8',
+  });
+  if (r.status < 200 || r.status >= 300) {
+    throw new Error(`iCloud PUT fehlgeschlagen (Status ${r.status})`);
+  }
+  return {
+    id: `ic_${uid}`,
+    icloud_uid: uid,
+    titel: data.titel,
+    typ: 'termin',
+    datum: data.datum,
+    zeit_von: data.zeit_von || null,
+    zeit_bis: data.zeit_bis || null,
+    notizen: data.notizen || '',
+    techniker: null,
+    kunde_name: null,
+    quelle: 'icloud',
+  };
+}
+
+// Neuen Termin in iCloud anlegen
+app.post('/api/termine', async (req, res) => {
+  try {
+    const { titel, datum, zeit_von, zeit_bis, notizen } = req.body;
+    if (!titel || !datum) return res.status(400).json({ error: 'titel und datum erforderlich' });
+    const uid = `shkplaner-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const event = await putTermin(uid, { titel, datum, zeit_von, zeit_bis, notizen });
+    res.json(event);
+  } catch (e) {
+    res.status(502).json({ error: e.message });
+  }
+});
+
+// Bestehenden iCloud-Termin ändern (überschreibt per UID)
+app.put('/api/termine/:uid', async (req, res) => {
+  try {
+    const uid = decodeURIComponent(req.params.uid).replace(/^ic_/, '');
+    const { titel, datum, zeit_von, zeit_bis, notizen } = req.body;
+    if (!titel || !datum) return res.status(400).json({ error: 'titel und datum erforderlich' });
+    const event = await putTermin(uid, { titel, datum, zeit_von, zeit_bis, notizen });
+    res.json(event);
+  } catch (e) {
+    res.status(502).json({ error: e.message });
+  }
+});
+
+// iCloud-Termin löschen
+app.delete('/api/termine/:uid', async (req, res) => {
+  try {
+    const uid = decodeURIComponent(req.params.uid).replace(/^ic_/, '');
+    const cred = await getKalenderCred();
+    if (!cred) return res.status(502).json({ error: 'Keine iCloud-Zugangsdaten' });
+    const r = await caldavRequest(eventUrl(cred.kalender_url, uid), 'DELETE', cred.auth, null);
+    if ((r.status >= 200 && r.status < 300) || r.status === 404) return res.json({ ok: true });
+    res.status(502).json({ error: `iCloud DELETE fehlgeschlagen (Status ${r.status})` });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // Diagnose: zeigt die nächsten Termine unabhängig vom Datum

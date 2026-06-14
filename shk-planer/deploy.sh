@@ -72,10 +72,19 @@ echo "✓ Icons generiert."
 # ── 4. Frontend bauen ──────────────────────────────────────────────────────
 echo ""
 echo "▶ Schritt 4: Frontend bauen…"
-cd "$PLANER_DIR/frontend"
-npm install
-npm run build
+docker run --rm \
+  -v "$PLANER_DIR/frontend:/app" \
+  -w /app \
+  node:20-alpine \
+  sh -c "npm install && npm run build"
 echo "✓ Frontend gebaut → dist/"
+
+# ── 4b. Frontend nach /var/www kopieren ────────────────────────────────────
+echo ""
+echo "▶ Schritt 4b: Frontend nach /var/www/shk-planer kopieren…"
+mkdir -p /var/www/shk-planer
+cp -r "$PLANER_DIR/frontend/dist/." /var/www/shk-planer/
+echo "✓ Frontend kopiert."
 
 # ── 5. PM2 starten/neustarten ─────────────────────────────────────────────
 echo ""

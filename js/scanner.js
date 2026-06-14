@@ -701,7 +701,38 @@ const Scanner = {
       const wu = span(u), wv = span(v), area = wu * wv;
       if (!best || area < best.area) best = { wu, wv, area, deg };
     }
-    return { w: Math.max(best.wu, best.wv), d: Math.min(best.wu, best.wv), angle: best.deg };
+    // Recompute rotated coords at best angle and use wall-density peaks for inner room dimensions.
+    // This is more accurate than percentile span, which slightly overestimates due to scan overhang.
+    const t = best.deg * Math.PI / 180, cosA = Math.cos(t), sinA = Math.sin(t);
+    const uF = [], vF = [];
+    for (let i = 0; i < px.length; i++) {
+      uF.push(px[i] * cosA + pz[i] * sinA);
+      vF.push(-px[i] * sinA + pz[i] * cosA);
+    }
+    const pkU = this._wallPeaks(uF);
+    const pkV = this._wallPeaks(vF);
+    // Fall back to OBB percentile if peak detection returns implausible span (< 50% of OBB)
+    const wu = (pkU.high - pkU.low) > best.wu * 0.5 ? pkU.high - pkU.low : best.wu;
+    const wv = (pkV.high - pkV.low) > best.wv * 0.5 ? pkV.high - pkV.low : best.wv;
+    return { w: Math.max(wu, wv), d: Math.min(wu, wv), angle: best.deg };
+  },
+
+  // Find wall positions as density peaks in the outer quarter of each axis range.
+  _wallPeaks(arr) {
+    const s = arr.slice().sort((a, b) => a - b);
+    const mn = s[0], mx = s[s.length - 1];
+    const bins = 80, w = (mx - mn) / bins || 1;
+    const h = new Array(bins).fill(0);
+    for (const v of s) {
+      let bi = Math.floor((v - mn) / w);
+      if (bi >= bins) bi = bins - 1; if (bi < 0) bi = 0;
+      h[bi]++;
+    }
+    const quarter = Math.floor(bins / 4);
+    let lb = 0, lc = -1, ub = bins - 1, uc = -1;
+    for (let i = 0; i < quarter; i++)            if (h[i] > lc) { lc = h[i]; lb = i; }
+    for (let i = bins - quarter; i < bins; i++)  if (h[i] > uc) { uc = h[i]; ub = i; }
+    return { low: mn + (lb + 0.5) * w, high: mn + (ub + 0.5) * w };
   },
 
   // Find floor & ceiling levels as the densest bins in the lower / upper half.
@@ -901,12 +932,20 @@ const Scanner = {
   },
 
   fileConfirm() {
-    // Run opening detection if we have a point cloud
     if (this.s.pcPoints && this.s.pcBounds) {
-      const detected = this._detectOpenings(this.s.pcPoints, this.s.pcBounds);
-      this.s.detectedOpenings = detected;
+      const angle = this.s.pcBounds.angle || 0;
+      if (angle > 15) {
+        // Axis-aligned wall detection produces false positives for rotated rooms
+        this.s.detectedOpenings = [];
+        this.s.detectedOpeningsNote = `Raum diagonal gescannt (${Math.round(angle)}°) — Fenster & Türen bitte manuell unter Bauteile eintragen.`;
+      } else {
+        const detected = this._detectOpenings(this.s.pcPoints, this.s.pcBounds);
+        this.s.detectedOpenings = detected;
+        this.s.detectedOpeningsNote = null;
+      }
     } else {
       this.s.detectedOpenings = [];
+      this.s.detectedOpeningsNote = null;
     }
     this._showConfirm();
   },
@@ -927,7 +966,8 @@ const Scanner = {
     const container = document.getElementById('detectedOpenings');
     if (!container) return;
     if (!openings.length) {
-      container.innerHTML = '<div style="color:var(--text-muted);font-size:.82rem;text-align:center;padding:8px 0;">Keine Fenster/Türen automatisch erkannt.<br>Bitte manuell unter Bauteile eintragen.</div>';
+      const note = this.s.detectedOpeningsNote || 'Keine Fenster/Türen automatisch erkannt.<br>Bitte manuell unter Bauteile eintragen.';
+      container.innerHTML = `<div style="color:var(--text-muted);font-size:.82rem;text-align:center;padding:8px 0;">${note}</div>`;
       return;
     }
     container.innerHTML = `

@@ -23,8 +23,17 @@ const CATS  = Object.keys(CAT_COLOR)
 
 const INIT = { title: '', hour: 8, duration: 1, category: 'office', person: 'Tamer' }
 
+const timeToHour = (t) => t ? parseInt(t.split(':')[0]) : 8
+const timeToDuration = (von, bis) => {
+  if (!von || !bis) return 1
+  const [vh, vm] = von.split(':').map(Number)
+  const [bh, bm] = bis.split(':').map(Number)
+  return Math.max(1, Math.round((bh * 60 + bm - vh * 60 - vm) / 60))
+}
+
 export default function Timeline({ date }) {
   const [blocks,  setBlocks]  = useState([])
+  const [termine, setTermine] = useState([])
   const [loading, setLoading] = useState(true)
   const [modal,   setModal]   = useState(false)
   const [form,    setForm]    = useState(INIT)
@@ -32,10 +41,13 @@ export default function Timeline({ date }) {
 
   useEffect(() => {
     setLoading(true)
-    api.getTimeblocks(date)
-      .then(d => setBlocks(Array.isArray(d) ? d : []))
-      .catch(() => setBlocks([]))
-      .finally(() => setLoading(false))
+    Promise.all([
+      api.getTimeblocks(date).catch(() => []),
+      api.getTermine(date).catch(() => []),
+    ]).then(([bl, te]) => {
+      setBlocks(Array.isArray(bl) ? bl : [])
+      setTermine(Array.isArray(te) ? te : [])
+    }).finally(() => setLoading(false))
   }, [date])
 
   const toggle = async (b) => {
@@ -58,7 +70,11 @@ export default function Timeline({ date }) {
   }
 
   const byHour = {}
-  blocks.forEach(b => { const h = +b.hour; (byHour[h] ??= []).push(b) })
+  blocks.forEach(b => { const h = +b.hour; (byHour[h] ??= []).push({ ...b, _type: 'block' }) })
+  termine.forEach(t => {
+    const h = timeToHour(t.zeit_von)
+    ;(byHour[h] ??= []).push({ ...t, _type: 'termin' })
+  })
 
   return (
     <div style={{ position: 'relative', paddingBottom: 100 }}>
@@ -76,9 +92,11 @@ export default function Timeline({ date }) {
 
               {/* Line + blocks */}
               <div style={{ flex: 1, borderLeft: '1px solid var(--border)', paddingLeft: 12, paddingRight: 16, paddingBottom: 4, paddingTop: 2 }}>
-                {(byHour[h] || []).map(b => (
-                  <Block key={b.id} block={b} onToggle={toggle} onDelete={remove} />
-                ))}
+                {(byHour[h] || []).map(item =>
+                  item._type === 'termin'
+                    ? <TerminBlock key={`t-${item.id}`} termin={item} />
+                    : <Block key={item.id} block={item} onToggle={toggle} onDelete={remove} />
+                )}
               </div>
             </div>
           ))}
@@ -121,6 +139,37 @@ export default function Timeline({ date }) {
           <button onClick={add} style={submitBtn}>Hinzufügen</button>
         </Sheet>
       )}
+    </div>
+  )
+}
+
+function TerminBlock({ termin }) {
+  const von  = termin.zeit_von ? termin.zeit_von.slice(0,5) : '?'
+  const bis  = termin.zeit_bis ? termin.zeit_bis.slice(0,5) : '?'
+  const dur  = timeToDuration(termin.zeit_von, termin.zeit_bis)
+  return (
+    <div style={{
+      background: 'rgba(13,148,136,0.12)', borderRadius: 'var(--radius)',
+      padding: '10px 12px', marginBottom: 8,
+      display: 'flex', alignItems: 'center', gap: 10,
+      borderLeft: '3px solid #0D9488',
+    }}>
+      <span style={{ fontSize: 18, flexShrink: 0 }}>📅</span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {termin.titel}
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 2 }}>
+          {von} – {bis}{dur > 1 ? ` (${dur} Std.)` : ''}
+          {termin.kunde_name && ` · ${termin.kunde_name}`}
+          {termin.techniker && ` · ${termin.techniker}`}
+        </div>
+        {termin.typ && (
+          <span style={{ fontSize: 11, background: 'rgba(13,148,136,0.2)', color: '#0D9488', padding: '1px 8px', borderRadius: 20, marginTop: 3, display: 'inline-block' }}>
+            {termin.typ}
+          </span>
+        )}
+      </div>
     </div>
   )
 }

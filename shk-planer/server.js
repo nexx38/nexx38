@@ -133,5 +133,25 @@ app.delete('/api/timeblocks/:id', async (req, res) => {
   }
 });
 
+// ── TERMINE (aus bestehender SHK-Datenbank) ────────────────────────────────
+
+app.get('/api/termine', async (req, res) => {
+  try {
+    const date = req.query.date || new Date().toISOString().split('T')[0];
+    const result = await pool.query(
+      `SELECT t.id, t.titel, t.typ, t.datum, t.zeit_von, t.zeit_bis,
+              t.techniker, t.notizen, k.name AS kunde_name
+       FROM termine t
+       LEFT JOIN kunden k ON t.kunden_id = k.id
+       WHERE t.datum = $1
+       ORDER BY t.zeit_von NULLS LAST`,
+      [date]
+    );
+    res.json(result.rows);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 const PORT = process.env.PORT || 3002;
 app.listen(PORT, () => console.log(`SHK Planer API running on port ${PORT}`));

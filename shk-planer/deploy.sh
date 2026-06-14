@@ -43,16 +43,6 @@ CREATE TABLE IF NOT EXISTS timeblocks (
 EOSQL
 echo "✓ Tabellen erstellt."
 
-# ── 2. Server-Abhängigkeiten ───────────────────────────────────────────────
-echo ""
-echo "▶ Schritt 2: Server-Abhängigkeiten installieren (Docker)…"
-docker run --rm \
-  -v "$PLANER_DIR:/app" \
-  -w /app \
-  node:20-alpine \
-  sh -c "npm install --omit=dev"
-echo "✓ Server-Pakete installiert."
-
 # ── 3. PWA-Icons generieren ────────────────────────────────────────────────
 echo ""
 echo "▶ Schritt 3: PWA-Icons generieren…"
@@ -93,18 +83,20 @@ mkdir -p /var/www/shk-planer
 cp -r "$PLANER_DIR/frontend/dist/." /var/www/shk-planer/
 echo "✓ Frontend kopiert."
 
-# ── 5. PM2 starten/neustarten ─────────────────────────────────────────────
+# ── 5. Backend als Docker-Container neustarten ────────────────────────────
 echo ""
-echo "▶ Schritt 5: PM2 starten…"
+echo "▶ Schritt 5: Backend-Docker-Container starten…"
 cd "$PLANER_DIR"
-if pm2 describe shk-planer > /dev/null 2>&1; then
-  pm2 restart shk-planer
-  echo "✓ PM2 neugestartet."
-else
-  pm2 start server.js --name shk-planer
-  echo "✓ PM2 gestartet."
-fi
-pm2 save
+docker stop shk-planer-backend 2>/dev/null || true
+docker rm   shk-planer-backend 2>/dev/null || true
+docker build -t shk-planer-backend .
+docker run -d \
+  --name shk-planer-backend \
+  --restart unless-stopped \
+  --network shk-app_default \
+  -p 3002:3002 \
+  shk-planer-backend
+echo "✓ Backend-Container gestartet."
 
 # ── 6. Nginx konfigurieren ─────────────────────────────────────────────────
 echo ""
@@ -134,4 +126,4 @@ echo ""
 echo "  API:      http://localhost:3002/api/health"
 echo "  Frontend: http://planer.shk-innovation.de"
 echo ""
-pm2 status
+docker ps --filter name=shk-planer-backend

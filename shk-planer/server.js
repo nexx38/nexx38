@@ -1,6 +1,7 @@
 const express = require('express');
 const { Pool } = require('pg');
 const cors = require('cors');
+const https = require('https');
 
 const app = express();
 app.use(cors());
@@ -135,23 +136,140 @@ app.delete('/api/timeblocks/:id', async (req, res) => {
 
 // ── TERMINE (aus bestehender SHK-Datenbank) ────────────────────────────────
 
-app.get('/api/termine', async (req, res) => {
-  try {
-    const date = req.query.date || new Date().toISOString().split('T')[0];
-    const result = await pool.query(
-      `SELECT t.id, t.titel, t.typ, t.datum, t.zeit_von, t.zeit_bis,
-              t.techniker, t.notizen,
-              COALESCE(NULLIF(k.firma, ''), k.nachname) AS kunde_name
-       FROM termine t
-       LEFT JOIN kunden k ON t.kunden_id = k.id
-       WHERE t.datum::date = $1::date
-       ORDER BY t.zeit_von NULLS LAST`,
-      [date]
+// ── iCloud CalDAV (direkt aus der gemeinsamen kalender_einstellungen) ──────
+
+function caldavRequest(url, method, auth, body, extraHeaders = {}) {
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(url);
+    const headers = {
+      'Content-Type': 'application/xml; charset=utf-8',
+      'Authorization': auth,
+      ...extraHeaders,
+    };
+    if (body) headers['Content-Length'] = Buffer.byteLength(body);
+    const r = https.request(
+      { hostname: parsed.hostname, path: parsed.pathname + parsed.search, method, headers },
+      (resp) => {
+        let data = '';
+        resp.on('data', (c) => (data += c));
+        resp.on('end', () => resolve({ status: resp.statusCode, body: data }));
+      }
     );
-    res.json(result.rows);
-  } catch (e) {
-    res.status(500).json({ error: e.message });
+    r.on('error', reject);
+    if (body) r.write(body);
+    r.end();
+  });
+}
+
+function parseIcalDt(dt) {
+  dt = (dt || '').trim().replace(/Z$/, '');
+  if (dt.length === 8) return { date: `${dt.slice(0, 4)}-${dt.slice(4, 6)}-${dt.slice(6, 8)}`, time: null };
+  return {
+    date: `${dt.slice(0, 4)}-${dt.slice(4, 6)}-${dt.slice(6, 8)}`,
+    time: `${dt.slice(9, 11)}:${dt.slice(11, 13)}`,
+  };
+}
+
+// Holt Termine direkt aus iCloud für den Zeitraum [von, bis] (Datum-Strings)
+async function fetchIcloudEvents(von, bis) {
+  const cred = await pool.query(
+    "SELECT apple_id, app_passwort, kalender_url FROM kalender_einstellungen WHERE aktiv = true ORDER BY id LIMIT 1"
+  );
+  if (!cred.rows.length || !cred.rows[0].kalender_url) return [];
+  const { apple_id, app_passwort, kalender_url } = cred.rows[0];
+  const auth = 'Basic ' + Buffer.from(`${apple_id}:${app_passwort}`).toString('base64');
+  const vonDt = (von || '').replace(/-/g, '') + 'T000000Z';
+  const bisDt = (bis || '').replace(/-/g, '') + 'T235959Z';
+  const body = `<?xml version="1.0" encoding="utf-8"?>
+<C:calendar-query xmlns:C="urn:ietf:params:xml:ns:caldav" xmlns:D="DAV:">
+  <D:prop><D:getetag/><C:calendar-data/></D:prop>
+  <C:filter>
+    <C:comp-filter name="VCALENDAR">
+      <C:comp-filter name="VEVENT">
+        <C:time-range start="${vonDt}" end="${bisDt}"/>
+      </C:comp-filter>
+    </C:comp-filter>
+  </C:filter>
+</C:calendar-query>`;
+  const result = await caldavRequest(kalender_url, 'REPORT', auth, body, { Depth: '1' });
+  if (result.status !== 207) return [];
+  const events = [];
+  let cdataBlocks = result.body.match(/<!\[CDATA\[([\s\S]*?)\]\]>/g) || [];
+  if (!cdataBlocks.length) {
+    const raw = result.body.match(/BEGIN:VCALENDAR[\s\S]*?END:VCALENDAR/g) || [];
+    cdataBlocks = raw.map((r) => `<![CDATA[${r}]]>`);
   }
+  for (const block of cdataBlocks) {
+    const ical = block.replace(/^<!\[CDATA\[/, '').replace(/\]\]>$/, '');
+    const lines = ical.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    const get = (key) => {
+      const m = lines.match(new RegExp(key + ':([^\\n]+)'));
+      return m ? m[1].trim() : null;
+    };
+    const uid = get('UID');
+    const summary = get('SUMMARY') || 'Termin';
+    const dtStart = lines.match(/DTSTART[^:\n]*:([^\n]+)/)?.[1]?.trim();
+    const dtEnd = lines.match(/DTEND[^:\n]*:([^\n]+)/)?.[1]?.trim();
+    const desc = get('DESCRIPTION') || '';
+    if (!uid || !dtStart) continue;
+    const start = parseIcalDt(dtStart);
+    const end = dtEnd ? parseIcalDt(dtEnd) : start;
+    events.push({
+      id: `ic_${uid}`,
+      icloud_uid: uid,
+      titel: summary,
+      typ: 'termin',
+      datum: start.date,
+      zeit_von: start.time,
+      zeit_bis: end.time,
+      techniker: null,
+      notizen: desc,
+      kunde_name: null,
+      quelle: 'icloud',
+    });
+  }
+  return events;
+}
+
+async function localTermine(date) {
+  const result = await pool.query(
+    `SELECT t.id, t.titel, t.typ, t.datum, t.zeit_von, t.zeit_bis,
+            t.techniker, t.notizen,
+            COALESCE(NULLIF(k.firma, ''), k.nachname) AS kunde_name
+     FROM termine t
+     LEFT JOIN kunden k ON t.kunden_id = k.id
+     WHERE t.datum::date = $1::date
+     ORDER BY t.zeit_von NULLS LAST`,
+    [date]
+  );
+  return result.rows.map((r) => ({ ...r, quelle: 'lokal' }));
+}
+
+app.get('/api/termine', async (req, res) => {
+  const date = req.query.date || new Date().toISOString().split('T')[0];
+  let events = [];
+  let icloudOk = false;
+  try {
+    events = await fetchIcloudEvents(date, date);
+    icloudOk = true;
+  } catch (e) {
+    console.error('iCloud-Fehler:', e.message);
+  }
+  // Lokale (im Planer angelegte) Termine ergänzen
+  let local = [];
+  try {
+    local = await localTermine(date);
+  } catch (e) {
+    console.error('Lokale Termine Fehler:', e.message);
+  }
+  // Wenn iCloud komplett fehlschlug und keine lokalen Daten: Fehler melden
+  if (!icloudOk && local.length === 0) {
+    return res.status(502).json({ error: 'iCloud nicht erreichbar und keine lokalen Termine' });
+  }
+  const all = [...events, ...local].sort((a, b) =>
+    (a.zeit_von || '99:99').localeCompare(b.zeit_von || '99:99')
+  );
+  res.json(all);
 });
 
 // Diagnose: zeigt die nächsten Termine unabhängig vom Datum

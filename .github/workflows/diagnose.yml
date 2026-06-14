@@ -19,45 +19,36 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           command_timeout: 5m
           script: |
-            echo "##### 1. DOCKER CONTAINER #####"
-            docker ps -a --format 'table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}'
+            # Helfer: filtert Zeilen mit möglichen Geheimnissen heraus (Repo ist öffentlich!)
+            SECRET_FILTER='passwo|password|passwort|secret|token|api[_-]?key|app[_-]?specific|credential|bearer|authorization|privatekey|private_key'
+
+            echo "##### A. VERFAHRENSDOKUMENTATION (gefiltert) #####"
+            sed -E "/($SECRET_FILTER)/Id" /opt/shk-app/backups/tooltime_archiv/Verfahrensdokumentation_ENTWURF.md 2>&1 | head -120
 
             echo ""
-            echo "##### 2. DATENBANKEN in shk-db #####"
-            docker exec -i shk-db psql -U shk -d shkdb -c "\l" 2>&1 | head -30
+            echo "##### B. STRUKTUR /opt/shk-app #####"
+            ls -la /opt/shk-app 2>&1 | head -40
+            echo "--- weitere .md / README im SHK-App ---"
+            find /opt/shk-app -maxdepth 4 -iname '*.md' -o -maxdepth 4 -iname 'README*' 2>/dev/null | grep -v node_modules | head -30
 
             echo ""
-            echo "##### 3. ALLE TABELLEN in shkdb #####"
-            docker exec -i shk-db psql -U shk -d shkdb -c "\dt" 2>&1
+            echo "##### C. kalender_einstellungen – Schema + Zeilenzahl (KEINE Werte) #####"
+            docker exec -i shk-db psql -U shk -d shkdb -c "\d kalender_einstellungen" 2>&1
+            docker exec -i shk-db psql -U shk -d shkdb -c "SELECT COUNT(*) AS anzahl FROM kalender_einstellungen;" 2>&1
+            echo "--- nicht-geheime Spalten (Schema-Übersicht) ---"
+            docker exec -i shk-db psql -U shk -d shkdb -c "SELECT column_name, data_type FROM information_schema.columns WHERE table_name='kalender_einstellungen' ORDER BY ordinal_position;" 2>&1
 
             echo ""
-            echo "##### 4. SCHEMA der termine-Tabelle #####"
-            docker exec -i shk-db psql -U shk -d shkdb -c "\d termine" 2>&1
+            echo "##### D. shk-backend Logs – Kalender/iCloud/Termin/Fehler (gefiltert) #####"
+            docker logs shk-backend --tail 300 2>&1 | grep -iE 'kalender|calendar|icloud|caldav|termin|sync|error|fehler' | sed -E "/($SECRET_FILTER)/Id" | tail -40
 
             echo ""
-            echo "##### 5. ANZAHL + ZEITRAUM der termine #####"
-            docker exec -i shk-db psql -U shk -d shkdb -c "SELECT COUNT(*) AS anzahl, MIN(datum) AS aeltester, MAX(datum) AS neuester FROM termine;" 2>&1
+            echo "##### E. n8n-Workflow – nur Node-Namen/Typen (keine Werte) #####"
+            grep -oE '"name":[^,]*|"type":[^,]*' /root/n8n_kedicik_workflow.json 2>/dev/null | sed -E "/($SECRET_FILTER)/Id" | head -60
 
             echo ""
-            echo "##### 6. LETZTE 15 TERMINE #####"
-            docker exec -i shk-db psql -U shk -d shkdb -c "SELECT id, datum, zeit_von, zeit_bis, titel, typ FROM termine ORDER BY datum DESC NULLS LAST LIMIT 15;" 2>&1
-
-            echo ""
-            echo "##### 7. TABELLEN mit Kalender/Apple/Event/Sync Bezug #####"
-            docker exec -i shk-db psql -U shk -d shkdb -c "SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND (table_name ILIKE '%calendar%' OR table_name ILIKE '%kalender%' OR table_name ILIKE '%apple%' OR table_name ILIKE '%event%' OR table_name ILIKE '%sync%' OR table_name ILIKE '%ical%');" 2>&1
-
-            echo ""
-            echo "##### 8. .md DOKU-DATEIEN auf dem Server #####"
-            find /root /opt /var/www /home /srv -maxdepth 6 -iname '*.md' -not -path '*/node_modules/*' -not -path '*/.git/*' 2>/dev/null | head -60
-
-            echo ""
-            echo "##### 9. Verzeichnisse mit 'shk' im Namen #####"
-            find / -maxdepth 4 -type d -iname '*shk*' 2>/dev/null | head -40
-
-            echo ""
-            echo "##### 10. n8n WORKFLOWS (Apple-Kalender-Sync?) #####"
-            find /root /home -maxdepth 6 -path '*n8n*' -iname '*.json' 2>/dev/null | head -20
-            docker ps -a --format '{{.Names}}' | grep -i n8n || echo "(kein n8n-Container – läuft als Host-Prozess)"
+            echo "##### F. SHK-Backend Quellcode – Kalender-/Termin-Dateien #####"
+            find /opt/shk-app -maxdepth 5 -type f \( -iname '*kalender*' -o -iname '*calendar*' -o -iname '*termin*' -o -iname '*caldav*' -o -iname '*icloud*' \) 2>/dev/null | grep -v node_modules | head -30
 
             echo ""
             echo "##### FERTIG #####"

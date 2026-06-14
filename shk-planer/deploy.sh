@@ -83,13 +83,26 @@ mkdir -p /var/www/shk-planer
 cp -r "$PLANER_DIR/frontend/dist/." /var/www/shk-planer/
 echo "✓ Frontend kopiert."
 
+# ── DEBUG: PM2-Umgebung diagnostizieren ───────────────────────────────────
+echo ""
+echo "── DEBUG PM2-Umgebung ──"
+echo "PATH=$PATH"
+echo "HOME=$HOME"
+which node 2>/dev/null && echo "node: $(which node)" || echo "node: nicht in PATH"
+which pm2  2>/dev/null && echo "pm2:  $(which pm2)"  || echo "pm2:  nicht in PATH"
+ls -la /root/.nvm 2>/dev/null | head -3 || echo "/root/.nvm: nicht gefunden"
+ls -la ~/.nvm     2>/dev/null | head -3 || echo "~/.nvm: nicht gefunden"
+find /usr/local/bin /usr/bin -name 'pm2' 2>/dev/null || echo "pm2 nicht in /usr/local/bin oder /usr/bin"
+find /root -maxdepth 6 -name 'pm2' 2>/dev/null | head -5 || true
+ls /root/.bashrc 2>/dev/null && head -20 /root/.bashrc || echo ".bashrc nicht gefunden"
+echo "── END DEBUG ──"
+
 # ── 5. PM2 neustarten ─────────────────────────────────────────────────────
 echo ""
 echo "▶ Schritt 5: PM2 neustarten…"
 cd "$PLANER_DIR"
 
 # Login-Shell verwenden: sourced ~/.bash_profile → nvm → pm2 im PATH
-# (genauso wie ein interaktiver SSH-Login über PuTTY)
 _pm2() { bash -lc "pm2 $*"; }
 
 if _pm2 "describe shk-planer" > /dev/null 2>&1; then

@@ -448,12 +448,17 @@ const Scanner = {
     const header = this._readPLYHeader(buf);
     this._setProgress(progEl, 30);
 
+    // Sample EVENLY across the whole file. Scaniverse orders points spatially,
+    // so reading only the first N would capture just one corner of the room.
+    const TARGET = 120000;
+    const step = Math.max(1, Math.floor(header.vertexCount / TARGET));
+
     const pts = [];
     if (header.format === 'ascii') {
       const text = new TextDecoder().decode(buf);
       const lines = text.slice(header.dataOffset).split('\n');
-      const max = Math.min(header.vertexCount, 100000);
-      for (let i = 0; i < max && i < lines.length; i++) {
+      const n = Math.min(header.vertexCount, lines.length);
+      for (let i = 0; i < n; i += step) {
         const parts = lines[i].trim().split(/\s+/);
         if (parts.length >= 3) {
           const x = parseFloat(parts[header.xIdx]);
@@ -461,13 +466,12 @@ const Scanner = {
           const z = parseFloat(parts[header.zIdx]);
           if (isFinite(x) && isFinite(y) && isFinite(z)) pts.push({ x, y, z });
         }
-        if (i % 10000 === 0) this._setProgress(progEl, 30 + (i / max) * 65);
+        if (i % 50000 === 0) this._setProgress(progEl, 30 + (i / n) * 65);
       }
     } else {
       // Binary little-endian
       const view   = new DataView(buf, header.dataOffset);
       const stride = header.stride;
-      const max    = Math.min(header.vertexCount, 100000);
       const readF  = (off, type) => {
         if (type === 'double')                          return view.getFloat64(off, true);
         if (type === 'int'   || type === 'int32')       return view.getInt32(off, true);
@@ -478,13 +482,13 @@ const Scanner = {
         if (type === 'char'  || type === 'int8')        return view.getInt8(off);
         return view.getFloat32(off, true); // float, float32
       };
-      for (let i = 0; i < max; i++) {
+      for (let i = 0; i < header.vertexCount; i += step) {
         const base = i * stride;
         const x = readF(base + header.xOff, header.xType);
         const y = readF(base + header.yOff, header.yType);
         const z = readF(base + header.zOff, header.zType);
         if (isFinite(x) && isFinite(y) && isFinite(z)) pts.push({ x, y, z });
-        if (i % 10000 === 0) this._setProgress(progEl, 30 + (i / max) * 65);
+        if (i % 50000 === 0) this._setProgress(progEl, 30 + (i / header.vertexCount) * 65);
       }
     }
 

@@ -3979,20 +3979,18 @@ const Scanner = {
 
   confirmApply() {
     const r = this.s.result;
-    const area = r.area > 0 ? r.area : +(r.width * r.depth).toFixed(2);
+    const area = +(r.area > 0 ? r.area : r.width * r.depth).toFixed(2);
+    const height = +r.height.toFixed(2);
 
-    // Push room dimensions
-    const areaEl   = document.getElementById('rArea');
-    const heightEl = document.getElementById('rHeight');
-    if (areaEl)   areaEl.value  = area.toFixed(1);
-    if (heightEl) heightEl.value = r.height.toFixed(2);
-    App.onRoomFormChange?.();
-
-    // Add checked openings as components
-    const openings = this.s.detectedOpenings || [];
-    const room = App.getRoom?.(window.state?.selectedRoomId);
-    let added = 0;
+    // 1. Direkt auf das Room-Objekt schreiben (funktioniert auch ohne sichtbares Formular)
+    const room = App.getRoom?.(this.s.roomId || window.state?.selectedRoomId);
     if (room) {
+      room.area   = area;
+      room.height = height;
+
+      // Erkannte Öffnungen als Bauteile hinzufügen
+      const openings = this.s.detectedOpenings || [];
+      let added = 0;
       openings.forEach((o, i) => {
         const cb = document.getElementById('opening_' + i);
         if (!cb?.checked) return;
@@ -4006,16 +4004,30 @@ const Scanner = {
         });
         added++;
       });
-      if (added) {
-        App.render?.();
-        App.renderRoomDetail?.();
-        App._autoSave?.();
-      }
+
+      App.render?.();
+      App.renderRoomDetail?.();
+      App._autoSave?.();
+
+      // 2. DOM-Inputs synchronisieren falls sichtbar
+      const areaEl   = document.getElementById('rArea');
+      const heightEl = document.getElementById('rHeight');
+      if (areaEl)   areaEl.value   = area.toFixed(1);
+      if (heightEl) heightEl.value  = height.toFixed(2);
+
+      const msg = `Raummaße übernommen: ${area.toFixed(1)} m² · h=${height.toFixed(2)} m`
+                + (added ? ` · ${added} Bauteil${added > 1 ? 'e' : ''} hinzugefügt` : '');
+      App.toast?.(msg, 'success');
+    } else {
+      // Kein Raum ausgewählt — als Fallback DOM-Inputs setzen
+      const areaEl   = document.getElementById('rArea');
+      const heightEl = document.getElementById('rHeight');
+      if (areaEl)   areaEl.value   = area.toFixed(1);
+      if (heightEl) heightEl.value  = height.toFixed(2);
+      App.onRoomFormChange?.();
+      App.toast?.(`Raummaße: ${area.toFixed(1)} m² · h=${height.toFixed(2)} m`, 'success');
     }
 
-    const msg = `Raummaße übernommen: ${area.toFixed(1)} m² · h=${r.height.toFixed(2)} m` +
-                (added ? ` · ${added} Bauteil${added > 1 ? 'e' : ''} hinzugefügt` : '');
-    App.toast?.(msg, 'success');
     this.close();
   },
 
@@ -4054,11 +4066,12 @@ const Scanner = {
       const tot  = new Float32Array(cols * rows); // total pts per cell (any depth)
       let wallPts = 0;
 
-      const n = pts.length / 3;
-      for (let k = 0; k < n; k++) {
-        const ax = pts[k*3 + w.ai];
-        const ux = pts[k*3 + w.ui];
-        const vy = pts[k*3 + 1] - floorY;
+      const axes = ['x', 'y', 'z'];
+      for (let k = 0; k < pts.length; k++) {
+        const p  = pts[k];
+        const ax = p[axes[w.ai]];
+        const ux = p[axes[w.ui]];
+        const vy = p.y - floorY;
         if (vy < -0.1 || vy > roomH + 0.1) continue;
         const ci = Math.min(cols-1, Math.max(0, Math.floor((ux - w.uMin) / GRID)));
         const ri = Math.min(rows-1, Math.max(0, Math.floor(vy / GRID)));

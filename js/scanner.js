@@ -652,12 +652,52 @@ const Scanner = {
     const peak = this._floorCeiling(ys);
     const minY = peak.floor, maxY = peak.ceil;
 
+    // Width & depth via an oriented (rotated) bounding box. Rooms are often
+    // scanned at an angle, so the axis-aligned box is far too large.
+    const fp = this._orientedFootprint(pts, minY, maxY);
+
     return {
       minX, maxX, minY, maxY, minZ, maxZ,
-      w: maxX - minX,
+      w: fp.w,
       h: maxY - minY,
-      d: maxZ - minZ,
+      d: fp.d,
+      angle: fp.angle,
     };
+  },
+
+  // Minimum-area oriented bounding box of the floor footprint.
+  // Uses a horizontal slice at wall height, then brute-forces the rotation
+  // angle that minimises the box area → recovers true room width × depth even
+  // when the room sits diagonally in the scan's coordinate system.
+  _orientedFootprint(pts, floorY, ceilY) {
+    const lo = floorY + (ceilY - floorY) * 0.2;
+    const hi = floorY + (ceilY - floorY) * 0.8;
+    let band = pts.filter(p => p.y > lo && p.y < hi);
+    if (band.length < 100) band = pts; // fallback: use everything
+    // Subsample for speed — a few thousand points define the outline well enough
+    if (band.length > 15000) {
+      const step = Math.ceil(band.length / 15000);
+      band = band.filter((_, i) => i % step === 0);
+    }
+    const px = band.map(p => p.x);
+    const pz = band.map(p => p.z);
+    const span = (arr) => {
+      const a = arr.slice().sort((m, n) => m - n);
+      const q = (f) => a[Math.max(0, Math.min(a.length - 1, Math.floor(a.length * f)))];
+      return q(0.99) - q(0.01);
+    };
+    let best = null;
+    for (let deg = 0; deg < 90; deg += 1) {
+      const t = deg * Math.PI / 180, c = Math.cos(t), s = Math.sin(t);
+      const u = [], v = [];
+      for (let i = 0; i < px.length; i++) {
+        u.push(px[i] * c + pz[i] * s);
+        v.push(-px[i] * s + pz[i] * c);
+      }
+      const wu = span(u), wv = span(v), area = wu * wv;
+      if (!best || area < best.area) best = { wu, wv, area, deg };
+    }
+    return { w: Math.max(best.wu, best.wv), d: Math.min(best.wu, best.wv), angle: best.deg };
   },
 
   // Find floor & ceiling levels as the densest bins in the lower / upper half.

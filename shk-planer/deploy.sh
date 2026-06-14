@@ -88,13 +88,18 @@ echo ""
 echo "── DEBUG PM2-Umgebung ──"
 echo "PATH=$PATH"
 echo "HOME=$HOME"
-which node 2>/dev/null && echo "node: $(which node)" || echo "node: nicht in PATH"
-which pm2  2>/dev/null && echo "pm2:  $(which pm2)"  || echo "pm2:  nicht in PATH"
-ls -la /root/.nvm 2>/dev/null | head -3 || echo "/root/.nvm: nicht gefunden"
-ls -la ~/.nvm     2>/dev/null | head -3 || echo "~/.nvm: nicht gefunden"
-find /usr/local/bin /usr/bin -name 'pm2' 2>/dev/null || echo "pm2 nicht in /usr/local/bin oder /usr/bin"
-find /root -maxdepth 6 -name 'pm2' 2>/dev/null | head -5 || true
-ls /root/.bashrc 2>/dev/null && head -20 /root/.bashrc || echo ".bashrc nicht gefunden"
+# Snap pm2?
+ls -la /snap/bin/pm2 2>/dev/null || echo "/snap/bin/pm2: nicht gefunden"
+ls /snap/bin/ 2>/dev/null | grep -E 'node|npm|pm2' || echo "kein node/npm/pm2 in /snap/bin"
+# opt/nvm?
+ls /opt/nvm 2>/dev/null | head -3 || echo "/opt/nvm: nicht gefunden"
+# Volle .bashrc (letzten 30 Zeilen – wo nvm normalerweise steht)
+echo "--- .bashrc (letzte 30 Zeilen) ---"
+tail -30 /root/.bashrc 2>/dev/null || echo ".bashrc nicht gefunden"
+echo "--- .bash_profile ---"
+cat /root/.bash_profile 2>/dev/null || echo ".bash_profile nicht gefunden"
+echo "--- .profile ---"
+cat /root/.profile 2>/dev/null | tail -20 || echo ".profile nicht gefunden"
 echo "── END DEBUG ──"
 
 # ── 5. PM2 neustarten ─────────────────────────────────────────────────────

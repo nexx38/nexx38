@@ -156,3 +156,4 @@ app.get('/api/termine', async (req, res) => {
 
 const PORT = process.env.PORT || 3002;
 app.listen(PORT, () => console.log(`SHK Planer API running on port ${PORT}`));
+

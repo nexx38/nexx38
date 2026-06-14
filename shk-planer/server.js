@@ -399,23 +399,6 @@ app.delete('/api/termine/:uid', async (req, res) => {
   }
 });
 
-// Diagnose: zeigt die nächsten Termine unabhängig vom Datum
-app.get('/api/termine/debug', async (req, res) => {
-  try {
-    const count = await pool.query('SELECT COUNT(*) AS total FROM termine');
-    const sample = await pool.query(
-      `SELECT id, titel, datum, zeit_von, zeit_bis,
-              pg_typeof(datum) AS datum_typ
-       FROM termine
-       ORDER BY datum DESC NULLS LAST
-       LIMIT 10`
-    );
-    res.json({ total: count.rows[0].total, sample: sample.rows });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
 const PORT = process.env.PORT || 3002;
 app.listen(PORT, () => console.log(`SHK Planer API running on port ${PORT}`));
 

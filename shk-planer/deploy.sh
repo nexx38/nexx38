@@ -128,9 +128,8 @@ sleep 2
 HEALTH=$(curl -s http://localhost:3002/api/health 2>/dev/null || echo '{"status":"no response"}')
 echo "  Health: $HEALTH"
 
-curl -s -X POST http://localhost:3002/api/todos \
-  -H 'Content-Type: application/json' \
-  -d '{"text":"Testtodo vom Deploy","category":"office","person":"Tamer","priority":"medium"}' | python3 -m json.tool || true
+# Alte Test-Todos aus früheren Deploys aufräumen
+docker exec -i shk-db psql -U shk -d shkdb -c "DELETE FROM todos WHERE text='Testtodo vom Deploy';" >/dev/null 2>&1 || true
 
 echo ""
 echo "╔═══════════════════════════════════╗"

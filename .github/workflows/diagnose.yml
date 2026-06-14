@@ -26,25 +26,15 @@ jobs:
 
             echo ""
             echo "##### 2. LIVE-TEST /api/kalender/icloud-events — NUR Anzahl + Feldnamen (keine PII) #####"
-            curl -s --max-time 30 "http://localhost:3000/api/kalender/icloud-events" \
-              | python3 -c "import sys,json
-try:
-    d=json.load(sys.stdin)
-    if isinstance(d,list):
-        print('Typ=Liste  Anzahl=',len(d))
-        print('Felder=', list(d[0].keys()) if d else '(leer)')
-    else:
-        print('Typ=',type(d).__name__,' Keys=', list(d.keys()) if isinstance(d,dict) else d)
-except Exception as e:
-    print('Konnte Antwort nicht als JSON lesen:', e)" 2>&1
+            curl -s --max-time 30 "http://localhost:3000/api/kalender/icloud-events" > /tmp/ic.json 2>&1
+            echo "HTTP-Bytes: $(wc -c < /tmp/ic.json)"
+            python3 -c "import json;d=json.load(open('/tmp/ic.json'));print('Anzahl=',len(d) if isinstance(d,list) else 'kein-array');print('Felder=', (list(d[0].keys()) if isinstance(d,list) and len(d)>0 else 'leer'))" 2>&1
 
             echo ""
-            echo "##### 3. Test mit ?date / ?from-Parameter (nur Anzahl) #####"
+            echo "##### 3. Test mit Parametern (nur Anzahl) #####"
             for q in "?date=2026-06-15" "?from=2026-06-01&to=2026-06-30" ""; do
-              n=$(curl -s --max-time 30 "http://localhost:3000/api/kalender/icloud-events$q" | python3 -c "import sys,json
-try:
-    d=json.load(sys.stdin); print(len(d) if isinstance(d,list) else 'kein-array')
-except: print('fehler')" 2>&1)
+              curl -s --max-time 30 "http://localhost:3000/api/kalender/icloud-events$q" > /tmp/q.json 2>&1
+              n=$(python3 -c "import json;d=json.load(open('/tmp/q.json'));print(len(d) if isinstance(d,list) else 'kein-array')" 2>&1)
               echo "  Query '$q' -> Anzahl: $n"
             done
 

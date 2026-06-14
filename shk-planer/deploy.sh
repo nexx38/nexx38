@@ -83,24 +83,27 @@ mkdir -p /var/www/shk-planer
 cp -r "$PLANER_DIR/frontend/dist/." /var/www/shk-planer/
 echo "✓ Frontend kopiert."
 
-# ── 5. Backend als Docker-Container neustarten ────────────────────────────
+# ── 5. PM2 neustarten (exakter nvm-Pfad) ─────────────────────────────────
 echo ""
-echo "▶ Schritt 5: Backend-Docker-Container starten…"
+echo "▶ Schritt 5: PM2 neustarten…"
 cd "$PLANER_DIR"
-# Port 3002 freigeben: PM2/node-Prozess beenden
-pkill -9 -f "node server.js" 2>/dev/null || true
-pkill -9 -f "node /root/shk-planer" 2>/dev/null || true
-sleep 2
-docker stop shk-planer-backend 2>/dev/null || true
-docker rm   shk-planer-backend 2>/dev/null || true
-docker build -t shk-planer-backend .
-docker run -d \
-  --name shk-planer-backend \
-  --restart unless-stopped \
-  --network shk-app_default \
-  -p 3002:3002 \
-  shk-planer-backend
-echo "✓ Backend-Container gestartet."
+# PM2 über exakten nvm-Pfad finden (unabhängig von PATH)
+PM2_BIN=$(ls /root/.nvm/versions/node/*/bin/pm2 2>/dev/null | head -1)
+if [ -z "$PM2_BIN" ]; then
+  echo "! PM2 nicht gefunden unter /root/.nvm – versuche nvm…"
+  export NVM_DIR="/root/.nvm"
+  \. "$NVM_DIR/nvm.sh"
+  PM2_BIN=$(which pm2)
+fi
+echo "  PM2: $PM2_BIN"
+if $PM2_BIN describe shk-planer > /dev/null 2>&1; then
+  $PM2_BIN restart shk-planer
+  echo "✓ PM2 neugestartet."
+else
+  $PM2_BIN start "$PLANER_DIR/server.js" --name shk-planer
+  echo "✓ PM2 gestartet."
+fi
+$PM2_BIN save
 
 # ── 6. Nginx konfigurieren ─────────────────────────────────────────────────
 echo ""
@@ -130,4 +133,4 @@ echo ""
 echo "  API:      http://localhost:3002/api/health"
 echo "  Frontend: http://planer.shk-innovation.de"
 echo ""
-docker ps --filter name=shk-planer-backend
+$PM2_BIN status

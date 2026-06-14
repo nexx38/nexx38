@@ -19,24 +19,11 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           command_timeout: 6m
           script: |
-            SECRET_FILTER='passwo|password|passwort|secret|token|api[_-]?key|app[_-]?passwort|credential|bearer|authorization|privatekey|private_key|apple_id'
-
-            echo "##### 1. server.js: /api/termine + iCloud-Endpunkte (Code, Zeile 478-620) #####"
-            sed -n '478,620p' /opt/shk-app/backend/server.js | sed -E "/($SECRET_FILTER)/Id"
-
-            echo ""
-            echo "##### 2. LIVE-TEST /api/kalender/icloud-events — NUR Anzahl + Feldnamen (keine PII) #####"
-            curl -s --max-time 30 "http://localhost:3000/api/kalender/icloud-events" > /tmp/ic.json 2>&1
-            echo "HTTP-Bytes: $(wc -c < /tmp/ic.json)"
-            python3 -c "import json;d=json.load(open('/tmp/ic.json'));print('Anzahl=',len(d) if isinstance(d,list) else 'kein-array');print('Felder=', (list(d[0].keys()) if isinstance(d,list) and len(d)>0 else 'leer'))" 2>&1
-
-            echo ""
-            echo "##### 3. Test mit Parametern (nur Anzahl) #####"
-            for q in "?date=2026-06-15" "?from=2026-06-01&to=2026-06-30" ""; do
-              curl -s --max-time 30 "http://localhost:3000/api/kalender/icloud-events$q" > /tmp/q.json 2>&1
-              n=$(python3 -c "import json;d=json.load(open('/tmp/q.json'));print(len(d) if isinstance(d,list) else 'kein-array')" 2>&1)
-              echo "  Query '$q' -> Anzahl: $n"
+            echo "##### LIVE-TEST mit korrekten Parametern (von/bis) — PII-frei #####"
+            for range in "von=2026-06-01&bis=2026-06-30" "von=2026-06-01&bis=2026-12-31" "von=2026-01-01&bis=2026-12-31"; do
+              curl -s --max-time 40 "http://localhost:3000/api/kalender/icloud-events?$range" > /tmp/v.json 2>&1
+              echo "--- Range: $range  (Bytes: $(wc -c < /tmp/v.json)) ---"
+              python3 -c "import json;d=json.load(open('/tmp/v.json'));print('  Anzahl=',len(d) if isinstance(d,list) else 'KEIN-ARRAY');print('  Felder=',list(d[0].keys()) if isinstance(d,list) and len(d)>0 else 'leer')" 2>&1
+              python3 -c "import json,sys;d=json.load(open('/tmp/v.json'));sys.exit(0 if isinstance(d,list) else 1)" 2>/dev/null || { echo '  RAW-Fehlerantwort (kein PII):'; head -c 300 /tmp/v.json; echo ''; }
             done
-
-            echo ""
             echo "##### FERTIG #####"

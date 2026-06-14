@@ -17,38 +17,43 @@ jobs:
           host: 178.104.159.191
           username: root
           key: ${{ secrets.VPS_SSH_KEY }}
-          command_timeout: 5m
+          command_timeout: 8m
           script: |
-            # Helfer: filtert Zeilen mit möglichen Geheimnissen heraus (Repo ist öffentlich!)
-            SECRET_FILTER='passwo|password|passwort|secret|token|api[_-]?key|app[_-]?specific|credential|bearer|authorization|privatekey|private_key'
+            SECRET_FILTER='passwo|password|passwort|secret|token|api[_-]?key|app[_-]?specific|app[_-]?passwort|credential|bearer|authorization|privatekey|private_key|apple_id|smtp|mail_pass'
 
-            echo "##### A. VERFAHRENSDOKUMENTATION (gefiltert) #####"
-            sed -E "/($SECRET_FILTER)/Id" /opt/shk-app/backups/tooltime_archiv/Verfahrensdokumentation_ENTWURF.md 2>&1 | head -120
-
-            echo ""
-            echo "##### B. STRUKTUR /opt/shk-app #####"
-            ls -la /opt/shk-app 2>&1 | head -40
-            echo "--- weitere .md / README im SHK-App ---"
-            find /opt/shk-app -maxdepth 4 -iname '*.md' -o -maxdepth 4 -iname 'README*' 2>/dev/null | grep -v node_modules | head -30
+            echo "##### A. BACKEND-GESUNDHEIT (Absturz/OOM?) #####"
+            docker inspect shk-backend --format 'Status={{.State.Status}} Running={{.State.Running}} OOMKilled={{.State.OOMKilled}} ExitCode={{.State.ExitCode}} RestartCount={{.RestartCount}} StartedAt={{.State.StartedAt}} MemLimit={{.HostConfig.Memory}}' 2>&1
+            echo "--- Host-RAM ---"
+            free -h 2>&1
+            echo "--- docker stats (einmalig) ---"
+            docker stats --no-stream --format 'table {{.Name}}\t{{.MemUsage}}\t{{.CPUPerc}}' 2>&1
 
             echo ""
-            echo "##### C. kalender_einstellungen – Schema + Zeilenzahl (KEINE Werte) #####"
-            docker exec -i shk-db psql -U shk -d shkdb -c "\d kalender_einstellungen" 2>&1
-            docker exec -i shk-db psql -U shk -d shkdb -c "SELECT COUNT(*) AS anzahl FROM kalender_einstellungen;" 2>&1
-            echo "--- nicht-geheime Spalten (Schema-Übersicht) ---"
-            docker exec -i shk-db psql -U shk -d shkdb -c "SELECT column_name, data_type FROM information_schema.columns WHERE table_name='kalender_einstellungen' ORDER BY ordinal_position;" 2>&1
+            echo "##### B. BACKEND-LOGS (letzte 40 Zeilen, ungefiltert nach Keyword) #####"
+            docker logs shk-backend --tail 40 2>&1 | sed -E "/($SECRET_FILTER)/Id"
 
             echo ""
-            echo "##### D. shk-backend Logs – Kalender/iCloud/Termin/Fehler (gefiltert) #####"
-            docker logs shk-backend --tail 300 2>&1 | grep -iE 'kalender|calendar|icloud|caldav|termin|sync|error|fehler' | sed -E "/($SECRET_FILTER)/Id" | tail -40
+            echo "##### C. BACKEND-STRUKTUR #####"
+            ls -la /opt/shk-app/backend 2>&1 | head -40
+            echo "--- alle .js Dateien (ohne node_modules) ---"
+            find /opt/shk-app/backend -name '*.js' -not -path '*/node_modules/*' 2>/dev/null | head -60
 
             echo ""
-            echo "##### E. n8n-Workflow – nur Node-Namen/Typen (keine Werte) #####"
-            grep -oE '"name":[^,]*|"type":[^,]*' /root/n8n_kedicik_workflow.json 2>/dev/null | sed -E "/($SECRET_FILTER)/Id" | head -60
+            echo "##### D. KALENDER/CALDAV/ICLOUD/TERMINE im Backend-Code #####"
+            grep -rilE 'caldav|icloud|kalender|tsdav|termine|dav-' /opt/shk-app/backend --include='*.js' 2>/dev/null | grep -v node_modules | head -30
+            echo "--- CalDAV-Bibliotheken in package.json ---"
+            grep -iE 'dav|ical|calendar|caldav|cron' /opt/shk-app/backend/package.json 2>&1 | sed -E "/($SECRET_FILTER)/Id"
 
             echo ""
-            echo "##### F. SHK-Backend Quellcode – Kalender-/Termin-Dateien #####"
-            find /opt/shk-app -maxdepth 5 -type f \( -iname '*kalender*' -o -iname '*calendar*' -o -iname '*termin*' -o -iname '*caldav*' -o -iname '*icloud*' \) 2>/dev/null | grep -v node_modules | head -30
+            echo "##### E. SYNC-MECHANIK: Endpunkt / Cron / Zeitplan #####"
+            grep -rnE 'sync|cron|schedule|setInterval' /opt/shk-app/backend --include='*.js' 2>/dev/null | grep -iE 'kalender|termin|caldav|icloud|sync' | grep -v node_modules | sed -E "/($SECRET_FILTER)/Id" | head -25
+            echo "--- system-cron / timer ---"
+            crontab -l 2>/dev/null | sed -E "/($SECRET_FILTER)/Id" | head -20 || echo "(kein crontab)"
+
+            echo ""
+            echo "##### F. WAREN TERMINE JE IN DER DB? (Export vom 05.05.) #####"
+            echo "Suche COPY/INSERT-Block für termine im 725MB-Dump…"
+            grep -m1 -n 'COPY public.termine\|INSERT INTO termine\|INSERT INTO public.termine' /opt/shk-app/shkdb_export.sql 2>/dev/null || echo "(kein termine-Datenblock im Export gefunden)"
 
             echo ""
             echo "##### FERTIG #####"

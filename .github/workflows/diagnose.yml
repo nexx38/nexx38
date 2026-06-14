@@ -11,34 +11,30 @@ jobs:
   diagnose:
     runs-on: ubuntu-latest
     steps:
-      - name: Verifikation Planer iCloud-Termine (read-only, PII-frei)
+      - name: Latenz + nginx-Pfad prüfen (PII-frei)
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: 178.104.159.191
           username: root
           key: ${{ secrets.VPS_SSH_KEY }}
-          command_timeout: 6m
+          command_timeout: 5m
           script: |
-            echo "##### A. Planer-Container Status #####"
-            docker ps --filter name=shk-planer-api --format '{{.Names}} {{.Status}}'
-
-            echo ""
-            echo "##### B. /api/termine je Tag (2026-06-14 .. 2026-07-13): Anzahl + Quelle (KEINE PII) #####"
-            total_ic=0; total_lo=0
-            for off in $(seq 0 29); do
-              d=$(date -u -d "2026-06-14 +$off day" +%Y-%m-%d)
-              curl -s --max-time 25 "http://localhost:3002/api/termine?date=$d" > /tmp/t.json 2>&1
-              line=$(python3 -c "import json;d=json.load(open('/tmp/t.json'));ic=sum(1 for x in d if isinstance(x,dict) and x.get('quelle')=='icloud') if isinstance(d,list) else -1;lo=sum(1 for x in d if isinstance(x,dict) and x.get('quelle')=='lokal') if isinstance(d,list) else -1;print(ic,lo)" 2>/dev/null || echo "ERR ERR")
-              ic=$(echo $line | cut -d' ' -f1); lo=$(echo $line | cut -d' ' -f2)
-              if [ "$ic" != "0" ] || [ "$lo" != "0" ]; then echo "  $d -> iCloud:$ic  lokal:$lo"; fi
-              case "$ic" in ''|*[!0-9]*) ;; *) total_ic=$((total_ic+ic));; esac
-              case "$lo" in ''|*[!0-9]*) ;; *) total_lo=$((total_lo+lo));; esac
+            echo "##### A. Antwortzeit /api/termine (Backend direkt, 3 Messungen) #####"
+            for i in 1 2 3; do
+              t=$(curl -s -o /tmp/t.json -w '%{time_total}' --max-time 40 "http://localhost:3002/api/termine?date=2026-06-15")
+              n=$(python3 -c "import json;d=json.load(open('/tmp/t.json'));print(len(d) if isinstance(d,list) else 'ERR')" 2>/dev/null || echo ERR)
+              echo "  Messung $i: ${t}s  Anzahl=$n"
             done
-            echo "  >>> SUMME 30 Tage: iCloud=$total_ic  lokal=$total_lo"
 
             echo ""
-            echo "##### C. Planer-Logs: iCloud-/DB-Fehler? #####"
-            docker logs shk-planer-api --tail 60 2>&1 | grep -iE 'icloud|fehler|error|caldav' | head -20 || echo "(keine relevanten Logzeilen)"
+            echo "##### B. Öffentlicher Weg über nginx (Host-Header) #####"
+            code=$(curl -s -o /tmp/n.json -w '%{http_code}' --max-time 40 -H 'Host: planer.shk-innovation.de' "http://127.0.0.1/api/termine?date=2026-06-15")
+            echo "  HTTP-Code via nginx: $code"
+            python3 -c "import json;d=json.load(open('/tmp/n.json'));print('  Anzahl via nginx=',len(d) if isinstance(d,list) else 'KEIN-ARRAY')" 2>&1
+
+            echo ""
+            echo "##### C. Ausgelieferte index.html / SW-Referenz (Cache-Hinweis) #####"
+            curl -s --max-time 20 -H 'Host: planer.shk-innovation.de' "http://127.0.0.1/" | grep -iE 'registerSW|sw\.js|workbox' | head -5 || echo "(kein SW-Verweis gefunden)"
 
             echo ""
             echo "##### FERTIG #####"

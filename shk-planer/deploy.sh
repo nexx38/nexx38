@@ -83,17 +83,21 @@ mkdir -p /var/www/shk-planer
 cp -r "$PLANER_DIR/frontend/dist/." /var/www/shk-planer/
 echo "✓ Frontend kopiert."
 
-# ── 5. PM2 neustarten (exakter nvm-Pfad) ─────────────────────────────────
+# ── 5. PM2 neustarten ─────────────────────────────────────────────────────
 echo ""
 echo "▶ Schritt 5: PM2 neustarten…"
 cd "$PLANER_DIR"
-# PM2 über exakten nvm-Pfad finden (unabhängig von PATH)
+
+# PM2 finden: nvm-Glob → System-Pfade → find
 PM2_BIN=$(ls /root/.nvm/versions/node/*/bin/pm2 2>/dev/null | head -1)
+[ -z "$PM2_BIN" ] && PM2_BIN=$(ls ~/.nvm/versions/node/*/bin/pm2 2>/dev/null | head -1)
+[ -z "$PM2_BIN" ] && PM2_BIN=$(which pm2 2>/dev/null || true)
+[ -z "$PM2_BIN" ] && PM2_BIN=$(ls /usr/local/bin/pm2 /usr/bin/pm2 2>/dev/null | head -1)
+[ -z "$PM2_BIN" ] && PM2_BIN=$(find / -maxdepth 10 -name pm2 -executable -type f 2>/dev/null | head -1)
+
 if [ -z "$PM2_BIN" ]; then
-  echo "! PM2 nicht gefunden unter /root/.nvm – versuche nvm…"
-  export NVM_DIR="/root/.nvm"
-  \. "$NVM_DIR/nvm.sh"
-  PM2_BIN=$(which pm2)
+  echo "ERROR: PM2 nicht gefunden! Bitte PM2 global installieren." >&2
+  exit 1
 fi
 echo "  PM2: $PM2_BIN"
 if $PM2_BIN describe shk-planer > /dev/null 2>&1; then

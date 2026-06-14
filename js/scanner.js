@@ -394,6 +394,9 @@ const Scanner = {
       else if (name.endsWith('.obj')) points = await this._parseOBJ(file, progressEl);
       else throw new Error('Format nicht unterstützt. Bitte PLY, XYZ oder OBJ.');
 
+      // Scaniverse exportiert mit wechselnder "Oben"-Achse → so drehen, dass Y immer oben ist
+      points = this._orientUp(points);
+
       let bounds = this._calcBounds(points);
 
       // Sanity check: real rooms are < ~100 m. Garbage (wrong byte layout)
@@ -612,6 +615,29 @@ const Scanner = {
     if (label) label.textContent = `Verarbeite Punktwolke … ${Math.round(pct)}%`;
   },
 
+  // Detect which axis is "up" (= room height) and rotate the cloud so Y is up.
+  // Scaniverse exports vary (sometimes Y up, sometimes Z). The vertical axis is
+  // the one with the two strongest density peaks: floor + ceiling are flat, dense
+  // planes, so the height axis has a sharply bimodal point distribution.
+  _orientUp(pts) {
+    const score = (key) => {
+      const a = pts.map(p => p[key]);
+      let mn = Infinity, mx = -Infinity;
+      for (const v of a) { if (v < mn) mn = v; if (v > mx) mx = v; }
+      const bins = 50, w = (mx - mn) / bins || 1, h = new Array(bins).fill(0);
+      for (const v of a) { let bi = Math.floor((v - mn) / w); if (bi >= bins) bi = bins - 1; if (bi < 0) bi = 0; h[bi]++; }
+      let fc = 0, cc = 0;
+      for (let i = 0; i < bins / 2; i++)               if (h[i] > fc) fc = h[i];
+      for (let i = Math.floor(bins / 2); i < bins; i++) if (h[i] > cc) cc = h[i];
+      return (fc + cc) / pts.length; // fraction of points in the densest floor+ceiling bins
+    };
+    const s = { x: score('x'), y: score('y'), z: score('z') };
+    const up = ['x', 'y', 'z'].reduce((a, b) => (s[a] > s[b] ? a : b));
+    if (up === 'y') return pts;
+    if (up === 'z') return pts.map(p => ({ x: p.x, y: p.z, z: p.y }));
+    return pts.map(p => ({ x: p.y, y: p.x, z: p.z })); // up === 'x'
+  },
+
   _calcBounds(pts) {
     // Robust percentile bounds — ignores scan-outliers (stray points below floor etc.)
     const pct = (arr, p) => arr[Math.max(0, Math.min(arr.length - 1, Math.floor(arr.length * p)))];
@@ -619,14 +645,35 @@ const Scanner = {
     const ys = pts.map(p => p.y).sort((a, b) => a - b);
     const zs = pts.map(p => p.z).sort((a, b) => a - b);
     const minX = pct(xs, 0.01), maxX = pct(xs, 0.99);
-    const minY = pct(ys, 0.02), maxY = pct(ys, 0.98);
     const minZ = pct(zs, 0.01), maxZ = pct(zs, 0.99);
+
+    // Height = distance between floor and ceiling density peaks (robust against
+    // stray points above the ceiling / below the floor that inflate the span).
+    const peak = this._floorCeiling(ys);
+    const minY = peak.floor, maxY = peak.ceil;
+
     return {
       minX, maxX, minY, maxY, minZ, maxZ,
       w: maxX - minX,
       h: maxY - minY,
       d: maxZ - minZ,
     };
+  },
+
+  // Find floor & ceiling levels as the densest bins in the lower / upper half.
+  _floorCeiling(sortedY) {
+    const mn = sortedY[0], mx = sortedY[sortedY.length - 1];
+    const bins = 60, w = (mx - mn) / bins || 1;
+    const h = new Array(bins).fill(0);
+    for (const v of sortedY) {
+      let bi = Math.floor((v - mn) / w);
+      if (bi >= bins) bi = bins - 1; if (bi < 0) bi = 0;
+      h[bi]++;
+    }
+    let fb = 0, fc = -1, cb = bins - 1, cc = -1;
+    for (let i = 0; i < bins / 2; i++)            if (h[i] > fc) { fc = h[i]; fb = i; }
+    for (let i = Math.floor(bins / 2); i < bins; i++) if (h[i] > cc) { cc = h[i]; cb = i; }
+    return { floor: mn + (fb + 0.5) * w, ceil: mn + (cb + 0.5) * w };
   },
 
   _showPointCloud(pts, b) {

@@ -5,19 +5,23 @@
 }
 
 :root {
-  --bg:     #0F1117;
-  --bg2:    #1A1D27;
-  --bg3:    #242736;
-  --border: #2D3148;
-  --text:   #E8EAF6;
-  --text2:  #8B90B0;
-  --accent: #3B82F6;
-  --accent2:#60A5FA;
-  --green:  #10B981;
-  --red:    #EF4444;
-  --orange: #F59E0B;
-  --purple: #8B5CF6;
-  --radius: 12px;
+  /* Helles „Structured"-Theme */
+  --bg:      #FFFFFF;
+  --bg2:     #F5F5F7;
+  --bg3:     #ECEDF1;
+  --border:  #E6E7EC;
+  --text:    #1B1B24;
+  --text2:   #8A8D9B;
+  --accent:  #FF6F61;   /* Koralle */
+  --accent2: #FF8A7E;
+  --green:   #34C759;
+  --red:     #FF3B30;
+  --orange:  #FF9F0A;
+  --purple:  #AF52DE;
+  --blue:    #3B82F6;
+  --line:    #E2E3EA;   /* Timeline-Linie */
+  --radius:  16px;
+  --shadow:  0 1px 3px rgba(20,20,40,0.06), 0 1px 2px rgba(20,20,40,0.04);
 }
 
 html, body, #root {
@@ -41,21 +45,21 @@ button {
 input, textarea, select {
   font: inherit;
   color: var(--text);
-  background: var(--bg3);
+  background: var(--bg2);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 10px 12px;
+  border-radius: 12px;
+  padding: 12px 14px;
   outline: none;
   width: 100%;
 }
 
 input:focus, textarea:focus, select:focus {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
+  box-shadow: 0 0 0 3px rgba(255,111,97,0.15);
 }
 
 select option {
-  background: var(--bg2);
+  background: #fff;
 }
 
 ::-webkit-scrollbar { width: 3px; }

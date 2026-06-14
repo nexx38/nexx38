@@ -1,253 +1,254 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { api } from '../api'
 
 const CAT_COLOR = {
-  office:    '#3B82F6',
-  baustelle: '#F59E0B',
-  lager:     '#8B5CF6',
-  privat:    '#10B981',
-  montage:   '#EF4444',
-  wartung:   '#F97316',
+  office: '#3B82F6', baustelle: '#FF9F0A', lager: '#AF52DE',
+  privat: '#34C759', montage: '#FF3B30', wartung: '#FF9500',
 }
 const CAT_ICON = {
-  office:    '💼',
-  baustelle: '🔧',
-  lager:     '📦',
-  privat:    '🏠',
-  montage:   '🔩',
-  wartung:   '⚙️',
+  office: '💼', baustelle: '🔧', lager: '📦',
+  privat: '🏠', montage: '🔩', wartung: '⚙️',
 }
-const HOURS = Array.from({ length: 17 }, (_, i) => i + 6)  // 06-22
-const pad   = (n) => String(n).padStart(2, '0')
-const CATS  = Object.keys(CAT_COLOR)
+const pad = (n) => String(n).padStart(2, '0')
 
-const INIT = { title: '', hour: 8, duration: 1, category: 'office', person: 'Tamer' }
-
-const timeToHour = (t) => t ? parseInt(t.split(':')[0]) : 8
-const timeToDuration = (von, bis) => {
-  if (!von || !bis) return 1
-  const [vh, vm] = von.split(':').map(Number)
-  const [bh, bm] = bis.split(':').map(Number)
-  return Math.max(1, Math.round((bh * 60 + bm - vh * 60 - vm) / 60))
+// "HH:MM" -> Minuten ab Mitternacht (null -> -1 = ganztägig/oben)
+const toMin = (t) => {
+  if (!t) return -1
+  const [h, m] = t.split(':').map(Number)
+  return h * 60 + (m || 0)
 }
+const hm = (t) => (t ? t.slice(0, 5) : null)
+
+const EMPTY = { titel: '', von: '08:00', bis: '09:00', notizen: '' }
 
 export default function Timeline({ date }) {
-  const [blocks,  setBlocks]  = useState([])
   const [termine, setTermine] = useState([])
+  const [blocks,  setBlocks]  = useState([])
   const [loading, setLoading] = useState(true)
-  const [modal,   setModal]   = useState(false)
-  const [form,    setForm]    = useState(INIT)
+  const [sheet,   setSheet]   = useState(null)   // null | { mode:'new'|'edit', form, uid }
+  const [busy,    setBusy]    = useState(false)
   const [err,     setErr]     = useState('')
+  const [now,     setNow]     = useState(new Date())
 
-  useEffect(() => {
+  const today = new Date().toISOString().split('T')[0]
+  const isToday = date === today
+
+  const reload = useCallback(() => {
     setLoading(true)
     Promise.all([
-      api.getTimeblocks(date).catch(() => []),
       api.getTermine(date).catch(() => []),
-    ]).then(([bl, te]) => {
-      setBlocks(Array.isArray(bl) ? bl : [])
+      api.getTimeblocks(date).catch(() => []),
+    ]).then(([te, bl]) => {
       setTermine(Array.isArray(te) ? te : [])
+      setBlocks(Array.isArray(bl) ? bl : [])
     }).finally(() => setLoading(false))
   }, [date])
 
-  const toggle = async (b) => {
-    setBlocks(bs => bs.map(x => x.id === b.id ? { ...x, done: !x.done } : x))
-    await api.updateTimeblock(b.id, { done: !b.done })
-  }
+  useEffect(() => { reload() }, [reload])
 
-  const remove = async (id) => {
-    setBlocks(bs => bs.filter(b => b.id !== id))
-    await api.deleteTimeblock(id)
-  }
+  // Uhr für „Jetzt"-Linie
+  useEffect(() => {
+    if (!isToday) return
+    const id = setInterval(() => setNow(new Date()), 60000)
+    return () => clearInterval(id)
+  }, [isToday])
 
-  const add = async () => {
-    if (!form.title.trim()) { setErr('Bitte Titel eingeben'); return }
+  // ── Items zusammenführen & sortieren ──
+  const items = []
+  termine.forEach(t => items.push({
+    kind: 'termin', id: t.id, uid: t.icloud_uid || (t.id || '').replace(/^ic_/, ''),
+    titel: t.titel, startMin: toMin(hm(t.zeit_von)),
+    von: hm(t.zeit_von), bis: hm(t.zeit_bis), notizen: t.notizen || '',
+  }))
+  blocks.forEach(b => items.push({
+    kind: 'block', id: b.id, titel: b.title, category: b.category, person: b.person,
+    done: b.done, startMin: (+b.hour) * 60, von: `${pad(b.hour)}:00`,
+    bis: `${pad(+b.hour + (+b.duration || 1))}:00`, duration: +b.duration || 1,
+  }))
+  items.sort((a, b) => a.startMin - b.startMin)
+
+  const nowMin = now.getHours() * 60 + now.getMinutes()
+  // Render-Liste mit „Jetzt"-Marker an der richtigen Stelle
+  const rows = []
+  let nowPlaced = !isToday
+  for (const it of items) {
+    if (!nowPlaced && it.startMin > nowMin) { rows.push({ now: true }); nowPlaced = true }
+    rows.push(it)
+  }
+  if (!nowPlaced) rows.push({ now: true })
+
+  // ── Aktionen ──
+  const openNew = () => { setErr(''); setSheet({ mode: 'new', form: { ...EMPTY }, uid: null }) }
+  const openEdit = (it) => {
     setErr('')
-    const created = await api.createTimeblock({ ...form, date })
-    setBlocks(bs => [...bs, created].sort((a, b) => a.hour - b.hour))
-    setModal(false)
-    setForm(INIT)
+    setSheet({ mode: 'edit', uid: it.uid, form: { titel: it.titel, von: it.von || '08:00', bis: it.bis || '09:00', notizen: it.notizen || '' } })
   }
 
-  const byHour = {}
-  blocks.forEach(b => { const h = +b.hour; (byHour[h] ??= []).push({ ...b, _type: 'block' }) })
-  termine.forEach(t => {
-    const h = timeToHour(t.zeit_von)
-    ;(byHour[h] ??= []).push({ ...t, _type: 'termin' })
-  })
+  const save = async () => {
+    const f = sheet.form
+    if (!f.titel.trim()) { setErr('Bitte einen Titel eingeben'); return }
+    setBusy(true); setErr('')
+    const payload = { titel: f.titel.trim(), datum: date, zeit_von: f.von, zeit_bis: f.bis, notizen: f.notizen }
+    try {
+      if (sheet.mode === 'new') await api.createTermin(payload)
+      else await api.updateTermin(sheet.uid, payload)
+      setSheet(null); reload()
+    } catch (e) {
+      setErr('Konnte nicht in Apple speichern. Bitte erneut versuchen.')
+    } finally { setBusy(false) }
+  }
+
+  const remove = async () => {
+    setBusy(true); setErr('')
+    try { await api.deleteTermin(sheet.uid); setSheet(null); reload() }
+    catch (e) { setErr('Löschen fehlgeschlagen.') }
+    finally { setBusy(false) }
+  }
+
+  const toggleBlock = async (b) => {
+    setBlocks(bs => bs.map(x => x.id === b.id ? { ...x, done: !x.done } : x))
+    try { await api.updateTimeblock(b.id, { done: !b.done }) } catch {}
+  }
 
   return (
-    <div style={{ position: 'relative', paddingBottom: 100 }}>
+    <div style={{ padding: '8px 0 110px', minHeight: '100%' }}>
+      {loading && <div style={spinner}>Laden…</div>}
 
-      {loading && <Spinner />}
-
-      {!loading && (
-        <div>
-          {HOURS.map(h => (
-            <div key={h} style={{ display: 'flex', minHeight: 56 }}>
-              {/* Hour label */}
-              <div style={{ width: 52, flexShrink: 0, paddingTop: 2, paddingRight: 10, textAlign: 'right', fontSize: 12, color: 'var(--text2)', userSelect: 'none' }}>
-                {pad(h)}:00
-              </div>
-
-              {/* Line + blocks */}
-              <div style={{ flex: 1, borderLeft: '1px solid var(--border)', paddingLeft: 12, paddingRight: 16, paddingBottom: 4, paddingTop: 2 }}>
-                {(byHour[h] || []).map(item =>
-                  item._type === 'termin'
-                    ? <TerminBlock key={`t-${item.id}`} termin={item} />
-                    : <Block key={item.id} block={item} onToggle={toggle} onDelete={remove} />
-                )}
-              </div>
-            </div>
-          ))}
+      {!loading && items.length === 0 && (
+        <div style={emptyBox}>
+          <div style={{ fontSize: 40, marginBottom: 10 }}>🗓️</div>
+          <div style={{ fontWeight: 600, fontSize: 16 }}>Keine Termine an diesem Tag</div>
+          <div style={{ fontSize: 13, color: 'var(--text2)', marginTop: 6 }}>Tippe auf + für einen neuen Termin</div>
         </div>
       )}
 
-      {/* FAB */}
-      <button onClick={() => setModal(true)} style={fab}>+</button>
+      {!loading && rows.map((row, i) =>
+        row.now
+          ? <NowMarker key={`now-${i}`} label={`${pad(now.getHours())}:${pad(now.getMinutes())}`} />
+          : row.kind === 'termin'
+            ? <TerminRow key={row.id} it={row} onClick={() => openEdit(row)} />
+            : <BlockRow key={row.id} it={row} onToggle={() => toggleBlock({ id: row.id, done: row.done })} />
+      )}
 
-      {/* Modal */}
-      {modal && (
-        <Sheet onClose={() => setModal(false)} title="Zeitblock hinzufügen">
-          <input placeholder="Titel *" value={form.title}
-            onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
-            onKeyDown={e => e.key === 'Enter' && add()} autoFocus />
+      {/* FAB */}
+      <button onClick={openNew} style={fab} aria-label="Neuer Termin">+</button>
+
+      {/* Sheet */}
+      {sheet && (
+        <Sheet
+          title={sheet.mode === 'new' ? 'Neuer Termin' : 'Termin bearbeiten'}
+          onClose={() => setSheet(null)}
+        >
+          <input autoFocus placeholder="Titel *" value={sheet.form.titel}
+            onChange={e => setSheet(s => ({ ...s, form: { ...s.form, titel: e.target.value } }))} />
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <Field label="Von">
+              <input type="time" value={sheet.form.von}
+                onChange={e => setSheet(s => ({ ...s, form: { ...s.form, von: e.target.value } }))} />
+            </Field>
+            <Field label="Bis">
+              <input type="time" value={sheet.form.bis}
+                onChange={e => setSheet(s => ({ ...s, form: { ...s.form, bis: e.target.value } }))} />
+            </Field>
+          </div>
+
+          <Field label="Notiz">
+            <textarea rows={2} placeholder="optional" value={sheet.form.notizen}
+              onChange={e => setSheet(s => ({ ...s, form: { ...s.form, notizen: e.target.value } }))} />
+          </Field>
+
+          <div style={{ fontSize: 12, color: 'var(--text2)', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span></span> Wird direkt in deinem Apple-Kalender gespeichert
+          </div>
+
           {err && <p style={{ color: 'var(--red)', fontSize: 13 }}>{err}</p>}
 
-          <Row>
-            <Field label="Uhrzeit">
-              <select value={form.hour} onChange={e => setForm(f => ({ ...f, hour: +e.target.value }))}>
-                {HOURS.map(h => <option key={h} value={h}>{pad(h)}:00</option>)}
-              </select>
-            </Field>
-            <Field label="Dauer (Std.)">
-              <select value={form.duration} onChange={e => setForm(f => ({ ...f, duration: +e.target.value }))}>
-                {[1,2,3,4,5,6,7,8].map(d => <option key={d} value={d}>{d} Std.</option>)}
-              </select>
-            </Field>
-          </Row>
-
-          <Field label="Kategorie">
-            <ChipRow cats={CATS} selected={form.category} onSelect={cat => setForm(f => ({ ...f, category: cat }))} />
-          </Field>
-
-          <Field label="Person">
-            <input placeholder="Person" value={form.person}
-              onChange={e => setForm(f => ({ ...f, person: e.target.value }))} />
-          </Field>
-
-          <button onClick={add} style={submitBtn}>Hinzufügen</button>
+          <button onClick={save} disabled={busy} style={{ ...submitBtn, opacity: busy ? 0.6 : 1 }}>
+            {busy ? 'Speichern…' : 'Speichern'}
+          </button>
+          {sheet.mode === 'edit' && (
+            <button onClick={remove} disabled={busy} style={deleteBtn}>Löschen</button>
+          )}
         </Sheet>
       )}
     </div>
   )
 }
 
-function TerminBlock({ termin }) {
-  const von  = termin.zeit_von ? termin.zeit_von.slice(0,5) : '?'
-  const bis  = termin.zeit_bis ? termin.zeit_bis.slice(0,5) : '?'
-  const dur  = timeToDuration(termin.zeit_von, termin.zeit_bis)
+// ── Zeilen ──────────────────────────────────────────────────────────────────
+
+function Rail({ icon, color }) {
   return (
-    <div style={{
-      background: 'rgba(13,148,136,0.12)', borderRadius: 'var(--radius)',
-      padding: '10px 12px', marginBottom: 8,
-      display: 'flex', alignItems: 'center', gap: 10,
-      borderLeft: '3px solid #0D9488',
-    }}>
-      <span style={{ fontSize: 18, flexShrink: 0 }}>📅</span>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {termin.titel}
-        </div>
-        <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 2 }}>
-          {von} – {bis}{dur > 1 ? ` (${dur} Std.)` : ''}
-          {termin.kunde_name && ` · ${termin.kunde_name}`}
-          {termin.techniker && ` · ${termin.techniker}`}
-        </div>
-        {termin.typ && (
-          <span style={{ fontSize: 11, background: 'rgba(13,148,136,0.2)', color: '#0D9488', padding: '1px 8px', borderRadius: 20, marginTop: 3, display: 'inline-block' }}>
-            {termin.typ}
-          </span>
-        )}
-      </div>
+    <div style={{ width: 52, flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', position: 'relative' }}>
+      <div style={{ position: 'absolute', top: 0, bottom: -16, width: 2, background: 'var(--line)' }} />
+      <div style={{
+        position: 'relative', width: 38, height: 38, borderRadius: '50%',
+        background: color, color: '#fff', display: 'flex', alignItems: 'center',
+        justifyContent: 'center', fontSize: 18, boxShadow: 'var(--shadow)', marginTop: 4,
+      }}>{icon}</div>
     </div>
   )
 }
 
-function Block({ block, onToggle, onDelete }) {
-  const color = CAT_COLOR[block.category] || 'var(--accent)'
-  const endH  = +block.hour + +block.duration
+function TerminRow({ it, onClick }) {
   return (
-    <div style={{
-      background: 'var(--bg2)', borderRadius: 'var(--radius)',
-      padding: '10px 12px', marginBottom: 8,
-      display: 'flex', alignItems: 'center', gap: 10,
-      borderLeft: `3px solid ${color}`,
-      opacity: block.done ? 0.55 : 1, transition: 'opacity 0.2s',
-    }}>
-      <span style={{ fontSize: 18, flexShrink: 0 }}>{CAT_ICON[block.category] || '📋'}</span>
-
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{
-          fontWeight: 600, fontSize: 14,
-          textDecoration: block.done ? 'line-through' : 'none',
-          color: block.done ? 'var(--text2)' : 'var(--text)',
-          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-        }}>
-          {block.title}
-        </div>
-        <div style={{ fontSize: 12, color: 'var(--text2)', marginTop: 2 }}>
-          {pad(block.hour)}:00 – {pad(endH)}:00
-          {+block.duration > 1 && ` (${block.duration} Std.)`}
-          {block.person && ` · ${block.person}`}
-        </div>
+    <div style={{ display: 'flex', gap: 12, padding: '0 16px' }}>
+      <div style={{ width: 44, flexShrink: 0, textAlign: 'right', paddingTop: 10, fontSize: 12, color: 'var(--text2)' }}>
+        {it.von || ''}
       </div>
-
-      {/* Delete */}
-      <button onClick={() => onDelete(block.id)}
-        style={{ color: 'var(--text2)', fontSize: 18, padding: '0 4px', flexShrink: 0 }}>×</button>
-
-      {/* Done toggle */}
-      <button onClick={() => onToggle(block)} style={{
-        width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
-        border: `2px solid ${block.done ? 'var(--green)' : 'var(--border)'}`,
-        background: block.done ? 'var(--green)' : 'transparent',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        transition: 'all 0.15s',
-      }}>
-        {block.done && <span style={{ color: 'white', fontSize: 14, lineHeight: 1 }}>✓</span>}
+      <Rail icon="📅" color="var(--accent)" />
+      <button onClick={onClick} style={{ ...card, textAlign: 'left' }}>
+        <div style={{ fontWeight: 600, fontSize: 15 }}>{it.titel}</div>
+        <div style={{ fontSize: 12.5, color: 'var(--text2)', marginTop: 3 }}>
+          {it.von ? `${it.von}${it.bis ? '–' + it.bis : ''}` : 'ganztägig'}
+          {it.notizen ? ` · ${it.notizen}` : ''}
+        </div>
+        <span style={appleBadge}>Apple</span>
       </button>
     </div>
   )
 }
 
-// ── Shared UI helpers ──────────────────────────────────────────────────────
-
-function Spinner() {
-  return <div style={{ textAlign: 'center', padding: 48, color: 'var(--text2)' }}>Laden…</div>
-}
-
-function Sheet({ onClose, title, children }) {
+function BlockRow({ it, onToggle }) {
+  const color = CAT_COLOR[it.category] || 'var(--blue)'
   return (
-    <div
-      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', display: 'flex', alignItems: 'flex-end', zIndex: 200 }}
-      onClick={e => e.target === e.currentTarget && onClose()}
-    >
-      <div style={{
-        background: 'var(--bg2)', borderRadius: '20px 20px 0 0',
-        padding: '20px 20px max(32px,env(safe-area-inset-bottom))', width: '100%',
-        display: 'flex', flexDirection: 'column', gap: 12,
-        maxHeight: '90dvh', overflowY: 'auto',
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-          <h3 style={{ fontWeight: 700, fontSize: 18 }}>{title}</h3>
-          <button onClick={onClose} style={{ color: 'var(--text2)', fontSize: 22, lineHeight: 1 }}>✕</button>
+    <div style={{ display: 'flex', gap: 12, padding: '0 16px' }}>
+      <div style={{ width: 44, flexShrink: 0, textAlign: 'right', paddingTop: 10, fontSize: 12, color: 'var(--text2)' }}>
+        {it.von}
+      </div>
+      <Rail icon={CAT_ICON[it.category] || '📋'} color={color} />
+      <div style={{ ...card, opacity: it.done ? 0.55 : 1, display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontWeight: 600, fontSize: 15, textDecoration: it.done ? 'line-through' : 'none' }}>{it.titel}</div>
+          <div style={{ fontSize: 12.5, color: 'var(--text2)', marginTop: 3 }}>
+            {it.von}–{it.bis}{it.duration > 1 ? ` (${it.duration} Std.)` : ''}{it.person ? ` · ${it.person}` : ''}
+          </div>
         </div>
-        {children}
+        <button onClick={onToggle} style={{
+          width: 26, height: 26, borderRadius: '50%', flexShrink: 0,
+          border: `2px solid ${it.done ? 'var(--green)' : 'var(--border)'}`,
+          background: it.done ? 'var(--green)' : 'transparent',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>{it.done && <span style={{ color: '#fff', fontSize: 13 }}>✓</span>}</button>
       </div>
     </div>
   )
 }
+
+function NowMarker({ label }) {
+  return (
+    <div style={{ display: 'flex', gap: 12, padding: '0 16px', alignItems: 'center', margin: '2px 0' }}>
+      <div style={{ width: 44, flexShrink: 0, textAlign: 'right', fontSize: 12, fontWeight: 700, color: 'var(--accent)' }}>{label}</div>
+      <div style={{ width: 52, flexShrink: 0, display: 'flex', justifyContent: 'center' }}>
+        <div style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--accent)' }} />
+      </div>
+      <div style={{ flex: 1, height: 2, background: 'var(--accent)', borderRadius: 2, opacity: 0.7 }} />
+    </div>
+  )
+}
+
+// ── UI-Helfer ────────────────────────────────────────────────────────────────
 
 function Field({ label, children }) {
   return (
@@ -258,38 +259,47 @@ function Field({ label, children }) {
   )
 }
 
-function Row({ children }) {
-  return <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>{children}</div>
-}
-
-function ChipRow({ cats, selected, onSelect }) {
+function Sheet({ title, onClose, children }) {
   return (
-    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-      {cats.map(c => (
-        <button key={c} onClick={() => onSelect(c)} style={{
-          padding: '6px 12px', borderRadius: 20, fontSize: 13,
-          background: selected === c ? (CAT_COLOR[c] || 'var(--accent)') : 'var(--bg3)',
-          color: selected === c ? 'white' : 'var(--text2)',
-          border: `1px solid ${selected === c ? (CAT_COLOR[c] || 'var(--accent)') : 'var(--border)'}`,
-          transition: 'all 0.15s',
-        }}>
-          {CAT_ICON[c]} {c}
-        </button>
-      ))}
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', display: 'flex', alignItems: 'flex-end', zIndex: 200 }}
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <div style={{
+        background: 'var(--bg)', borderRadius: '22px 22px 0 0', width: '100%',
+        padding: '18px 18px max(28px, env(safe-area-inset-bottom))',
+        display: 'flex', flexDirection: 'column', gap: 12, maxHeight: '92dvh', overflowY: 'auto',
+        maxWidth: 480, margin: '0 auto',
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h3 style={{ fontWeight: 700, fontSize: 18 }}>{title}</h3>
+          <button onClick={onClose} style={{ color: 'var(--text2)', fontSize: 22 }}>✕</button>
+        </div>
+        {children}
+      </div>
     </div>
   )
 }
 
-const fab = {
-  position: 'fixed', bottom: 80, right: 20,
-  width: 56, height: 56, borderRadius: '50%',
-  background: 'var(--accent)', color: 'white', fontSize: 30, lineHeight: 1,
-  display: 'flex', alignItems: 'center', justifyContent: 'center',
-  boxShadow: '0 4px 20px rgba(59,130,246,0.45)', zIndex: 100,
+const spinner = { textAlign: 'center', padding: 48, color: 'var(--text2)' }
+const emptyBox = { textAlign: 'center', padding: '72px 24px', color: 'var(--text)' }
+const card = {
+  flex: 1, minWidth: 0, background: 'var(--bg2)', borderRadius: 'var(--radius)',
+  padding: '12px 14px', marginBottom: 14, boxShadow: 'var(--shadow)', position: 'relative',
 }
-
+const appleBadge = {
+  position: 'absolute', top: 12, right: 12, fontSize: 10, fontWeight: 700,
+  color: 'var(--accent)', background: 'rgba(255,111,97,0.12)', padding: '2px 7px', borderRadius: 10,
+}
+const fab = {
+  position: 'fixed', bottom: 84, right: 20, width: 58, height: 58, borderRadius: '50%',
+  background: 'var(--accent)', color: '#fff', fontSize: 30, lineHeight: 1,
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+  boxShadow: '0 6px 20px rgba(255,111,97,0.45)', zIndex: 100,
+}
 const submitBtn = {
-  background: 'var(--accent)', color: 'white',
-  padding: '14px', borderRadius: 12, fontWeight: 600, fontSize: 16, marginTop: 4,
-  width: '100%',
+  background: 'var(--accent)', color: '#fff', padding: '14px', borderRadius: 14,
+  fontWeight: 700, fontSize: 16, marginTop: 2, width: '100%',
+}
+const deleteBtn = {
+  background: 'rgba(255,59,48,0.1)', color: 'var(--red)', padding: '12px', borderRadius: 14,
+  fontWeight: 600, fontSize: 15, width: '100%',
 }

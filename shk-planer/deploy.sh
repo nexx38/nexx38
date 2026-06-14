@@ -83,23 +83,20 @@ mkdir -p /var/www/shk-planer
 cp -r "$PLANER_DIR/frontend/dist/." /var/www/shk-planer/
 echo "✓ Frontend kopiert."
 
-# ── DEBUG: PM2-Umgebung diagnostizieren ───────────────────────────────────
+# ── DEBUG: Was läuft auf Port 3002 und wo ist node/pm2? ──────────────────
 echo ""
-echo "── DEBUG PM2-Umgebung ──"
-echo "PATH=$PATH"
-echo "HOME=$HOME"
-# Snap pm2?
-ls -la /snap/bin/pm2 2>/dev/null || echo "/snap/bin/pm2: nicht gefunden"
-ls /snap/bin/ 2>/dev/null | grep -E 'node|npm|pm2' || echo "kein node/npm/pm2 in /snap/bin"
-# opt/nvm?
-ls /opt/nvm 2>/dev/null | head -3 || echo "/opt/nvm: nicht gefunden"
-# Volle .bashrc (letzten 30 Zeilen – wo nvm normalerweise steht)
-echo "--- .bashrc (letzte 30 Zeilen) ---"
-tail -30 /root/.bashrc 2>/dev/null || echo ".bashrc nicht gefunden"
-echo "--- .bash_profile ---"
-cat /root/.bash_profile 2>/dev/null || echo ".bash_profile nicht gefunden"
-echo "--- .profile ---"
-cat /root/.profile 2>/dev/null | tail -20 || echo ".profile nicht gefunden"
+echo "── DEBUG ──"
+# Was nutzt Port 3002?
+ss -tlnp 2>/dev/null | grep 3002 || netstat -tlnp 2>/dev/null | grep 3002 || echo "Port 3002: kein Ergebnis"
+# Docker-Container
+docker ps 2>/dev/null | grep -E 'node|shk|planer' || echo "Keine node/shk Docker-Container"
+# Systemd-Dienste
+systemctl list-units --type=service 2>/dev/null | grep -E 'shk|planer|pm2|node' || echo "Keine shk/pm2/node systemd-Dienste"
+# Alle laufenden Prozesse mit node oder pm2
+ps aux 2>/dev/null | grep -E '[n]ode|[p]m2' || echo "Keine node/pm2 Prozesse"
+# node/npm in /etc/profile.d?
+ls /etc/profile.d/ 2>/dev/null | head -10
+grep -r 'nvm\|node\|npm' /etc/profile.d/ 2>/dev/null | head -5 || echo "Kein nvm/node in /etc/profile.d"
 echo "── END DEBUG ──"
 
 # ── 5. PM2 neustarten ─────────────────────────────────────────────────────

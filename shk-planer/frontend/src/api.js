@@ -24,7 +24,7 @@ export const api = {
   updateTodo:     (id, data) => req(`/todos/${id}`, patch(data)),
   deleteTodo:     (id) => req(`/todos/${id}`, { method: 'DELETE' }),
 
-  getTermine:      (date) => req(`/termine?date=${date}`),
+  getTermine:      (date) => req(`/termine?date=${date}&_=${Date.now()}`),
   getTimeblocks:   (date) => req(`/timeblocks?date=${date}`),
   createTimeblock: (data) => req('/timeblocks', json(data)),
   updateTimeblock: (id, data) => req(`/timeblocks/${id}`, patch(data)),

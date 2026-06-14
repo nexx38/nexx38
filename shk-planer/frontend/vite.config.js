@@ -26,14 +26,9 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         runtimeCaching: [
           {
-            // Termine/Kalender immer frisch holen (iCloud-Abfrage darf etwas dauern)
+            // Termine/Kalender NIE aus dem Cache – immer frisch vom Netz
             urlPattern: /\/api\/termine/,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'shk-termine-cache-v2',
-              expiration: { maxEntries: 60, maxAgeSeconds: 300 },
-              networkTimeoutSeconds: 20
-            }
+            handler: 'NetworkOnly'
           },
           {
             urlPattern: /\/api\//,

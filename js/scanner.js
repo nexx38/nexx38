@@ -394,15 +394,50 @@ const Scanner = {
       else if (name.endsWith('.obj')) points = await this._parseOBJ(file, progressEl);
       else throw new Error('Format nicht unterstützt. Bitte PLY, XYZ oder OBJ.');
 
+      let bounds = this._calcBounds(points);
+
+      // Sanity check: real rooms are < ~100 m. Garbage (wrong byte layout)
+      // produces values like 6e+38. If detected, drop outliers and retry.
+      if (!this._boundsPlausible(bounds)) {
+        points = this._filterOutliers(points);
+        bounds = this._calcBounds(points);
+      }
+      if (!this._boundsPlausible(bounds)) {
+        throw new Error('Die Datei konnte nicht korrekt gelesen werden (ungültige Koordinaten). '
+          + 'Bitte exportiere in Scaniverse als PLY (Mesh) und versuche es erneut. '
+          + 'Falls es weiter klemmt: schick mir die ersten Zeilen der Datei.');
+      }
+
       this.s.pcPoints = points;
-      this.s.pcBounds = this._calcBounds(points);
+      this.s.pcBounds = bounds;
       progressEl.classList.remove('active');
-      this._showPointCloud(points, this.s.pcBounds);
+      this._showPointCloud(points, bounds);
     } catch (err) {
       progressEl.classList.remove('active');
       dropZone.style.display = 'flex';
       alert('Fehler: ' + err.message);
     }
+  },
+
+  _boundsPlausible(b) {
+    return [b.w, b.h, b.d].every(v => isFinite(v) && v > 0.05 && v < 200);
+  },
+
+  // Drop points whose coordinates are far outside the robust median range
+  _filterOutliers(points) {
+    const med = (arr) => {
+      const s = arr.slice().sort((a, b) => a - b);
+      return s[Math.floor(s.length / 2)];
+    };
+    const xs = points.map(p => p.x).filter(isFinite);
+    const ys = points.map(p => p.y).filter(isFinite);
+    const zs = points.map(p => p.z).filter(isFinite);
+    if (!xs.length) return points;
+    const mx = med(xs), my = med(ys), mz = med(zs);
+    const R = 100; // metres from median centre
+    return points.filter(p =>
+      isFinite(p.x) && isFinite(p.y) && isFinite(p.z) &&
+      Math.abs(p.x - mx) < R && Math.abs(p.y - my) < R && Math.abs(p.z - mz) < R);
   },
 
   async _parsePLY(file, progEl) {
@@ -456,22 +491,45 @@ const Scanner = {
   },
 
   _readPLYHeader(buf) {
-    const txt = new TextDecoder().decode(buf.slice(0, 8192));
-    const lines = txt.split('\n');
-    let format = 'ascii', vertexCount = 0, props = [], headerEnd = 0;
+    const bytes = new Uint8Array(buf);
+
+    // Find exact byte offset of data: search raw bytes for "end_header" + newline.
+    // This avoids all \n vs \r\n length-calculation bugs.
+    const needle = 'end_header';
+    let dataOffset = -1;
+    const limit = Math.min(bytes.length - needle.length, 65536);
+    for (let i = 0; i < limit; i++) {
+      let match = true;
+      for (let k = 0; k < needle.length; k++) {
+        if (bytes[i + k] !== needle.charCodeAt(k)) { match = false; break; }
+      }
+      if (match) {
+        // Skip past "end_header" and the following newline (\n or \r\n)
+        let j = i + needle.length;
+        if (bytes[j] === 0x0d) j++; // CR
+        if (bytes[j] === 0x0a) j++; // LF
+        dataOffset = j;
+        break;
+      }
+    }
+
+    // Parse the textual header portion
+    const headerTxt = new TextDecoder().decode(bytes.slice(0, dataOffset > 0 ? dataOffset : 8192));
+    const lines = headerTxt.split('\n');
+    let format = 'ascii', vertexCount = 0, props = [];
     let inVertex = false;
 
-    for (let i = 0; i < lines.length; i++) {
-      const l = lines[i].trim();
+    for (const rawLine of lines) {
+      const l = rawLine.trim();
       if (l.startsWith('format binary_little_endian')) format = 'binary';
-      if (l.startsWith('format ascii'))               format = 'ascii';
-      if (l.startsWith('element vertex')) { vertexCount = parseInt(l.split(' ')[2]); inVertex = true; }
-      if (l.startsWith('element') && !l.startsWith('element vertex')) inVertex = false;
-      if (inVertex && l.startsWith('property')) {
+      if (l.startsWith('format binary_big_endian'))    format = 'binary_be';
+      if (l.startsWith('format ascii'))                format = 'ascii';
+      if (l.startsWith('element vertex')) { vertexCount = parseInt(l.split(/\s+/)[2]); inVertex = true; }
+      else if (l.startsWith('element'))  { inVertex = false; }
+      if (inVertex && l.startsWith('property') && !l.startsWith('property list')) {
         const parts = l.split(/\s+/);
         const typeName = parts[1];
         const propName = parts[2];
-        // Byte size per type
         const size = (typeName === 'double' || typeName === 'float64')             ? 8
                    : (typeName === 'uchar'  || typeName === 'uint8'
                    || typeName === 'char'   || typeName === 'int8')                ? 1
@@ -480,16 +538,7 @@ const Scanner = {
                    : 4; // float, float32, int, uint, int32, uint32
         props.push({ name: propName, type: typeName, size });
       }
-      if (l === 'end_header') {
-        // Measure exact header byte length (handle \r\n and \n)
-        let nb = 0;
-        for (let j = 0; j <= i; j++) {
-          const raw = lines[j].replace(/\r$/, ''); // strip CR if present
-          nb += new TextEncoder().encode(raw + '\n').length;
-        }
-        headerEnd = nb;
-        break;
-      }
+      if (l === 'end_header') break;
     }
 
     // Calculate per-property byte offsets
@@ -502,7 +551,9 @@ const Scanner = {
     const zP = props.find(p => p.name === 'z');
 
     return {
-      format, vertexCount, dataOffset: headerEnd,
+      format,
+      vertexCount,
+      dataOffset: dataOffset > 0 ? dataOffset : 0,
       xIdx: props.findIndex(p => p.name === 'x'),
       yIdx: props.findIndex(p => p.name === 'y'),
       zIdx: props.findIndex(p => p.name === 'z'),

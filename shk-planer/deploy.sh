@@ -83,38 +83,34 @@ mkdir -p /var/www/shk-planer
 cp -r "$PLANER_DIR/frontend/dist/." /var/www/shk-planer/
 echo "✓ Frontend kopiert."
 
-# ── DEBUG: Was läuft auf Port 3002 und wo ist node/pm2? ──────────────────
+# ── 5. Backend-Docker-Container neu bauen und starten ─────────────────────
 echo ""
-echo "── DEBUG ──"
-# Was nutzt Port 3002?
-ss -tlnp 2>/dev/null | grep 3002 || netstat -tlnp 2>/dev/null | grep 3002 || echo "Port 3002: kein Ergebnis"
-# Docker-Container
-docker ps 2>/dev/null | grep -E 'node|shk|planer' || echo "Keine node/shk Docker-Container"
-# Systemd-Dienste
-systemctl list-units --type=service 2>/dev/null | grep -E 'shk|planer|pm2|node' || echo "Keine shk/pm2/node systemd-Dienste"
-# Alle laufenden Prozesse mit node oder pm2
-ps aux 2>/dev/null | grep -E '[n]ode|[p]m2' || echo "Keine node/pm2 Prozesse"
-# node/npm in /etc/profile.d?
-ls /etc/profile.d/ 2>/dev/null | head -10
-grep -r 'nvm\|node\|npm' /etc/profile.d/ 2>/dev/null | head -5 || echo "Kein nvm/node in /etc/profile.d"
-echo "── END DEBUG ──"
-
-# ── 5. PM2 neustarten ─────────────────────────────────────────────────────
-echo ""
-echo "▶ Schritt 5: PM2 neustarten…"
+echo "▶ Schritt 5: Backend-Container aktualisieren…"
 cd "$PLANER_DIR"
 
-# Login-Shell verwenden: sourced ~/.bash_profile → nvm → pm2 im PATH
-_pm2() { bash -lc "pm2 $*"; }
+# Image bauen (mit neuem server.js)
+docker build -t shk-planer-api "$PLANER_DIR"
 
-if _pm2 "describe shk-planer" > /dev/null 2>&1; then
-  _pm2 "restart shk-planer"
-  echo "✓ PM2 neugestartet."
-else
-  _pm2 "start $PLANER_DIR/server.js --name shk-planer"
-  echo "✓ PM2 gestartet."
+# Alten Container stoppen und entfernen
+if docker ps -q -f name=shk-planer-api | grep -q .; then
+  docker stop shk-planer-api
 fi
-_pm2 "save"
+docker rm -f shk-planer-api 2>/dev/null || true
+
+# Netzwerk des Datenbank-Containers ermitteln
+DOCKER_NET=$(docker inspect shk-db --format '{{range $k,$v := .NetworkSettings.Networks}}{{$k}}{{end}}' 2>/dev/null | head -1)
+[ -z "$DOCKER_NET" ] && DOCKER_NET="bridge"
+echo "  Docker-Netzwerk: $DOCKER_NET"
+
+# Neuen Container starten
+docker run -d \
+  --name shk-planer-api \
+  --network "$DOCKER_NET" \
+  -p 127.0.0.1:3002:3002 \
+  --restart unless-stopped \
+  shk-planer-api
+
+echo "✓ Backend-Container gestartet."
 
 # ── 6. Nginx konfigurieren ─────────────────────────────────────────────────
 echo ""
@@ -144,4 +140,4 @@ echo ""
 echo "  API:      http://localhost:3002/api/health"
 echo "  Frontend: http://planer.shk-innovation.de"
 echo ""
-$PM2_BIN status
+docker ps --filter name=shk-planer-api --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"

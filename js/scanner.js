@@ -613,14 +613,14 @@ const Scanner = {
   },
 
   _calcBounds(pts) {
-    let minX=Infinity, maxX=-Infinity;
-    let minY=Infinity, maxY=-Infinity;
-    let minZ=Infinity, maxZ=-Infinity;
-    for (const p of pts) {
-      if (p.x < minX) minX=p.x; if (p.x > maxX) maxX=p.x;
-      if (p.y < minY) minY=p.y; if (p.y > maxY) maxY=p.y;
-      if (p.z < minZ) minZ=p.z; if (p.z > maxZ) maxZ=p.z;
-    }
+    // Robust percentile bounds — ignores scan-outliers (stray points below floor etc.)
+    const pct = (arr, p) => arr[Math.max(0, Math.min(arr.length - 1, Math.floor(arr.length * p)))];
+    const xs = pts.map(p => p.x).sort((a, b) => a - b);
+    const ys = pts.map(p => p.y).sort((a, b) => a - b);
+    const zs = pts.map(p => p.z).sort((a, b) => a - b);
+    const minX = pct(xs, 0.01), maxX = pct(xs, 0.99);
+    const minY = pct(ys, 0.02), maxY = pct(ys, 0.98);
+    const minZ = pct(zs, 0.01), maxZ = pct(zs, 0.99);
     return {
       minX, maxX, minY, maxY, minZ, maxZ,
       w: maxX - minX,

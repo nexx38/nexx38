@@ -13,7 +13,7 @@ echo "╚═══════════════════════�
 # ── 1. PostgreSQL Tabellen ─────────────────────────────────────────────────
 echo ""
 echo "▶ Schritt 1: PostgreSQL Tabellen anlegen…"
-docker exec shk-db psql -U shkuser -d shkdb << 'EOSQL'
+docker exec -i shk-db psql -U shkuser -d shkdb << 'EOSQL'
 CREATE TABLE IF NOT EXISTS todos (
   id SERIAL PRIMARY KEY,
   text TEXT NOT NULL,

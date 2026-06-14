@@ -140,7 +140,8 @@ app.get('/api/termine', async (req, res) => {
     const date = req.query.date || new Date().toISOString().split('T')[0];
     const result = await pool.query(
       `SELECT t.id, t.titel, t.typ, t.datum, t.zeit_von, t.zeit_bis,
-              t.techniker, t.notizen, k.name AS kunde_name
+              t.techniker, t.notizen,
+              COALESCE(NULLIF(k.firma, ''), k.nachname) AS kunde_name
        FROM termine t
        LEFT JOIN kunden k ON t.kunden_id = k.id
        WHERE t.datum = $1

@@ -8,10 +8,10 @@ app.use(express.json());
 
 const pool = new Pool({
   host: process.env.DB_HOST || 'shk-db',
-  user: process.env.DB_USER || 'shkuser',
-  password: process.env.DB_PASS || 'shkpass',
+  user: process.env.DB_USER || 'shk',
+  password: process.env.DB_PASS || 'shk2024sicher',
   database: process.env.DB_NAME || 'shkdb',
-  port: 5432,
+  port: process.env.DB_PORT || 5432,
 });
 
 app.get('/api/health', async (req, res) => {

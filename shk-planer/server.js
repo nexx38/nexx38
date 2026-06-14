@@ -144,11 +144,28 @@ app.get('/api/termine', async (req, res) => {
               COALESCE(NULLIF(k.firma, ''), k.nachname) AS kunde_name
        FROM termine t
        LEFT JOIN kunden k ON t.kunden_id = k.id
-       WHERE t.datum = $1
+       WHERE t.datum::date = $1::date
        ORDER BY t.zeit_von NULLS LAST`,
       [date]
     );
     res.json(result.rows);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Diagnose: zeigt die nächsten Termine unabhängig vom Datum
+app.get('/api/termine/debug', async (req, res) => {
+  try {
+    const count = await pool.query('SELECT COUNT(*) AS total FROM termine');
+    const sample = await pool.query(
+      `SELECT id, titel, datum, zeit_von, zeit_bis,
+              pg_typeof(datum) AS datum_typ
+       FROM termine
+       ORDER BY datum DESC NULLS LAST
+       LIMIT 10`
+    );
+    res.json({ total: count.rows[0].total, sample: sample.rows });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }

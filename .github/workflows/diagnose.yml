@@ -17,29 +17,36 @@ jobs:
           host: 178.104.159.191
           username: root
           key: ${{ secrets.VPS_SSH_KEY }}
-          command_timeout: 8m
+          command_timeout: 6m
           script: |
-            SECRET_FILTER='passwo|password|passwort|secret|token|api[_-]?key|app[_-]?specific|app[_-]?passwort|credential|bearer|authorization|privatekey|private_key|apple_id|smtp'
+            SECRET_FILTER='passwo|password|passwort|secret|token|api[_-]?key|app[_-]?passwort|credential|bearer|authorization|privatekey|private_key|apple_id'
 
-            echo "##### 1. OOM / RESTART-FAKTEN #####"
-            docker inspect shk-backend --format 'OOMKilled={{.State.OOMKilled}} ExitCode={{.State.ExitCode}} RestartCount={{.RestartCount}} Status={{.State.Status}} MemLimit={{.HostConfig.Memory}} StartedAt={{.State.StartedAt}}' 2>&1
-            free -h | head -2
-
-            echo ""
-            echo "##### 2. HATTE termine im Export Daten? (Zeilen direkt nach COPY-Header) #####"
-            sed -n '3461577,3461590p' /opt/shk-app/shkdb_export.sql 2>/dev/null | cut -c1-90
+            echo "##### 1. server.js: /api/termine + iCloud-Endpunkte (Code, Zeile 478-620) #####"
+            sed -n '478,620p' /opt/shk-app/backend/server.js | sed -E "/($SECRET_FILTER)/Id"
 
             echo ""
-            echo "##### 3. SYNC-PLANER (node-cron / schedule / setInterval) in server.js #####"
-            grep -nE 'cron\.|schedule\(|setInterval|nodeCron|node-cron' /opt/shk-app/backend/server.js 2>/dev/null | sed -E "/($SECRET_FILTER)/Id" | head -15
+            echo "##### 2. LIVE-TEST /api/kalender/icloud-events — NUR Anzahl + Feldnamen (keine PII) #####"
+            curl -s --max-time 30 "http://localhost:3000/api/kalender/icloud-events" \
+              | python3 -c "import sys,json
+try:
+    d=json.load(sys.stdin)
+    if isinstance(d,list):
+        print('Typ=Liste  Anzahl=',len(d))
+        print('Felder=', list(d[0].keys()) if d else '(leer)')
+    else:
+        print('Typ=',type(d).__name__,' Keys=', list(d.keys()) if isinstance(d,dict) else d)
+except Exception as e:
+    print('Konnte Antwort nicht als JSON lesen:', e)" 2>&1
 
             echo ""
-            echo "##### 4. KALENDER/CALDAV/ICLOUD/TERMINE-Zeilen in server.js #####"
-            grep -niE 'caldav|icloud|kalender|tsdav|vevent|fetchcalendar|syncKalender|syncTermine|dav\.' /opt/shk-app/backend/server.js 2>/dev/null | sed -E "/($SECRET_FILTER)/Id" | head -40
-
-            echo ""
-            echo "##### 5. ROUTEN mit termine/kalender/sync #####"
-            grep -nE "app\.(get|post|put|delete)\([^)]*(termin|kalender|sync|calendar)" /opt/shk-app/backend/server.js 2>/dev/null | sed -E "/($SECRET_FILTER)/Id" | head -25
+            echo "##### 3. Test mit ?date / ?from-Parameter (nur Anzahl) #####"
+            for q in "?date=2026-06-15" "?from=2026-06-01&to=2026-06-30" ""; do
+              n=$(curl -s --max-time 30 "http://localhost:3000/api/kalender/icloud-events$q" | python3 -c "import sys,json
+try:
+    d=json.load(sys.stdin); print(len(d) if isinstance(d,list) else 'kein-array')
+except: print('fehler')" 2>&1)
+              echo "  Query '$q' -> Anzahl: $n"
+            done
 
             echo ""
             echo "##### FERTIG #####"

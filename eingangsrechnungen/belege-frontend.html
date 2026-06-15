@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<!--
+  Eingangsrechnungen – Frontend-Seite mit KI-Beleg-Erkennung
+  ============================================================
+  Diese Datei kann entweder:
+  a) Als eigenständige Seite /eingangsrechnungen in der Live-App dienen, oder
+  b) Als Vorlage: Den <style>-Block in die globale CSS-Datei kopieren,
+     den <body>-Inhalt in die bestehende App-Seite integrieren,
+     den <script>-Block in die App-JS-Datei kopieren.
+
+  API-Endpoint: /api/belege  (GET, POST, PATCH, DELETE, POST /belege/ocr)
+  Implementierung: eingangsrechnungen/belege-api.js
+
+  Die OCR läuft über das Backend (kein API-Key im Browser).
+-->
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Eingangsrechnungen – SHK</title>
+  <style>
+    /* ── Belegliste ── */
+    .belege-toolbar {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+    .period-tabs {
+      display: flex;
+      gap: 4px;
+      flex-wrap: wrap;
+    }
+    .period-tab {
+      padding: 4px 10px;
+      border: 1px solid var(--border, #e5e7eb);
+      border-radius: 6px;
+      background: none;
+      cursor: pointer;
+      font-size: 13px;
+      color: var(--text2, #6b7280);
+    }
+    .period-tab.active {
+      background: var(--primary, #2563eb);
+      color: #fff;
+      border-color: var(--primary, #2563eb);
+    }
+    .belege-count {
+      font-size: 13px;
+      color: var(--text2, #6b7280);
+      margin-left: auto;
+    }
+    .beleg-item {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      padding: 12px;
+      border: 1px solid var(--border, #e5e7eb);
+      border-radius: 8px;
+      margin-bottom: 8px;
+      background: var(--surface, #fff);
+    }
+    .beleg-foto {
+      width: 56px;
+      height: 56px;
+      object-fit: cover;
+      border-radius: 6px;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .beleg-foto-placeholder {
+      width: 56px;
+      height: 56px;
+      border: 2px dashed var(--border, #e5e7eb);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .beleg-info { flex: 1; min-width: 0; }
+    .beleg-desc { font-weight: 600; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .beleg-meta { font-size: 12px; color: var(--text2, #6b7280); }
+    .beleg-cat {
+      display: inline-block;
+      font-size: 11px;
+      background: var(--surface2, #f3f4f6);
+      border-radius: 4px;
+      padding: 1px 6px;
+      margin-top: 4px;
+    }
+    .beleg-betrag { text-align: right; white-space: nowrap; }
+    .beleg-betrag .brutto { font-weight: 700; font-size: 15px; }
+    .beleg-betrag .netto, .beleg-betrag .mwst-line { font-size: 11px; color: var(--text2, #6b7280); }
+    .beleg-actions { display: flex; gap: 4px; justify-content: flex-end; margin-top: 6px; }
+
+    /* ── Kategorie-Tabelle ── */
+    .kat-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .kat-table th { text-align: left; padding: 6px 8px; font-size: 12px; color: var(--text2, #6b7280); border-bottom: 1px solid var(--border, #e5e7eb); }
+    .kat-table td { padding: 6px 8px; border-bottom: 1px solid var(--border, #e5e7eb); }
+
+    /* ── Modal ── */
+    .belege-modal-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.45);
+      z-index: 1000;
+      align-items: flex-end;
+      justify-content: center;
+    }
+    .belege-modal-overlay.open {
+      display: flex;
+    }
+    @media (min-width: 640px) {
+      .belege-modal-overlay { align-items: center; }
+      .belege-modal { border-radius: 12px !important; max-width: 480px !important; }
+    }
+    .belege-modal {
+      background: var(--surface, #fff);
+      border-radius: 16px 16px 0 0;
+      padding: 20px;
+      width: 100%;
+      max-width: 540px;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 -4px 24px rgba(0,0,0,.15);
+    }
+    .modal-field { margin-bottom: 12px; }
+    .modal-field label { display: block; font-size: 12px; color: var(--text2, #6b7280); margin-bottom: 4px; }
+    .modal-input, .modal-select {
+      width: 100%; padding: 8px 10px;
+      border: 1px solid var(--border, #e5e7eb);
+      border-radius: 8px;
+      font-size: 14px;
+      background: var(--bg, #f9fafb);
+      box-sizing: border-box;
+    }
+    .foto-upload-area {
+      border: 2px dashed var(--border, #e5e7eb);
+      border-radius: 8px;
+      padding: 20px;
+      text-align: center;
+      cursor: pointer;
+      font-size: 13px;
+      color: var(--text2, #6b7280);
+    }
+    .foto-preview { max-width: 100%; max-height: 200px; border-radius: 6px; margin-top: 8px; }
+    #ocr-status { font-size: 12px; margin-top: 6px; }
+
+    /* ── Lightbox ── */
+    .foto-lightbox {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.85);
+      z-index: 2000;
+      align-items: center;
+      justify-content: center;
+      cursor: zoom-out;
+    }
+    .foto-lightbox.open { display: flex; }
+    .foto-lightbox img { max-width: 95vw; max-height: 95vh; border-radius: 6px; }
+  </style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════════════
+     EINGANGSRECHNUNGEN – Hauptbereich
+     Diesen Block in die bestehende App-Seite einsetzen.
+     ══════════════════════════════════════════════════════════ -->
+<section id="eingangsrechnungen-section">
+
+  <!-- Toolbar: Quartals-/Jahreswahl + Hinzufügen-Button -->
+  <div class="belege-toolbar">
+    <div class="period-tabs" id="period-tabs"></div>
+    <select id="belege-year" onchange="belegeSetYear(this.value)" style="padding:4px 8px;border-radius:6px;border:1px solid #e5e7eb;font-size:13px">
+      <!-- Jahre werden per JS befüllt -->
+    </select>
+    <span class="belege-count" id="belege-count"></span>
+    <button onclick="belegeOpenModal(null)"
+            style="margin-left:auto;padding:8px 14px;background:#2563eb;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px">
+      + Beleg / Quittung
+    </button>
+  </div>
+
+  <!-- Kategorie-Übersicht -->
+  <div id="belege-kat-uebersicht" style="margin-bottom:16px"></div>
+
+  <!-- Belegliste -->
+  <div id="belege-list"></div>
+
+</section>
+
+<!-- ── Beleg-Modal ── -->
+<div class="belege-modal-overlay" id="belege-modal" onclick="if(event.target===this)belegeCloseModal()">
+  <div class="belege-modal">
+    <h3 style="margin:0 0 16px;font-size:16px">📷 Beleg / Quittung erfassen</h3>
+
+    <div class="modal-field">
+      <label>Foto der Quittung</label>
+      <div class="foto-upload-area" onclick="document.getElementById('belege-foto-input').click()">
+        <div id="belege-foto-placeholder">📷 Tippe hier um ein Foto zu machen oder hochzuladen</div>
+        <img id="belege-foto-preview" class="foto-preview" style="display:none">
+        <input type="file" id="belege-foto-input" accept="image/*" capture="environment"
+               onchange="belegeHandleFoto(event)" style="display:none">
+      </div>
+      <button id="belege-ocr-btn"
+              onclick="belegeRunOCR()"
+              style="display:none;margin-top:8px;width:100%;padding:8px;background:#2563eb;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px">
+        🤖 Beleg automatisch auslesen (KI)
+      </button>
+      <div id="ocr-status" style="display:none"></div>
+    </div>
+
+    <div class="modal-field">
+      <label>Datum</label>
+      <input class="modal-input" type="date" id="belege-datum">
+    </div>
+    <div class="modal-field">
+      <label>Beschreibung (Händler / Lieferant)</label>
+      <input class="modal-input" type="text" id="belege-desc" placeholder="z.B. Tankstelle Shell, OBI Düsseldorf…">
+    </div>
+    <div class="modal-field">
+      <label>Betrag (brutto inkl. MwSt) in €</label>
+      <input class="modal-input" type="number" id="belege-betrag" placeholder="0.00" step="0.01" min="0">
+    </div>
+    <div class="modal-field">
+      <label>MwSt-Satz</label>
+      <select class="modal-select" id="belege-mwst">
+        <option value="19">19% (Standard)</option>
+        <option value="7">7% (ermäßigt)</option>
+        <option value="0">0% (keine MwSt / Kleinunternehmer)</option>
+      </select>
+    </div>
+    <div class="modal-field">
+      <label>Kategorie</label>
+      <select class="modal-select" id="belege-kat">
+        <option value="material">Material / Wareneinsatz</option>
+        <option value="fahrzeuge">Fahrzeugkosten (Benzin, Leasing…)</option>
+        <option value="personal">Personalkosten</option>
+        <option value="werkzeug">Werkzeug &amp; Maschinen</option>
+        <option value="buero">Büro &amp; Verwaltung</option>
+        <option value="software">Software &amp; Abonnements</option>
+        <option value="versicherung">Versicherungen</option>
+        <option value="steuerberater">Steuerberater / Rechtsberatung</option>
+        <option value="marketing">Marketing &amp; Werbung</option>
+        <option value="sonstiges">Sonstige Ausgaben</option>
+      </select>
+    </div>
+
+    <div style="display:flex;gap:10px;margin-top:18px">
+      <button onclick="belegeSave()"
+              style="flex:1;padding:10px;background:#2563eb;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600">
+        💾 Speichern
+      </button>
+      <button onclick="belegeCloseModal()"
+              style="padding:10px 18px;border:1px solid #e5e7eb;border-radius:8px;background:none;cursor:pointer">
+        Abbrechen
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Foto-Lightbox ── -->
+<div class="foto-lightbox" id="belege-lightbox" onclick="this.classList.remove('open')">
+  <img id="belege-lightbox-img" src="" alt="">
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     JAVASCRIPT
+     ══════════════════════════════════════════════════════════ -->
+<script>
+const BELEGE_KAT_LABELS = {
+  material:      'Material / Wareneinsatz',
+  fahrzeuge:     'Fahrzeugkosten',
+  personal:      'Personalkosten',
+  werkzeug:      'Werkzeug & Maschinen',
+  buero:         'Büro & Verwaltung',
+  software:      'Software & Abonnements',
+  versicherung:  'Versicherungen',
+  steuerberater: 'Steuerberater',
+  marketing:     'Marketing & Werbung',
+  sonstiges:     'Sonstige Ausgaben'
+};
+
+const BELEGE_QUARTER_MONTHS = { Q1:[1,2,3], Q2:[4,5,6], Q3:[7,8,9], Q4:[10,11,12] };
+const BELEGE_QUARTER_LABELS = {
+  Q1:'Q1 Jan–Mär', Q2:'Q2 Apr–Jun',
+  Q3:'Q3 Jul–Sep', Q4:'Q4 Okt–Dez', JAHR:'Ganzes Jahr'
+};
+
+let belegeYear   = new Date().getFullYear();
+let belege_period = 'Q' + (Math.floor(new Date().getMonth() / 3) + 1);
+let belegeEditId  = null;
+let belege_fotoB64 = null;
+let belege_cache   = [];
+
+/* ── Initialisierung ── */
+(function belegeInit() {
+  // Jahr-Dropdown füllen
+  const sel = document.getElementById('belege-year');
+  const cur = new Date().getFullYear();
+  for (let y = cur; y >= cur - 3; y--) {
+    const o = document.createElement('option');
+    o.value = y; o.textContent = y;
+    if (y === belegeYear) o.selected = true;
+    sel.appendChild(o);
+  }
+
+  // Perioden-Tabs
+  const tabs = document.getElementById('period-tabs');
+  ['Q1','Q2','Q3','Q4','JAHR'].forEach(p => {
+    const btn = document.createElement('button');
+    btn.className = 'period-tab' + (p === belege_period ? ' active' : '');
+    btn.textContent = BELEGE_QUARTER_LABELS[p];
+    btn.onclick = () => {
+      belege_period = p;
+      document.querySelectorAll('.period-tab').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      belegeLoad();
+    };
+    tabs.appendChild(btn);
+  });
+
+  belegeLoad();
+})();
+
+function belegeSetYear(y) {
+  belegeYear = parseInt(y);
+  belegeLoad();
+}
+
+/* ── API ── */
+async function belegeLoad() {
+  try {
+    const r = await fetch(`/api/belege?year=${belegeYear}&period=${belege_period}`);
+    belege_cache = await r.json();
+    belegeRender();
+  } catch (e) {
+    document.getElementById('belege-list').innerHTML =
+      `<p style="color:red">Fehler beim Laden: ${e.message}</p>`;
+  }
+}
+
+async function belegeSave() {
+  const datum       = document.getElementById('belege-datum').value;
+  const beschreibung = document.getElementById('belege-desc').value.trim();
+  const betrag      = parseFloat(document.getElementById('belege-betrag').value);
+  const mwst        = parseInt(document.getElementById('belege-mwst').value);
+  const kategorie   = document.getElementById('belege-kat').value;
+
+  if (!datum || !beschreibung || isNaN(betrag)) {
+    alert('Bitte Datum, Beschreibung und Betrag ausfüllen.');
+    return;
+  }
+
+  const body = { datum, beschreibung, betrag, mwst, kategorie, foto_base64: belege_fotoB64 || null };
+
+  try {
+    if (belegeEditId) {
+      await fetch(`/api/belege/${belegeEditId}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+    } else {
+      await fetch('/api/belege', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body)
+      });
+    }
+    belegeCloseModal();
+    belegeLoad();
+  } catch (e) {
+    alert('Fehler beim Speichern: ' + e.message);
+  }
+}
+
+async function belegeDelete(id) {
+  if (!confirm('Beleg löschen?')) return;
+  await fetch(`/api/belege/${id}`, { method: 'DELETE' });
+  belegeLoad();
+}
+
+/* ── OCR ── */
+function belegeHandleFoto(ev) {
+  const file = ev.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    belege_fotoB64 = e.target.result;
+    document.getElementById('belege-foto-preview').src = belege_fotoB64;
+    document.getElementById('belege-foto-preview').style.display = 'block';
+    document.getElementById('belege-foto-placeholder').style.display = 'none';
+    document.getElementById('belege-ocr-btn').style.display = 'block';
+    belegeRunOCR();
+  };
+  reader.readAsDataURL(file);
+}
+
+async function belegeRunOCR() {
+  if (!belege_fotoB64) return;
+
+  const m = belege_fotoB64.match(/^data:(image\/[a-zA-Z]+);base64,(.+)$/);
+  if (!m) { belegeSetOcrStatus('Bildformat nicht erkannt.', 'red'); return; }
+  const [, mediaType, data] = m;
+
+  belegeSetOcrStatus('⏳ Beleg wird ausgelesen…', '');
+  document.getElementById('belege-ocr-btn').disabled = true;
+
+  try {
+    const r = await fetch('/api/belege/ocr', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ mediaType, data })
+    });
+
+    if (!r.ok) {
+      const err = await r.json();
+      belegeSetOcrStatus('⚠️ Fehler: ' + (err.error || r.status), 'red');
+      return;
+    }
+
+    const parsed = await r.json();
+    if (parsed.datum)        document.getElementById('belege-datum').value   = parsed.datum;
+    if (parsed.beschreibung) document.getElementById('belege-desc').value    = parsed.beschreibung;
+    if (parsed.betrag)       document.getElementById('belege-betrag').value  = parsed.betrag;
+    if (parsed.mwst != null) document.getElementById('belege-mwst').value    = String(parsed.mwst);
+    if (parsed.kategorie)    document.getElementById('belege-kat').value     = parsed.kategorie;
+    belegeSetOcrStatus('✅ Erkannt! Bitte prüfen und ggf. korrigieren.', 'green');
+  } catch (e) {
+    belegeSetOcrStatus('⚠️ Verbindungsfehler – bitte manuell eintragen.', 'red');
+  } finally {
+    document.getElementById('belege-ocr-btn').disabled = false;
+  }
+}
+
+function belegeSetOcrStatus(msg, color) {
+  const el = document.getElementById('ocr-status');
+  el.style.display = 'block';
+  el.style.color = color;
+  el.textContent = msg;
+}
+
+/* ── Modal ── */
+function belegeOpenModal(id) {
+  belegeEditId    = id;
+  belege_fotoB64  = null;
+  document.getElementById('belege-foto-preview').style.display  = 'none';
+  document.getElementById('belege-foto-placeholder').style.display = 'block';
+  document.getElementById('belege-foto-input').value            = '';
+  document.getElementById('belege-ocr-btn').style.display       = 'none';
+  document.getElementById('ocr-status').style.display           = 'none';
+
+  if (id) {
+    const b = belege_cache.find(x => x.id === id);
+    if (b) {
+      document.getElementById('belege-datum').value   = b.datum ? b.datum.slice(0,10) : '';
+      document.getElementById('belege-desc').value    = b.beschreibung;
+      document.getElementById('belege-betrag').value  = b.betrag;
+      document.getElementById('belege-mwst').value    = String(b.mwst);
+      document.getElementById('belege-kat').value     = b.kategorie;
+      if (b.foto_base64) {
+        belege_fotoB64 = b.foto_base64;
+        document.getElementById('belege-foto-preview').src = b.foto_base64;
+        document.getElementById('belege-foto-preview').style.display = 'block';
+        document.getElementById('belege-foto-placeholder').style.display = 'none';
+        document.getElementById('belege-ocr-btn').style.display = 'block';
+      }
+    }
+  } else {
+    document.getElementById('belege-datum').value   = new Date().toISOString().slice(0,10);
+    document.getElementById('belege-desc').value    = '';
+    document.getElementById('belege-betrag').value  = '';
+    document.getElementById('belege-mwst').value    = '19';
+    document.getElementById('belege-kat').value     = 'material';
+  }
+  document.getElementById('belege-modal').classList.add('open');
+}
+
+function belegeCloseModal() {
+  document.getElementById('belege-modal').classList.remove('open');
+  belegeEditId = null;
+  belege_fotoB64 = null;
+}
+
+/* ── Render ── */
+function belegeRender() {
+  const arr = belege_cache;
+  const total = arr.reduce((s, b) => s + parseFloat(b.betrag), 0);
+  document.getElementById('belege-count').textContent =
+    arr.length ? `${arr.length} Belege · ${fmtEur(total)} brutto` : '';
+
+  belegeRenderKatUebersicht(arr);
+
+  const list = document.getElementById('belege-list');
+  if (arr.length === 0) {
+    list.innerHTML = `<div style="text-align:center;color:#9ca3af;padding:32px;font-size:13px">
+      Noch keine Belege. Klicke auf "+ Beleg / Quittung".</div>`;
+    return;
+  }
+
+  list.innerHTML = arr.map(b => {
+    const brutto  = parseFloat(b.betrag);
+    const netto   = brutto / (1 + b.mwst / 100);
+    const mwstVal = brutto - netto;
+    const fotoHtml = b.foto_base64
+      ? `<img class="beleg-foto" src="${b.foto_base64}"
+              onclick="document.getElementById('belege-lightbox-img').src=this.src;document.getElementById('belege-lightbox').classList.add('open')">`
+      : `<div class="beleg-foto-placeholder" onclick="belegeOpenModal(${b.id})">📷</div>`;
+    return `
+    <div class="beleg-item">
+      ${fotoHtml}
+      <div class="beleg-info">
+        <div class="beleg-desc">${escHtml(b.beschreibung)}</div>
+        <div class="beleg-meta">${fmtDate(b.datum)}</div>
+        <span class="beleg-cat">${BELEGE_KAT_LABELS[b.kategorie] || b.kategorie}</span>
+      </div>
+      <div>
+        <div class="beleg-betrag">
+          <div class="brutto">${fmtEur(brutto)}</div>
+          <div class="netto">Netto: ${fmtEur(netto)}</div>
+          <div class="mwst-line">MwSt ${b.mwst}%: ${fmtEur(mwstVal)}</div>
+        </div>
+        <div class="beleg-actions">
+          <button onclick="belegeOpenModal(${b.id})"
+                  style="border:1px solid #e5e7eb;border-radius:6px;padding:4px 8px;background:none;cursor:pointer">✏️</button>
+          <button onclick="belegeDelete(${b.id})"
+                  style="border:1px solid #fee2e2;border-radius:6px;padding:4px 8px;background:none;color:#dc2626;cursor:pointer">🗑</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function belegeRenderKatUebersicht(arr) {
+  const el = document.getElementById('belege-kat-uebersicht');
+  if (!arr || arr.length === 0) { el.innerHTML = ''; return; }
+
+  const byKat = {};
+  let tAnz = 0, tNetto = 0, tMwst = 0, tBrutto = 0;
+  arr.forEach(b => {
+    const brutto = parseFloat(b.betrag);
+    const netto  = brutto / (1 + b.mwst / 100);
+    const mwst   = brutto - netto;
+    const k = byKat[b.kategorie] || (byKat[b.kategorie] = { anz: 0, netto: 0, mwst: 0, brutto: 0 });
+    k.anz++; k.netto += netto; k.mwst += mwst; k.brutto += brutto;
+    tAnz++; tNetto += netto; tMwst += mwst; tBrutto += brutto;
+  });
+
+  const rows = Object.entries(byKat)
+    .sort((a, b) => b[1].brutto - a[1].brutto)
+    .map(([kat, v]) => `
+      <tr>
+        <td>${BELEGE_KAT_LABELS[kat] || kat}</td>
+        <td style="text-align:center;color:#6b7280">${v.anz}</td>
+        <td style="text-align:right">${fmtEur(v.netto)}</td>
+        <td style="text-align:right;color:#f97316">${fmtEur(v.mwst)}</td>
+        <td style="text-align:right;font-weight:600">${fmtEur(v.brutto)}</td>
+      </tr>`).join('');
+
+  el.innerHTML = `
+    <details open>
+      <summary style="font-size:13px;color:#6b7280;cursor:pointer;margin-bottom:8px">📋 Ausgaben nach Kategorie</summary>
+      <table class="kat-table">
+        <thead><tr>
+          <th>Kategorie</th>
+          <th style="text-align:center">Belege</th>
+          <th style="text-align:right">Netto</th>
+          <th style="text-align:right">Vorsteuer</th>
+          <th style="text-align:right">Brutto</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+        <tfoot><tr style="font-weight:700;border-top:2px solid #e5e7eb">
+          <td>Gesamt</td>
+          <td style="text-align:center">${tAnz}</td>
+          <td style="text-align:right">${fmtEur(tNetto)}</td>
+          <td style="text-align:right;color:#f97316">${fmtEur(tMwst)}</td>
+          <td style="text-align:right">${fmtEur(tBrutto)}</td>
+        </tr></tfoot>
+      </table>
+    </details>`;
+}
+
+/* ── Hilfsfunktionen ── */
+function fmtEur(n) {
+  return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(n);
+}
+function fmtDate(s) {
+  if (!s) return '';
+  try { return new Date(s).toLocaleDateString('de-DE'); } catch { return s; }
+}
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+</body>
+</html>

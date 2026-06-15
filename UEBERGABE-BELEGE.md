@@ -1,81 +1,90 @@
-# Übergabe-Notiz: KI-Beleg-Erkennung in die Live-App einbauen
+# Übergabe-Notiz für die Laptop-Sitzung (Claude Code mit SSH/paramiko)
 
-> Diese Notiz ist für die **Laptop-Sitzung** von Claude Code gedacht.
-> Sie fasst zusammen, was in der Cloud-/Handy-Sitzung erarbeitet wurde, damit
-> direkt weitergearbeitet werden kann, ohne erneut zu recherchieren.
+> Diese Notiz schreibt die **Cloud-Sitzung** (kein Server-Zugriff).
+> Die **Laptop-Sitzung** liest sie und arbeitet direkt auf dem Server weiter.
+> **Passwörter stehen NICHT hier** – die kennt der Nutzer.
 
-## Ziel
+**Letzter Stand:** 2026-06-15 · Branch `claude/shk-company-setup-X9y7A`
 
-Die **KI-Beleg-Erkennung** (Quittung fotografieren → Datum, Händler, Betrag,
-MwSt, Kategorie werden automatisch ausgelesen) soll in die **echte Live-App**
-`app.shk-innovation.de` eingebaut werden — konkret in den Bereich
-**„Eingangsrechnungen"** und für das **„Datenexport / Steuerberater-Paket"**.
+---
 
-## Wichtigste Erkenntnis
+## TL;DR – Was gerade gilt
 
-Es gibt **mehrere getrennte Projekte**:
+- ✅ Die **Rechnungs-Automatik läuft wieder sauber** (`/root/poll_rechnungsmail.py`, alle 10 Min).
+- ✅ Die hängende Rechnung **#8352905** (GOTTSCHALL & SOHN, 7,04 €) ist **gebucht**.
+- ✅ Ein versehentlich angelegtes Duplikat-Skript wurde wieder entfernt.
+- ⚠️ Eine **Lücke** bleibt: Die Automatik holt nur **ungelesene** Mails → manuell im Webmail geöffnete Rechnungen werden für immer übersprungen. **Das war die Ursache.**
+- 🎯 Nutzer-Wunsch: **direkt auf dem Server arbeiten, ohne GitHub-Umweg.**
 
-| Projekt | Liegt wo | URL |
-|---|---|---|
-| **SHK Business-App** (Kunden, Projekte, Rechnungen, **Eingangsrechnungen**, **Datenexport**) | **nur auf Hetzner** – NICHT in diesem Git-Repo | `app.shk-innovation.de` |
-| Tagesplaner (`shk-planer/`) | im Repo, Branch `claude/shk-tagesplaner-pwa-GWi78` | `planer.shk-innovation.de` |
-| HeizlastProfi (`app.html`) | im Repo, Branch `main` | – |
-| Belege-Demo (`index.html`) | im Repo, Branch `claude/shk-company-setup-X9y7A` | nur lokal/Demo |
+---
 
-➡️ **Der Code der Business-App ist NICHT in GitHub.** Erster Schritt am Laptop:
-ihn auf dem Server finden und ins Repo holen.
+## Der Server (Hetzner)
 
-## Schritt 1 – Code auf Hetzner finden
+| Was | Wert |
+|---|---|
+| Host | `ubuntu-4gb-nbg1-1` |
+| IP | `178.104.159.191` |
+| Login | `root@178.104.159.191` (Passwort kennt der Nutzer) |
+| App | `app.shk-innovation.de` (Docker compose, **nicht** in GitHub) |
 
-Per SSH auf den VPS, dann:
+**Container:** `shk-backend` (Port 3000), `shk-frontend` (nginx, 8082), `shk-db` (PostgreSQL: User `shk`, DB `shkdb`), `n8n`.
 
-```bash
-# Welche nginx-Konfig gehört zu app.shk-innovation.de?
-grep -rl "app.shk-innovation.de" /etc/nginx/
-grep -rA15 "app.shk-innovation.de" /etc/nginx/sites-enabled/
+**DB-Zugriff:** `docker exec shk-db psql -U shk -d shkdb -c "..."`
 
-# Läuft sie als Container oder als statische Dateien?
-docker ps
-ls -la /root/ /var/www/
-```
+---
 
-- `root /var/www/...`  → statische Dateien dort
-- `proxy_pass http://localhost:PORT` → Backend-App, Quellcode meist in `/root/...`
+## Die Rechnungs-Automatik (funktioniert)
 
-## Schritt 2 – Deploy-Ablauf (Vorbild: shk-planer/deploy.sh)
+**Skript:** `/root/poll_rechnungsmail.py` · **Log:** `/var/log/poll_rechnungsmail.log`
+**Cron:** `*/10 * * * * /usr/bin/python3 /root/poll_rechnungsmail.py`
 
-Die bestehende Tagesplaner-App wird so deployt (gleiches Muster erwarten):
-- **PostgreSQL** im Container `shk-db` (User `shk`, DB `shkdb`)
-- Frontend mit Vite gebaut (`npm run build`) → nach `/var/www/...`
-- Backend als Docker-Container, dahinter **nginx**
-- Deploy = `bash deploy.sh` **auf dem Server**
+Ablauf:
+1. IMAP `imap.strato.de:993`, Postfach `rechnungen@shk-innovation.de` (PW kennt Nutzer)
+2. Sucht **UNSEEN**-Mails, lädt PDF-Anhänge
+3. POST an `http://localhost:3000/api/eingangsrechnungen/upload`
+4. Backend bucht + macht KI-OCR; **erkennt Duplikate selbst** (`result.duplikat`) → keine Doppelbuchung
+5. Markiert Mail erst als **Seen**, wenn Upload geklappt hat (`mail_ok`)
 
-## Schritt 3 – KI-OCR-Logik (fertig erprobt, wiederverwendbar)
+**Andere Cronjobs (nicht anfassen):** `poll_calls.py` (vapi), `monitor.py`, `backup.sh` (täglich 2 Uhr).
 
-Die Beleg-Erkennung läuft direkt per Browser→Anthropic-API. Kernpunkte aus
-`index.html` (Funktion `runOCR`), die übernommen werden können:
+---
 
-- Modell: **`claude-opus-4-8`**
-- Strukturierte Ausgabe via `output_config.format` (JSON-Schema) mit Feldern:
-  `datum, beschreibung, betrag, mwst (19|7|0), kategorie`
-- Kategorien: material, fahrzeuge, personal, werkzeug, buero, software,
-  versicherung, steuerberater, marketing, sonstiges (Tankstelle → fahrzeuge)
-- Header: `x-api-key`, `anthropic-version: 2023-06-01`,
-  `anthropic-dangerous-direct-browser-access: true`
-- **API-Schlüssel NIEMALS ins Repo** committen — nur clientseitig/Server-Env.
+## Die offene Lücke (Ursache des Problems)
 
-> Hinweis: In einer echten Server-App ist es sauberer, den API-Call **über das
-> Backend** (server.js) laufen zu lassen, damit der Schlüssel nicht im Browser
-> liegt. Foto-Speicherung als base64 im localStorage (wie in der Demo) ist nur
-> für den Prototyp ok – in der Live-App in die Datenbank/Dateispeicher.
+Das Skript verlässt sich auf das **Gelesen/Ungelesen-Flag**. Wird eine Rechnungs-Mail
+vorher im Webmail geöffnet → sie ist „Seen" → die `UNSEEN`-Suche überspringt sie dauerhaft.
+Genau so ist #8352905 durchgerutscht.
 
-## Datenbank-Zugriff (read-only, bereits verbunden)
+**Empfohlener Fix (mit Nutzer abstimmen, Backup vorher!):**
+Statt auf das Seen-Flag zu setzen, eine kleine Zustandsdatei führen
+(`/root/.rechnung_seen_msgids`) mit bereits verarbeiteten **Message-IDs**.
+Dann werden auch manuell geöffnete Mails verarbeitet, und nichts doppelt
+(Backend-Duplikatschutz greift zusätzlich).
 
-Es gibt MCP-Werkzeuge zur SHK-Datenbank (nur lesen): Kunden suchen, Angebote /
-offene Rechnungen / Termine je Kunde, Termine der nächsten X Tage, Datum.
-Kein Schreib- oder Code-Zugriff darüber.
+---
 
-## Status der Demo (`index.html`, dieser Branch)
+## Backend-Modul (auf dem Server, fertig)
 
-Vollständig & geprüft: Belege mit Foto, KI-Erkennung, Kategorie-Übersicht,
-EÜR + USt-Voranmeldung, Quartals-/Jahresumschaltung. Dient als Vorlage/Referenz.
+`/opt/shk-app/backend/eingangsrechnungen.js` – komplett mit KI-OCR:
+- `verarbeitePdf()` nutzt `@anthropic-ai/sdk`, Modell aktuell `claude-sonnet-4-5-20250929`
+  (optional auf **`claude-opus-4-8`** anheben für bessere Erkennung)
+- Routes: `POST/GET /api/eingangsrechnungen`, `/:id`, `/:id/pdf`, `PATCH`, `DELETE`
+- API-Key liegt in DB-Tabelle `einstellungen` (`schluessel='anthropic_api_key'`), **nicht** in Env.
+
+---
+
+## Arbeitsweise: direkt auf dem Server (ohne GitHub)
+
+Der Nutzer will **keinen GitHub-Umweg** mehr. In der Laptop-Sitzung:
+- Per SSH (paramiko) einloggen und Dateien **direkt** in `/root/` bzw. `/opt/shk-app/` ändern.
+- **Vor jeder Änderung Backup** (`cp datei datei.bak` bzw. `backup.sh`).
+- GitHub nur optional als Sicherung – für den Arbeitsfluss nicht nötig.
+
+---
+
+## Offene Punkte / ToDo
+
+1. **Betrag prüfen:** #8352905 = 7,04 € wirkt klein – gegen Original-PDF abgleichen, ggf. in der App korrigieren.
+2. **Lücke schließen:** Message-ID-Tracking statt Seen-Flag (siehe oben), nur nach Nutzer-OK.
+3. **Sicherheit:** Server- und Mail-Passwort wurden im Chat geteilt → ändern.
+4. **Optional:** OCR-Modell auf `claude-opus-4-8` anheben.

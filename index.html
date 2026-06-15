@@ -658,6 +658,9 @@ tbody tr:hover { background: rgba(255,255,255,0.02); }
             <img id="foto-preview-img" class="foto-preview" style="display:none">
             <input type="file" id="foto-input" accept="image/*" capture="environment" onchange="handleFotoUpload(event)">
           </div>
+          <button class="btn btn-primary btn-sm" id="ocr-btn" style="margin-top:8px;width:100%;display:none"
+                  onclick="runOCR()">🤖 Beleg automatisch auslesen</button>
+          <div id="ocr-status" style="margin-top:8px;font-size:12px;display:none"></div>
         </div>
 
         <div class="modal-field">
@@ -700,6 +703,19 @@ tbody tr:hover { background: rgba(255,255,255,0.02); }
           <button class="btn btn-primary" style="flex:1" onclick="saveBeleg()">💾 Speichern</button>
           <button class="btn btn-ghost" onclick="closeBelegModal()">Abbrechen</button>
         </div>
+
+        <details style="margin-top:16px">
+          <summary style="font-size:11px;color:var(--text2);cursor:pointer">⚙️ KI-Einstellungen (API-Schlüssel)</summary>
+          <div class="modal-field" style="margin-top:10px">
+            <label>Anthropic API-Schlüssel</label>
+            <input class="modal-input" type="password" id="api-key-input" placeholder="sk-ant-..."
+                   onchange="saveApiKey()">
+            <div style="font-size:11px;color:var(--text2);margin-top:4px">
+              Wird nur lokal in deinem Browser gespeichert. Schlüssel erstellen auf
+              console.anthropic.com → API Keys.
+            </div>
+          </div>
+        </details>
       </div>
     </div>
 
@@ -1217,6 +1233,9 @@ function openBelegModal(id) {
   document.getElementById('foto-preview-img').style.display = 'none';
   document.getElementById('foto-placeholder').style.display = 'block';
   document.getElementById('foto-input').value = '';
+  document.getElementById('ocr-status').style.display = 'none';
+  document.getElementById('ocr-btn').style.display = 'none';
+  document.getElementById('api-key-input').value = getApiKey();
 
   if (id) {
     const b = loadBelege().find(x => x.id === id);
@@ -1231,6 +1250,7 @@ function openBelegModal(id) {
         document.getElementById('foto-preview-img').src = b.foto;
         document.getElementById('foto-preview-img').style.display = 'block';
         document.getElementById('foto-placeholder').style.display = 'none';
+        document.getElementById('ocr-btn').style.display = 'block';
       }
     }
   } else {
@@ -1258,8 +1278,120 @@ function handleFotoUpload(ev) {
     img.src = currentFotoB64;
     img.style.display = 'block';
     document.getElementById('foto-placeholder').style.display = 'none';
+    // OCR-Button zeigen + automatisch auslesen wenn Schlüssel vorhanden
+    document.getElementById('ocr-btn').style.display = 'block';
+    if (getApiKey()) runOCR();
   };
   reader.readAsDataURL(file);
+}
+
+/* ── KI-Beleg-Erkennung (Claude Vision) ── */
+function getApiKey() { return localStorage.getItem('shk_anthropic_key') || ''; }
+
+function saveApiKey() {
+  const key = document.getElementById('api-key-input').value.trim();
+  if (key) localStorage.setItem('shk_anthropic_key', key);
+  else localStorage.removeItem('shk_anthropic_key');
+}
+
+function setOcrStatus(msg, color) {
+  const el = document.getElementById('ocr-status');
+  el.style.display = 'block';
+  el.style.color = color || 'var(--text2)';
+  el.innerHTML = msg;
+}
+
+async function runOCR() {
+  if (!currentFotoB64) { setOcrStatus('Bitte zuerst ein Foto hochladen.', 'var(--orange)'); return; }
+  const apiKey = getApiKey();
+  if (!apiKey) {
+    setOcrStatus('Kein API-Schlüssel hinterlegt – bitte unten unter „⚙️ KI-Einstellungen" eintragen.', 'var(--orange)');
+    return;
+  }
+
+  const m = currentFotoB64.match(/^data:(image\/[a-zA-Z]+);base64,(.+)$/);
+  if (!m) { setOcrStatus('Bildformat nicht erkannt.', 'var(--red)'); return; }
+  const mediaType = m[1], data = m[2];
+
+  setOcrStatus('⏳ Beleg wird ausgelesen…');
+  const btn = document.getElementById('ocr-btn');
+  btn.disabled = true;
+
+  const body = {
+    model: 'claude-opus-4-8',
+    max_tokens: 1024,
+    messages: [{
+      role: 'user',
+      content: [
+        { type: 'image', source: { type: 'base64', media_type: mediaType, data } },
+        { type: 'text', text:
+          'Dies ist eine deutsche Quittung oder Rechnung (Eingangsbeleg eines Handwerksbetriebs). ' +
+          'Extrahiere: Belegdatum, Händler/Lieferant als kurze Beschreibung, Bruttobetrag (Gesamtsumme inkl. MwSt) in Euro, ' +
+          'den MwSt-Satz (19, 7 oder 0) und die passende Ausgaben-Kategorie. ' +
+          'Mögliche Kategorien: material, fahrzeuge (Benzin/Diesel/Leasing/KFZ), personal, werkzeug, buero, software, ' +
+          'versicherung, steuerberater, marketing, sonstiges. Bei Tankstellen → fahrzeuge.'
+        }
+      ]
+    }],
+    output_config: {
+      format: {
+        type: 'json_schema',
+        schema: {
+          type: 'object',
+          properties: {
+            datum:        { type: 'string', format: 'date', description: 'Belegdatum als YYYY-MM-DD' },
+            beschreibung: { type: 'string', description: 'Händler / Lieferant, kurz' },
+            betrag:       { type: 'number', description: 'Bruttobetrag gesamt in Euro' },
+            mwst:         { type: 'integer', enum: [19, 7, 0] },
+            kategorie:    { type: 'string', enum: ['material','fahrzeuge','personal','werkzeug','buero','software','versicherung','steuerberater','marketing','sonstiges'] }
+          },
+          required: ['datum','beschreibung','betrag','mwst','kategorie'],
+          additionalProperties: false
+        }
+      }
+    }
+  };
+
+  try {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify(body)
+    });
+
+    if (!resp.ok) {
+      let detail = resp.status;
+      try { const err = await resp.json(); detail = err.error?.message || detail; } catch {}
+      if (resp.status === 401) detail = 'API-Schlüssel ungültig.';
+      setOcrStatus('⚠️ Fehler: ' + detail, 'var(--red)');
+      return;
+    }
+
+    const result = await resp.json();
+    if (result.stop_reason === 'refusal') {
+      setOcrStatus('⚠️ Beleg konnte nicht ausgelesen werden.', 'var(--orange)');
+      return;
+    }
+    const textBlock = (result.content || []).find(b => b.type === 'text');
+    const parsed = JSON.parse(textBlock.text);
+
+    if (parsed.datum)        document.getElementById('beleg-datum').value  = parsed.datum;
+    if (parsed.beschreibung) document.getElementById('beleg-desc').value   = parsed.beschreibung;
+    if (parsed.betrag)       document.getElementById('beleg-betrag').value = parsed.betrag;
+    if (parsed.mwst != null) document.getElementById('beleg-mwst').value   = String(parsed.mwst);
+    if (parsed.kategorie)    document.getElementById('beleg-kat').value    = parsed.kategorie;
+
+    setOcrStatus('✅ Erkannt! Bitte prüfen und ggf. korrigieren.', 'var(--green, #16a34a)');
+  } catch (e) {
+    setOcrStatus('⚠️ Verbindungsfehler – bitte manuell eintragen.', 'var(--red)');
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 function saveBeleg() {

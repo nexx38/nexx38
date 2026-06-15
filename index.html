@@ -154,7 +154,81 @@ tbody tr:hover { background: rgba(255,255,255,0.02); }
   .two-col, .three-col { grid-template-columns: 1fr; }
 }
 
-/* ── Steuerberater ── */
+/* ── Belege (Quittungen) ── */
+.beleg-list { display:flex; flex-direction:column; gap:10px; }
+.beleg-item {
+  display:grid; grid-template-columns:64px 1fr auto;
+  gap:12px; align-items:center;
+  background:var(--dark3); border-radius:10px; padding:12px;
+  border:1px solid var(--border);
+}
+.beleg-foto {
+  width:64px; height:64px; border-radius:8px; object-fit:cover;
+  cursor:pointer; border:2px solid var(--border);
+}
+.beleg-foto-placeholder {
+  width:64px; height:64px; border-radius:8px;
+  background:var(--dark2); border:2px dashed var(--border);
+  display:flex; align-items:center; justify-content:center;
+  font-size:22px; cursor:pointer; flex-shrink:0;
+}
+.beleg-foto-placeholder:hover { border-color:var(--blue); }
+.beleg-info { display:flex; flex-direction:column; gap:3px; }
+.beleg-info .beleg-desc { font-weight:600; font-size:14px; }
+.beleg-info .beleg-meta { font-size:12px; color:var(--text2); }
+.beleg-info .beleg-cat { display:inline-block; font-size:11px; padding:2px 8px; border-radius:12px; background:rgba(59,130,246,0.15); color:var(--blue-light); margin-top:2px; }
+.beleg-betrag { text-align:right; }
+.beleg-betrag .brutto { font-size:16px; font-weight:700; }
+.beleg-betrag .netto { font-size:11px; color:var(--text2); }
+.beleg-betrag .mwst { font-size:11px; color:var(--orange); }
+.beleg-actions { display:flex; gap:6px; margin-top:4px; justify-content:flex-end; }
+
+.add-beleg-btn {
+  width:100%; padding:14px; border:2px dashed var(--border); border-radius:10px;
+  background:transparent; color:var(--text2); font-size:14px; cursor:pointer;
+  transition:all 0.15s; text-align:center;
+}
+.add-beleg-btn:hover { border-color:var(--blue); color:var(--blue-light); background:rgba(59,130,246,0.05); }
+
+/* Modal */
+.modal-overlay {
+  display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7);
+  z-index:1000; align-items:center; justify-content:center;
+}
+.modal-overlay.open { display:flex; }
+.modal {
+  background:var(--dark2); border:1px solid var(--border); border-radius:14px;
+  padding:24px; width:90%; max-width:480px; max-height:90vh; overflow-y:auto;
+}
+.modal h3 { font-size:16px; font-weight:700; margin-bottom:18px; }
+.modal-field { display:flex; flex-direction:column; gap:5px; margin-bottom:14px; }
+.modal-field label { font-size:11px; color:var(--text2); text-transform:uppercase; letter-spacing:0.4px; }
+.modal-input {
+  background:var(--dark3); border:1px solid var(--border); color:var(--text);
+  padding:9px 12px; border-radius:8px; font-size:14px; width:100%; outline:none;
+}
+.modal-input:focus { border-color:var(--blue); }
+.modal-select { background:var(--dark3); border:1px solid var(--border); color:var(--text); padding:9px 12px; border-radius:8px; font-size:14px; width:100%; outline:none; }
+
+.foto-upload-area {
+  border:2px dashed var(--border); border-radius:10px; padding:20px;
+  text-align:center; cursor:pointer; transition:all 0.15s; position:relative;
+}
+.foto-upload-area:hover { border-color:var(--blue); background:rgba(59,130,246,0.05); }
+.foto-upload-area input[type=file] { display:none; }
+.foto-preview { width:100%; max-height:200px; object-fit:contain; border-radius:8px; margin-top:10px; }
+
+/* Foto Lightbox */
+.lightbox { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.9); z-index:2000; align-items:center; justify-content:center; cursor:pointer; }
+.lightbox.open { display:flex; }
+.lightbox img { max-width:95vw; max-height:95vh; object-fit:contain; border-radius:8px; }
+
+@media print {
+  .beleg-item { background:white !important; border:1px solid #ddd !important; break-inside:avoid; }
+  .beleg-actions, .add-beleg-btn, .modal-overlay, .lightbox { display:none !important; }
+  .beleg-foto-placeholder { display:none !important; }
+}
+
 .period-bar { display:flex; gap:8px; align-items:center; margin-bottom:20px; flex-wrap:wrap; }
 .period-btn { padding:6px 14px; border-radius:8px; border:1px solid var(--border); background:var(--dark3); color:var(--text2); font-size:13px; font-weight:600; cursor:pointer; transition:all 0.15s; }
 .period-btn.active, .period-btn:hover { background:var(--blue); color:white; border-color:var(--blue); }
@@ -531,16 +605,15 @@ tbody tr:hover { background: rgba(255,255,255,0.02); }
           </div>
         </div>
 
-        <!-- ── Ausgaben (editierbar) ── -->
+        <!-- ── Belege (Quittungen) ── -->
         <div class="card">
-          <h3>📤 Betriebsausgaben <span style="font-size:11px;font-weight:400;color:var(--orange)">bitte eintragen</span></h3>
-          <div class="ausgaben-form" id="stb-ausgaben-form">
-            <!-- wird per JS befüllt -->
-          </div>
-          <div style="margin-top:14px;display:flex;justify-content:space-between;align-items:center">
-            <div style="font-size:12px;color:var(--text2)">💾 Werte werden automatisch gespeichert</div>
-            <button class="btn btn-ghost btn-sm no-print" onclick="resetAusgaben()">Zurücksetzen</button>
-          </div>
+          <h3>📤 Betriebsausgaben & Belege
+            <span style="font-size:11px;font-weight:400;color:var(--text2)" id="stb-belege-count"></span>
+          </h3>
+          <div class="beleg-list" id="stb-beleg-list"></div>
+          <button class="add-beleg-btn no-print" style="margin-top:10px" onclick="openBelegModal()">
+            📷 + Beleg / Quittung hinzufügen
+          </button>
         </div>
       </div>
 
@@ -572,6 +645,68 @@ tbody tr:hover { background: rgba(255,255,255,0.02); }
       </div>
 
     </div><!-- /page-steuerberater -->
+
+    <!-- ── Beleg Modal ── -->
+    <div class="modal-overlay no-print" id="beleg-modal" onclick="if(event.target===this)closeBelegModal()">
+      <div class="modal">
+        <h3>📷 Beleg / Quittung erfassen</h3>
+
+        <div class="modal-field">
+          <label>Foto der Quittung (optional)</label>
+          <div class="foto-upload-area" onclick="document.getElementById('foto-input').click()">
+            <div id="foto-placeholder">📷 Tippe hier um ein Foto zu machen oder hochzuladen</div>
+            <img id="foto-preview-img" class="foto-preview" style="display:none">
+            <input type="file" id="foto-input" accept="image/*" capture="environment" onchange="handleFotoUpload(event)">
+          </div>
+        </div>
+
+        <div class="modal-field">
+          <label>Datum</label>
+          <input class="modal-input" type="date" id="beleg-datum">
+        </div>
+        <div class="modal-field">
+          <label>Beschreibung</label>
+          <input class="modal-input" type="text" id="beleg-desc" placeholder="z.B. Tankstelle Shell, Obi Düsseldorf…">
+        </div>
+        <div class="modal-field">
+          <label>Betrag (brutto inkl. MwSt)</label>
+          <input class="modal-input" type="number" id="beleg-betrag" placeholder="0.00" step="0.01" min="0">
+        </div>
+        <div class="modal-field">
+          <label>MwSt-Satz</label>
+          <select class="modal-select" id="beleg-mwst">
+            <option value="19">19% (Standard)</option>
+            <option value="7">7% (ermäßigt)</option>
+            <option value="0">0% (keine MwSt / Kleinunternehmer)</option>
+          </select>
+        </div>
+        <div class="modal-field">
+          <label>Kategorie</label>
+          <select class="modal-select" id="beleg-kat">
+            <option value="material">Material / Wareneinsatz</option>
+            <option value="fahrzeuge">Fahrzeugkosten (Benzin, Leasing…)</option>
+            <option value="personal">Personalkosten</option>
+            <option value="werkzeug">Werkzeug & Maschinen</option>
+            <option value="buero">Büro & Verwaltung</option>
+            <option value="software">Software & Abonnements</option>
+            <option value="versicherung">Versicherungen</option>
+            <option value="steuerberater">Steuerberater / Rechtsberatung</option>
+            <option value="marketing">Marketing & Werbung</option>
+            <option value="sonstiges">Sonstige Ausgaben</option>
+          </select>
+        </div>
+
+        <div style="display:flex;gap:10px;margin-top:18px">
+          <button class="btn btn-primary" style="flex:1" onclick="saveBeleg()">💾 Speichern</button>
+          <button class="btn btn-ghost" onclick="closeBelegModal()">Abbrechen</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Foto Lightbox ── -->
+    <div class="lightbox no-print" id="foto-lightbox" onclick="this.classList.remove('open')">
+      <img id="lightbox-img" src="">
+    </div>
 
   </div><!-- /content -->
 </div><!-- /main -->
@@ -1051,29 +1186,162 @@ let stbYear  = 2025;
 const QUARTER_MONTHS = { Q1:[0,1,2], Q2:[3,4,5], Q3:[6,7,8], Q4:[9,10,11] };
 const QUARTER_LABELS = { Q1:'Q1 Januar – März', Q2:'Q2 April – Juni', Q3:'Q3 Juli – September', Q4:'Q4 Oktober – Dezember', JAHR:'Ganzes Jahr' };
 
+const KAT_LABELS = {
+  material:'Material / Wareneinsatz', fahrzeuge:'Fahrzeugkosten',
+  personal:'Personalkosten', werkzeug:'Werkzeug & Maschinen',
+  buero:'Büro & Verwaltung', software:'Software & Abonnements',
+  versicherung:'Versicherungen', steuerberater:'Steuerberater',
+  marketing:'Marketing & Werbung', sonstiges:'Sonstige Ausgaben'
+};
+
 function stbStorageKey() {
   const period = stbMode === 'jahr' ? 'JAHR' : stbQ;
-  return `shk_ausgaben_${stbYear}_${period}`;
+  return `shk_belege_${stbYear}_${period}`;
 }
 
-function loadAusgaben() {
-  try { return JSON.parse(localStorage.getItem(stbStorageKey()) || '{}'); } catch { return {}; }
+function loadBelege() {
+  try { return JSON.parse(localStorage.getItem(stbStorageKey()) || '[]'); } catch { return []; }
 }
 
-function saveAusgaben() {
-  const vals = {};
-  AUSGABEN_KATEGORIEN.forEach(k => {
-    const el = document.getElementById('aus_' + k.key);
-    if (el) vals[k.key] = parseFloat(el.value.replace(',','.')) || 0;
-  });
-  localStorage.setItem(stbStorageKey(), JSON.stringify(vals));
+function saveBelegeArr(arr) {
+  localStorage.setItem(stbStorageKey(), JSON.stringify(arr));
+}
+
+/* ── Modal ── */
+let editBelegId = null;
+let currentFotoB64 = null;
+
+function openBelegModal(id) {
+  editBelegId = id || null;
+  currentFotoB64 = null;
+  document.getElementById('foto-preview-img').style.display = 'none';
+  document.getElementById('foto-placeholder').style.display = 'block';
+  document.getElementById('foto-input').value = '';
+
+  if (id) {
+    const b = loadBelege().find(x => x.id === id);
+    if (b) {
+      document.getElementById('beleg-datum').value   = b.datum;
+      document.getElementById('beleg-desc').value    = b.desc;
+      document.getElementById('beleg-betrag').value  = b.betrag;
+      document.getElementById('beleg-mwst').value    = b.mwst;
+      document.getElementById('beleg-kat').value     = b.kat;
+      if (b.foto) {
+        currentFotoB64 = b.foto;
+        document.getElementById('foto-preview-img').src = b.foto;
+        document.getElementById('foto-preview-img').style.display = 'block';
+        document.getElementById('foto-placeholder').style.display = 'none';
+      }
+    }
+  } else {
+    document.getElementById('beleg-datum').value  = new Date().toISOString().slice(0,10);
+    document.getElementById('beleg-desc').value   = '';
+    document.getElementById('beleg-betrag').value = '';
+    document.getElementById('beleg-mwst').value   = '19';
+    document.getElementById('beleg-kat').value    = 'material';
+  }
+  document.getElementById('beleg-modal').classList.add('open');
+}
+
+function closeBelegModal() {
+  document.getElementById('beleg-modal').classList.remove('open');
+  editBelegId = null; currentFotoB64 = null;
+}
+
+function handleFotoUpload(ev) {
+  const file = ev.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    currentFotoB64 = e.target.result;
+    const img = document.getElementById('foto-preview-img');
+    img.src = currentFotoB64;
+    img.style.display = 'block';
+    document.getElementById('foto-placeholder').style.display = 'none';
+  };
+  reader.readAsDataURL(file);
+}
+
+function saveBeleg() {
+  const datum  = document.getElementById('beleg-datum').value;
+  const desc   = document.getElementById('beleg-desc').value.trim();
+  const betrag = parseFloat(document.getElementById('beleg-betrag').value);
+  const mwst   = parseInt(document.getElementById('beleg-mwst').value);
+  const kat    = document.getElementById('beleg-kat').value;
+
+  if (!datum || !desc || !betrag) { alert('Bitte Datum, Beschreibung und Betrag ausfüllen.'); return; }
+
+  const arr = loadBelege();
+  if (editBelegId) {
+    const idx = arr.findIndex(x => x.id === editBelegId);
+    if (idx >= 0) arr[idx] = { ...arr[idx], datum, desc, betrag, mwst, kat, foto: currentFotoB64 || arr[idx].foto };
+  } else {
+    arr.push({ id: Date.now().toString(), datum, desc, betrag, mwst, kat, foto: currentFotoB64 || null });
+  }
+  arr.sort((a,b) => a.datum.localeCompare(b.datum));
+  saveBelegeArr(arr);
+  closeBelegModal();
+  renderBelege();
   buildStbSummary();
 }
 
-function resetAusgaben() {
-  if (!confirm('Alle Ausgaben für diesen Zeitraum zurücksetzen?')) return;
-  localStorage.removeItem(stbStorageKey());
-  buildStb();
+function deleteBeleg(id) {
+  if (!confirm('Beleg löschen?')) return;
+  const arr = loadBelege().filter(x => x.id !== id);
+  saveBelegeArr(arr);
+  renderBelege();
+  buildStbSummary();
+}
+
+function openLightbox(src) {
+  document.getElementById('lightbox-img').src = src;
+  document.getElementById('foto-lightbox').classList.add('open');
+}
+
+/* ── Render Belege list ── */
+function renderBelege() {
+  const arr = loadBelege();
+  const el  = document.getElementById('stb-beleg-list');
+  const cnt = document.getElementById('stb-belege-count');
+  if (!el) return;
+  if (cnt) {
+    const total = arr.reduce((s,b) => s + b.betrag, 0);
+    cnt.textContent = arr.length ? `(${arr.length} Belege · ${fmt(total)} brutto)` : '';
+  }
+  if (arr.length === 0) {
+    el.innerHTML = `<div style="text-align:center;color:var(--text2);padding:20px;font-size:13px">
+      Noch keine Belege. Klicke auf "+ Beleg / Quittung hinzufügen".</div>`;
+    return;
+  }
+  el.innerHTML = arr.map(b => {
+    const mwstRate = b.mwst / 100;
+    const bruttoVal = b.betrag;
+    const nettoVal  = bruttoVal / (1 + mwstRate);
+    const mwstVal   = bruttoVal - nettoVal;
+    const fotoHtml  = b.foto
+      ? `<img class="beleg-foto" src="${b.foto}" onclick="openLightbox('${b.foto}')" title="Quittung anzeigen">`
+      : `<div class="beleg-foto-placeholder" onclick="openBelegModal('${b.id}')" title="Foto hinzufügen">📷</div>`;
+    return `
+    <div class="beleg-item">
+      ${fotoHtml}
+      <div class="beleg-info">
+        <div class="beleg-desc">${b.desc}</div>
+        <div class="beleg-meta">${fmtDate(b.datum)}</div>
+        <span class="beleg-cat">${KAT_LABELS[b.kat] || b.kat}</span>
+      </div>
+      <div>
+        <div class="beleg-betrag">
+          <div class="brutto">${fmt(bruttoVal)}</div>
+          <div class="netto">Netto: ${fmt(nettoVal)}</div>
+          <div class="mwst">MwSt ${b.mwst}%: ${fmt(mwstVal)}</div>
+        </div>
+        <div class="beleg-actions no-print">
+          <button class="btn btn-ghost btn-sm" onclick="openBelegModal('${b.id}')">✏️</button>
+          <button class="btn btn-ghost btn-sm" style="color:var(--red)" onclick="deleteBeleg('${b.id}')">🗑</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 function saveNotiz() {
@@ -1105,12 +1373,10 @@ function getStbEinnahmen() {
 function buildStb() {
   stbYear = parseInt(document.getElementById('stb-year').value);
   buildStbEinnahmen();
-  buildStbAusgabenForm();
+  renderBelege();
   buildStbSummary();
-  // Notiz laden
   const key = `shk_notiz_${stbYear}_${stbMode==='jahr'?'JAHR':stbQ}`;
   document.getElementById('stb-notiz').value = localStorage.getItem(key) || '';
-  // Print labels
   const periodLabel = QUARTER_LABELS[stbMode==='jahr'?'JAHR':stbQ] + ' ' + stbYear;
   document.getElementById('print-period-label').textContent = periodLabel;
   document.getElementById('print-date').textContent = new Date().toLocaleDateString('de-DE');
@@ -1142,63 +1408,53 @@ function buildStbEinnahmen() {
   document.getElementById('stb-sum-brutto').textContent = fmt(totalBrutto);
 }
 
-function buildStbAusgabenForm() {
-  const saved = loadAusgaben();
-  document.getElementById('stb-ausgaben-form').innerHTML = AUSGABEN_KATEGORIEN.map(k => `
-    <div class="ausgabe-row">
-      <label title="${k.hint}">${k.label}</label>
-      <input class="ausgabe-input" id="aus_${k.key}" type="number" min="0" step="0.01"
-        value="${(saved[k.key] || 0).toFixed(2)}"
-        placeholder="0,00"
-        oninput="saveAusgaben()">
-    </div>
-  `).join('');
-}
 
 function buildStbSummary() {
-  const einnahmen = getStbEinnahmen();
+  const einnahmen   = getStbEinnahmen();
   const totalNetto  = einnahmen.reduce((s,a) => s + netto(a.brutto), 0);
   const totalBrutto = einnahmen.reduce((s,a) => s + a.brutto, 0);
   const ustAus      = totalBrutto - totalNetto;
 
-  const saved = loadAusgaben();
-  let totalAusgaben = 0, vorsteuer = 0;
-  AUSGABEN_KATEGORIEN.forEach(k => {
-    const v = parseFloat((saved[k.key]||0));
-    if (k.key === 'vorsteuer') vorsteuer += v;
-    else totalAusgaben += v;
+  // Belege auswerten
+  const belege = loadBelege();
+  let totalAusgabenNetto = 0, vorsteuer = 0;
+  const byKat = {};
+  belege.forEach(b => {
+    const rate    = b.mwst / 100;
+    const nettoV  = b.betrag / (1 + rate);
+    const mwstV   = b.betrag - nettoV;
+    totalAusgabenNetto += nettoV;
+    vorsteuer          += mwstV;
+    byKat[b.kat] = (byKat[b.kat] || 0) + nettoV;
   });
 
-  const gewinn   = totalNetto - totalAusgaben;
+  const gewinn   = totalNetto - totalAusgabenNetto;
   const zahllast = ustAus - vorsteuer;
 
   // EÜR
   const euerLines = [
-    { lbl:'Betriebseinnahmen (netto)',        val: totalNetto,     cls: totalNetto>0?'pos':'' },
-    { lbl:'– Betriebsausgaben gesamt',        val: -totalAusgaben, cls: totalAusgaben>0?'neg':'' },
-    { lbl:'= Gewinn / Verlust (vor Steuer)',  val: gewinn,         cls: gewinn>=0?'pos':'neg', total:true },
+    { lbl:'Betriebseinnahmen (netto)',       val: totalNetto,          cls: totalNetto>0?'pos':'' },
+    { lbl:'– Betriebsausgaben (netto)',      val: -totalAusgabenNetto, cls: totalAusgabenNetto>0?'neg':'' },
+    { lbl:'= Gewinn / Verlust (vor Steuer)', val: gewinn,              cls: gewinn>=0?'pos':'neg', total:true },
   ];
+  const katBreakdown = Object.entries(byKat).map(([kat, v]) => `
+    <div class="stb-line" style="font-size:12px">
+      <span class="lbl" style="padding-left:12px">${KAT_LABELS[kat]||kat}</span>
+      <span style="color:var(--text2)">${fmt(v)}</span>
+    </div>`).join('');
+
   document.getElementById('stb-euer').innerHTML = euerLines.map(l => `
     <div class="stb-line${l.total?' total':''}">
       <span class="lbl">${l.lbl}</span>
       <span class="val ${l.cls||''}">${fmt(l.val)}</span>
     </div>
-  `).join('') + `
-    <div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">
-      ${AUSGABEN_KATEGORIEN.filter(k=>k.key!=='vorsteuer').map(k=>{
-        const v = parseFloat(saved[k.key]||0);
-        return v > 0 ? `<div class="stb-line" style="font-size:12px">
-          <span class="lbl" style="padding-left:12px">${k.label}</span>
-          <span style="color:var(--text2)">${fmt(v)}</span>
-        </div>` : '';
-      }).join('')}
-    </div>`;
+  `).join('') + (katBreakdown ? `<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border)">${katBreakdown}</div>` : '');
 
   // UStVA
   const ustLines = [
-    { lbl:'Umsatzsteuer (Ausgang 19%)',    val: ustAus,   cls:'neg' },
-    { lbl:'– Vorsteuer (aus Einkäufen)',   val: -vorsteuer, cls:'pos' },
-    { lbl:'= Zahllast ans Finanzamt',      val: zahllast, cls: zahllast>=0?'neg':'pos', total:true },
+    { lbl:'Umsatzsteuer (Ausgang 19%)',  val: ustAus,    cls:'neg' },
+    { lbl:'– Vorsteuer (aus Belegen)',   val: -vorsteuer, cls:'pos' },
+    { lbl:'= Zahllast ans Finanzamt',    val: zahllast,  cls: zahllast>=0?'neg':'pos', total:true },
   ];
   document.getElementById('stb-ust').innerHTML = ustLines.map(l => `
     <div class="stb-line${l.total?' total':''}">
@@ -1208,7 +1464,7 @@ function buildStbSummary() {
   `).join('') + `
     <div style="margin-top:12px;padding:10px 12px;background:rgba(239,68,68,0.08);border-radius:8px;font-size:12px;color:var(--text2)">
       Fällig: ${getUstFaellig()}<br>
-      Bitte dem Steuerberater die Eingangsrechnungen mit MwSt-Ausweis übergeben.
+      Vorsteuer wird automatisch aus deinen Belegen berechnet.
     </div>`;
 }
 

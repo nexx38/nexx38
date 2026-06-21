@@ -34,6 +34,7 @@ const roomEmoji = {
 
 // ── App ──────────────────────────────────────────────────
 const App = {
+  _newId() { return newId(); },
   init() {
     // Auto-load last session
     this._autoLoad();

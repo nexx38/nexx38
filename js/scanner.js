@@ -969,28 +969,85 @@ const Scanner = {
     if (hEl) hEl.value = r.height.toFixed(2);
     this._updateConfirmArea();
 
-    // Render detected openings
+    // Detected openings
     const openings = this.s.detectedOpenings || [];
-    const container = document.getElementById('detectedOpenings');
-    if (!container) return;
-    if (!openings.length) {
-      const note = this.s.detectedOpeningsNote || 'Keine Fenster/Türen automatisch erkannt.<br>Bitte manuell unter Bauteile eintragen.';
-      container.innerHTML = `<div style="color:var(--text-muted);font-size:.82rem;text-align:center;padding:8px 0;">${note}</div>`;
-      return;
+    const openEl = document.getElementById('detectedOpenings');
+    if (openEl) {
+      if (!openings.length) {
+        const note = this.s.detectedOpeningsNote || '';
+        openEl.innerHTML = note
+          ? `<div style="color:var(--text-muted);font-size:.82rem;text-align:center;padding:4px 0;">${note}</div>`
+          : '';
+      } else {
+        openEl.innerHTML = `
+          <div style="font-weight:600;margin-bottom:8px;font-size:.9rem;">🔍 Erkannte Öffnungen (${openings.length})</div>
+          ${openings.map((o, i) => `
+            <label style="display:flex;align-items:center;gap:10px;padding:8px;background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;cursor:pointer;">
+              <input type="checkbox" id="opening_${i}" checked style="width:16px;height:16px;accent-color:var(--primary);">
+              <div style="flex:1">
+                <div style="font-weight:600;font-size:.85rem;">${o.type === 'door' ? '🚪 Außentür' : '🪟 Fenster'} – ${o.wall}</div>
+                <div style="font-size:.78rem;color:var(--text-muted);">${o.width.toFixed(2)} m × ${o.height.toFixed(2)} m = ${o.area.toFixed(2)} m²</div>
+              </div>
+              <div style="font-size:.75rem;color:var(--primary);font-weight:600;">U = ${o.uDefault.toFixed(2)}</div>
+            </label>
+          `).join('')}`;
+      }
     }
-    container.innerHTML = `
-      <div style="font-weight:600;margin-bottom:8px;font-size:.9rem;">🔍 Erkannte Öffnungen (${openings.length})</div>
-      ${openings.map((o, i) => `
-        <label style="display:flex;align-items:center;gap:10px;padding:8px;background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;cursor:pointer;">
-          <input type="checkbox" id="opening_${i}" checked style="width:16px;height:16px;accent-color:var(--primary);">
-          <div style="flex:1">
-            <div style="font-weight:600;font-size:.85rem;">${o.type === 'door' ? '🚪 Außentür' : '🪟 Fenster'} – ${o.wall}</div>
-            <div style="font-size:.78rem;color:var(--text-muted);">${o.width.toFixed(2)} m × ${o.height.toFixed(2)} m = ${o.area.toFixed(2)} m²${o.type === 'window' ? ' · Brüstung ~' + o.sillHeight.toFixed(2) + ' m' : ''}</div>
-          </div>
-          <div style="font-size:.75rem;color:var(--primary);font-weight:600;">U = ${o.uDefault.toFixed(2)}</div>
-        </label>
-      `).join('')}
-    `;
+
+    // Suggested Bauteile from scan dimensions
+    this._renderSuggestedComponents();
+  },
+
+  _uDefaults(year) {
+    if (year <= 1968) return { wall: 1.75, window: 2.80, roof: 2.00 };
+    if (year <= 1978) return { wall: 1.40, window: 2.80, roof: 1.50 };
+    if (year <= 1984) return { wall: 0.90, window: 2.50, roof: 0.80 };
+    if (year <= 1995) return { wall: 0.60, window: 1.80, roof: 0.50 };
+    if (year <= 2002) return { wall: 0.45, window: 1.40, roof: 0.35 };
+    return { wall: 0.28, window: 1.10, roof: 0.20 };
+  },
+
+  _renderSuggestedComponents() {
+    const el = document.getElementById('suggestedComponents');
+    if (!el) return;
+    const r = this.s.result;
+    if (!r.width || !r.depth || !r.height) { el.innerHTML = ''; return; }
+
+    const year = parseInt(window.state?.project?.constructionYear) || 1975;
+    const u = this._uDefaults(year);
+    const w = parseFloat(document.getElementById('confirmWidth')?.value) || r.width;
+    const d = parseFloat(document.getElementById('confirmDepth')?.value) || r.depth;
+    const h = parseFloat(document.getElementById('confirmHeight')?.value) || r.height;
+    const area = w * d;
+
+    // Estimate window area as 15% of floor area (typical Wohnzimmer)
+    const winArea = +(area * 0.15).toFixed(1);
+    // Two exterior walls minus window area
+    const wallArea = +((w + d) * h - winArea).toFixed(1);
+    const ceilArea = +area.toFixed(1);
+
+    this.s.suggested = [
+      { id: 'sg_wall',    type: 'wall',     description: 'Außenwand',      area: wallArea, uValue: u.wall,   label: `${wallArea} m² · U=${u.wall.toFixed(2)}` },
+      { id: 'sg_window',  type: 'window',   description: 'Fenster',         area: winArea,  uValue: u.window, label: `${winArea} m² · U=${u.window.toFixed(2)}` },
+      { id: 'sg_ceiling', type: 'ceiling',  description: 'Decke / Dachboden', area: ceilArea, uValue: u.roof, label: `${ceilArea} m² · U=${u.roof.toFixed(2)}` },
+    ];
+
+    el.innerHTML = `
+      <div style="margin-top:14px;padding:10px 12px;background:rgba(79,195,247,.07);border:1px solid rgba(79,195,247,.2);border-radius:10px;">
+        <div style="font-weight:700;font-size:.88rem;margin-bottom:8px;color:#4FC3F7;">
+          🧱 Bauteile aus Scan vorbelegen <span style="font-weight:400;font-size:.78rem;color:rgba(255,255,255,.45);">(Baujahr ${year})</span>
+        </div>
+        ${this.s.suggested.map(s => `
+          <label style="display:flex;align-items:center;gap:10px;padding:7px 4px;border-bottom:1px solid rgba(255,255,255,.07);cursor:pointer;">
+            <input type="checkbox" id="${s.id}" checked style="width:16px;height:16px;accent-color:#4FC3F7;flex-shrink:0;">
+            <div style="flex:1;font-size:.83rem;">
+              <span style="font-weight:600;">${s.description}</span>
+              <span style="color:rgba(255,255,255,.5);margin-left:6px;">${s.label}</span>
+            </div>
+          </label>
+        `).join('')}
+        <div style="font-size:.75rem;color:rgba(255,255,255,.35);margin-top:8px;">Flächen aus Scan · U-Werte nach DIN 4108 für ${year}</div>
+      </div>`;
   },
 
   _adjDim(id, delta) {
@@ -1020,18 +1077,35 @@ const Scanner = {
       room.area   = area;
       room.height = height;
 
-      // Erkannte Öffnungen als Bauteile hinzufügen
-      const openings = this.s.detectedOpenings || [];
       let added = 0;
+
+      // Erkannte Öffnungen (aus Scan-Erkennung)
+      const openings = this.s.detectedOpenings || [];
       openings.forEach((o, i) => {
         const cb = document.getElementById('opening_' + i);
         if (!cb?.checked) return;
         room.components.push({
-          id: 'id_sc_' + Date.now() + '_' + i,
+          id: App._newId?.() || ('id_sc_' + Date.now() + '_' + i),
           type: o.type === 'door' ? 'door' : 'window',
           description: o.type === 'door' ? ('Tür ' + o.wall) : ('Fenster ' + o.wall),
           area: +o.area.toFixed(2),
           uValue: o.uDefault,
+          adjacentTemp: null,
+        });
+        added++;
+      });
+
+      // Vorgeschlagene Bauteile aus Scan-Maßen
+      const suggested = this.s.suggested || [];
+      suggested.forEach(s => {
+        const cb = document.getElementById(s.id);
+        if (!cb?.checked) return;
+        room.components.push({
+          id: App._newId?.() || ('id_sc_' + Date.now() + '_' + s.id),
+          type: s.type,
+          description: s.description,
+          area: s.area,
+          uValue: s.uValue,
           adjacentTemp: null,
         });
         added++;

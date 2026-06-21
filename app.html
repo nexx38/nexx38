@@ -3853,7 +3853,43 @@ const Scanner = {
       const wu = span(u), wv = span(v), area = wu * wv;
       if (!best || area < best.area) best = { wu, wv, area, deg };
     }
-    return { w: Math.max(best.wu, best.wv), d: Math.min(best.wu, best.wv), angle: best.deg };
+    // Recompute at best angle and use wall-density peaks for inner room dimensions.
+    // Scans often include stray points from adjacent spaces that inflate 1-99% span.
+    // Wall peaks (strongest density in outer third) are much closer to true room size.
+    const cosA = Math.cos(best.deg * Math.PI / 180);
+    const sinA = Math.sin(best.deg * Math.PI / 180);
+    const uF = [], vF = [];
+    for (let i = 0; i < px.length; i++) {
+      uF.push(px[i] * cosA + pz[i] * sinA);
+      vF.push(-px[i] * sinA + pz[i] * cosA);
+    }
+    const pkU = this._wallPeaks(uF);
+    const pkV = this._wallPeaks(vF);
+    // Fall back per-axis if peak span is implausible (< 40% or > 110% of OBB span)
+    const wu = (pkU.high - pkU.low) > best.wu * 0.4 && (pkU.high - pkU.low) < best.wu * 1.1
+             ? pkU.high - pkU.low : best.wu;
+    const wv = (pkV.high - pkV.low) > best.wv * 0.4 && (pkV.high - pkV.low) < best.wv * 1.1
+             ? pkV.high - pkV.low : best.wv;
+    return { w: Math.max(wu, wv), d: Math.min(wu, wv), angle: best.deg };
+  },
+
+  // Finds wall positions as the density peak in the outer third of the rotated axis range.
+  // More accurate than 1-99% percentile span when the scan includes adjacent spaces.
+  _wallPeaks(arr) {
+    const s = arr.slice().sort((a, b) => a - b);
+    const mn = s[0], mx = s[s.length - 1];
+    const bins = 80, w = (mx - mn) / bins || 1;
+    const h = new Array(bins).fill(0);
+    for (const v of s) {
+      let bi = Math.floor((v - mn) / w);
+      if (bi >= bins) bi = bins - 1; if (bi < 0) bi = 0;
+      h[bi]++;
+    }
+    const third = Math.floor(bins / 3);
+    let lb = 0, lc = -1, ub = bins - 1, uc = -1;
+    for (let i = 0; i < third; i++)              if (h[i] > lc) { lc = h[i]; lb = i; }
+    for (let i = bins - third; i < bins; i++)    if (h[i] > uc) { uc = h[i]; ub = i; }
+    return { low: mn + (lb + 0.5) * w, high: mn + (ub + 0.5) * w };
   },
 
   // Find floor & ceiling levels as the densest bins in the lower / upper half.

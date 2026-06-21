@@ -603,6 +603,23 @@
 }
 .confirm-dim-val { font-size: 1.6rem; font-weight: 800; color: #4FC3F7; }
 .confirm-dim-lbl { font-size: .75rem; color: rgba(255,255,255,.5); margin-top: 4px; }
+.confirm-dim-inp {
+  font-size: 1.5rem; font-weight: 800; color: #4FC3F7;
+  background: transparent; border: none; border-bottom: 2px solid rgba(79,195,247,.4);
+  text-align: center; width: 90px; padding: 2px 0;
+  -moz-appearance: textfield;
+}
+.confirm-dim-inp::-webkit-inner-spin-button,
+.confirm-dim-inp::-webkit-outer-spin-button { -webkit-appearance: none; }
+.confirm-dim-inp:focus { outline: none; border-bottom-color: #4FC3F7; }
+.confirm-adj { display: flex; align-items: center; gap: 4px; justify-content: center; }
+.confirm-adj-btn {
+  width: 28px; height: 28px; border-radius: 50%; border: 1px solid rgba(79,195,247,.4);
+  background: rgba(79,195,247,.08); color: #4FC3F7; font-size: 1.1rem; line-height: 1;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: background .15s;
+}
+.confirm-adj-btn:active { background: rgba(79,195,247,.25); }
 .confirm-buttons { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; }
 
 /* ── Responsive ──────────────────────────────────────────── */

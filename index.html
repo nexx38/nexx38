@@ -862,16 +862,28 @@
         <div class="confirm-title">Raummaße ermittelt</div>
         <div class="confirm-dims">
           <div class="confirm-dim">
-            <div class="confirm-dim-val" id="confirmWidth">—</div>
-            <div class="confirm-dim-lbl">Breite</div>
+            <div class="confirm-adj">
+              <button class="confirm-adj-btn" onclick="Scanner._adjDim('confirmWidth',-0.1)">−</button>
+              <input class="confirm-dim-inp" id="confirmWidth" type="number" step="0.1" min="0.1" oninput="Scanner._updateConfirmArea()">
+              <button class="confirm-adj-btn" onclick="Scanner._adjDim('confirmWidth',0.1)">+</button>
+            </div>
+            <div class="confirm-dim-lbl">Breite (m)</div>
           </div>
           <div class="confirm-dim">
-            <div class="confirm-dim-val" id="confirmDepth">—</div>
-            <div class="confirm-dim-lbl">Tiefe</div>
+            <div class="confirm-adj">
+              <button class="confirm-adj-btn" onclick="Scanner._adjDim('confirmDepth',-0.1)">−</button>
+              <input class="confirm-dim-inp" id="confirmDepth" type="number" step="0.1" min="0.1" oninput="Scanner._updateConfirmArea()">
+              <button class="confirm-adj-btn" onclick="Scanner._adjDim('confirmDepth',0.1)">+</button>
+            </div>
+            <div class="confirm-dim-lbl">Tiefe (m)</div>
           </div>
           <div class="confirm-dim">
-            <div class="confirm-dim-val" id="confirmHeight">—</div>
-            <div class="confirm-dim-lbl">Raumhöhe</div>
+            <div class="confirm-adj">
+              <button class="confirm-adj-btn" onclick="Scanner._adjDim('confirmHeight',-0.1)">−</button>
+              <input class="confirm-dim-inp" id="confirmHeight" type="number" step="0.1" min="0.5" oninput="Scanner._updateConfirmArea()">
+              <button class="confirm-adj-btn" onclick="Scanner._adjDim('confirmHeight',0.1)">+</button>
+            </div>
+            <div class="confirm-dim-lbl">Höhe (m)</div>
           </div>
           <div class="confirm-dim">
             <div class="confirm-dim-val" id="confirmArea">—</div>
@@ -879,7 +891,7 @@
           </div>
         </div>
         <p style="font-size:.85rem;color:rgba(255,255,255,.5);max-width:340px;line-height:1.6;">
-          Die Maße werden in den Raum-Editor übertragen. Du kannst sie dort noch anpassen.
+          Scan-Toleranz ±10% — Werte direkt anpassbar.
         </p>
         <div id="detectedOpenings" style="width:100%;max-width:420px;margin:12px auto 0;text-align:left;max-height:260px;overflow-y:auto;"></div>
         <div class="confirm-buttons">

@@ -701,38 +701,7 @@ const Scanner = {
       const wu = span(u), wv = span(v), area = wu * wv;
       if (!best || area < best.area) best = { wu, wv, area, deg };
     }
-    // Recompute rotated coords at best angle and use wall-density peaks for inner room dimensions.
-    // This is more accurate than percentile span, which slightly overestimates due to scan overhang.
-    const t = best.deg * Math.PI / 180, cosA = Math.cos(t), sinA = Math.sin(t);
-    const uF = [], vF = [];
-    for (let i = 0; i < px.length; i++) {
-      uF.push(px[i] * cosA + pz[i] * sinA);
-      vF.push(-px[i] * sinA + pz[i] * cosA);
-    }
-    const pkU = this._wallPeaks(uF);
-    const pkV = this._wallPeaks(vF);
-    // Fall back to OBB percentile if peak detection returns implausible span (< 50% of OBB)
-    const wu = (pkU.high - pkU.low) > best.wu * 0.5 ? pkU.high - pkU.low : best.wu;
-    const wv = (pkV.high - pkV.low) > best.wv * 0.5 ? pkV.high - pkV.low : best.wv;
-    return { w: Math.max(wu, wv), d: Math.min(wu, wv), angle: best.deg };
-  },
-
-  // Find wall positions as density peaks in the outer quarter of each axis range.
-  _wallPeaks(arr) {
-    const s = arr.slice().sort((a, b) => a - b);
-    const mn = s[0], mx = s[s.length - 1];
-    const bins = 80, w = (mx - mn) / bins || 1;
-    const h = new Array(bins).fill(0);
-    for (const v of s) {
-      let bi = Math.floor((v - mn) / w);
-      if (bi >= bins) bi = bins - 1; if (bi < 0) bi = 0;
-      h[bi]++;
-    }
-    const quarter = Math.floor(bins / 4);
-    let lb = 0, lc = -1, ub = bins - 1, uc = -1;
-    for (let i = 0; i < quarter; i++)            if (h[i] > lc) { lc = h[i]; lb = i; }
-    for (let i = bins - quarter; i < bins; i++)  if (h[i] > uc) { uc = h[i]; ub = i; }
-    return { low: mn + (lb + 0.5) * w, high: mn + (ub + 0.5) * w };
+    return { w: Math.max(best.wu, best.wv), d: Math.min(best.wu, best.wv), angle: best.deg };
   },
 
   // Find floor & ceiling levels as the densest bins in the lower / upper half.
@@ -956,10 +925,13 @@ const Scanner = {
     document.getElementById('scanPanel_confirm').classList.add('active');
 
     const r = this.s.result;
-    document.getElementById('confirmWidth').textContent  = r.width.toFixed(2)  + ' m';
-    document.getElementById('confirmDepth').textContent  = r.depth.toFixed(2)  + ' m';
-    document.getElementById('confirmHeight').textContent = r.height.toFixed(2) + ' m';
-    document.getElementById('confirmArea').textContent   = (r.area > 0 ? r.area : r.width * r.depth).toFixed(1) + ' m²';
+    const wEl = document.getElementById('confirmWidth');
+    const dEl = document.getElementById('confirmDepth');
+    const hEl = document.getElementById('confirmHeight');
+    if (wEl) wEl.value = r.width.toFixed(2);
+    if (dEl) dEl.value = r.depth.toFixed(2);
+    if (hEl) hEl.value = r.height.toFixed(2);
+    this._updateConfirmArea();
 
     // Render detected openings
     const openings = this.s.detectedOpenings || [];
@@ -985,10 +957,26 @@ const Scanner = {
     `;
   },
 
+  _adjDim(id, delta) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.value = Math.max(+el.min || 0.1, +(parseFloat(el.value) + delta).toFixed(2));
+    this._updateConfirmArea();
+  },
+
+  _updateConfirmArea() {
+    const w = parseFloat(document.getElementById('confirmWidth')?.value) || 0;
+    const d = parseFloat(document.getElementById('confirmDepth')?.value) || 0;
+    const el = document.getElementById('confirmArea');
+    if (el) el.textContent = (w * d).toFixed(1) + ' m²';
+  },
+
   confirmApply() {
-    const r = this.s.result;
-    const area = +(r.area > 0 ? r.area : r.width * r.depth).toFixed(2);
-    const height = +r.height.toFixed(2);
+    const w = parseFloat(document.getElementById('confirmWidth')?.value)  || this.s.result.width;
+    const d = parseFloat(document.getElementById('confirmDepth')?.value)  || this.s.result.depth;
+    const h = parseFloat(document.getElementById('confirmHeight')?.value) || this.s.result.height;
+    const area   = +(w * d).toFixed(2);
+    const height = +h.toFixed(2);
 
     // 1. Direkt auf das Room-Objekt schreiben (funktioniert auch ohne sichtbares Formular)
     const room = App.getRoom?.(this.s.roomId || window.state?.selectedRoomId);

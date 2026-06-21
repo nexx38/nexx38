@@ -5947,11 +5947,12 @@ const App = {
       .map(([k, v]) => `<option value="${k}" ${room.type === k ? 'selected' : ''}>${roomEmoji[k] || ''} ${v.label}</option>`)
       .join('');
 
-    // Component rows
+    // Component rows — use index (not ID) to match componentDetail, since detail is
+    // always built as room.components.map(...) and has the same order and length.
     const maxLoss = rr ? Math.max(...rr.componentDetail.map(c => c.loss), 1) : 1;
     const compRows = room.components.length
-      ? room.components.map(c => {
-          const loss = rr ? rr.componentDetail.find(d => d.id === c.id)?.loss ?? 0 : 0;
+      ? room.components.map((c, idx) => {
+          const loss = rr ? (rr.componentDetail[idx]?.loss ?? 0) : 0;
           const barW = Math.round(loss / maxLoss * 100);
           const adjInfo = c.type === 'internal' ? ` · θ_adj = ${c.adjacentTemp}°C` : '';
           return `

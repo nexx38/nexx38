@@ -18,16 +18,23 @@ jobs:
       - name: Build offline app.html (Chart.js inlined)
         run: python3 build.py
 
-      - name: Deploy app.html to gh-pages branch
+      - name: Deploy app.html + PWA assets to gh-pages branch
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          # Stamp service-worker cache version with the commit SHA
+          sed "s/BUILD_TS/${GITHUB_SHA::8}/" sw.js > /tmp/sw.js
           cp app.html /tmp/app.html
+          cp manifest.webmanifest /tmp/manifest.webmanifest
+          cp -r icons /tmp/icons
           echo '<meta http-equiv="refresh" content="0; url=app.html">' > /tmp/index.html
           git checkout --orphan gh-pages-tmp
           git rm -rf . --quiet
           cp /tmp/app.html app.html
           cp /tmp/index.html index.html
-          git add app.html index.html
+          cp /tmp/sw.js sw.js
+          cp /tmp/manifest.webmanifest manifest.webmanifest
+          cp -r /tmp/icons icons
+          git add app.html index.html sw.js manifest.webmanifest icons
           git commit -m "Deploy app.html [skip ci]"
           git push origin HEAD:gh-pages --force

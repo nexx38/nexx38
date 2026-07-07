@@ -3178,6 +3178,11 @@ const Scanner = {
   async open(roomId) {
     this.s.roomId = roomId;
     this.s.result = { width: 0, depth: 0, height: 2.50, area: 0 };
+    this.s.detectedOpenings = [];
+    this.s.detectedOpeningsNote = null;
+    this.s.suggested = [];
+    this.s.pcPoints = null;
+    this.s.pcBounds = null;
     document.getElementById('scannerOverlay').classList.add('active');
 
     // iPad mit Desktop-UA meldet sich als MacIntel mit Touchscreen
@@ -3435,6 +3440,9 @@ const Scanner = {
     const w = parseFloat(document.getElementById('camWidth')?.value)  || 0;
     const d = parseFloat(document.getElementById('camDepth')?.value)  || 0;
     const h = parseFloat(document.getElementById('camHeight')?.value) || 2.5;
+    // Öffnungen stammen immer aus einem PLY-Scan — für manuell gemessene Räume zurücksetzen
+    this.s.detectedOpenings = [];
+    this.s.detectedOpeningsNote = null;
     this.s.result = {
       width:  w,
       depth:  d,
@@ -3878,7 +3886,10 @@ const Scanner = {
   // More accurate than 1-99% percentile span when the scan includes adjacent spaces.
   _wallPeaks(arr) {
     const s = arr.slice().sort((a, b) => a - b);
-    const mn = s[0], mx = s[s.length - 1];
+    // 1-99% percentile range, consistent with all other bounds in this file —
+    // raw min/max would let a single stray point stretch the histogram range
+    const q = (f) => s[Math.max(0, Math.min(s.length - 1, Math.floor(s.length * f)))];
+    const mn = q(0.01), mx = q(0.99);
     const bins = 80, w = (mx - mn) / bins || 1;
     const h = new Array(bins).fill(0);
     for (const v of s) {
@@ -4092,10 +4103,12 @@ const Scanner = {
   fileConfirm() {
     if (this.s.pcPoints && this.s.pcBounds) {
       const angle = this.s.pcBounds.angle || 0;
-      if (angle > 15) {
+      // OBB angle is 90°-periodic: 89° ≡ −1°, effectively axis-aligned
+      const effAngle = Math.min(angle, 90 - angle);
+      if (effAngle > 15) {
         // Axis-aligned wall detection produces false positives for rotated rooms
         this.s.detectedOpenings = [];
-        this.s.detectedOpeningsNote = `Raum diagonal gescannt (${Math.round(angle)}°) — Fenster & Türen bitte manuell unter Bauteile eintragen.`;
+        this.s.detectedOpeningsNote = `Raum diagonal gescannt (${Math.round(effAngle)}°) — Fenster & Türen bitte manuell unter Bauteile eintragen.`;
       } else {
         const detected = this._detectOpenings(this.s.pcPoints, this.s.pcBounds);
         this.s.detectedOpenings = detected;
@@ -4160,39 +4173,66 @@ const Scanner = {
     return { wall: 0.28, window: 1.10, roof: 0.20 };
   },
 
-  _renderSuggestedComponents() {
-    const el = document.getElementById('suggestedComponents');
-    if (!el) return;
+  // Compute suggested components from current confirm-input dimensions.
+  // Detected openings (real windows/doors from the scan) take precedence over
+  // the 15% window estimate — otherwise window area would be counted twice.
+  _buildSuggested() {
     const r = this.s.result;
-    if (!r.width || !r.depth || !r.height) { el.innerHTML = ''; return; }
+    const w = this._confirmVal('confirmWidth',  r.width);
+    const d = this._confirmVal('confirmDepth',  r.depth);
+    const h = this._confirmVal('confirmHeight', r.height);
+    if (!w || !d || !h) return [];
 
     const year = parseInt(window.state?.project?.constructionYear) || 1975;
     const u = this._uDefaults(year);
-    const w = parseFloat(document.getElementById('confirmWidth')?.value) || r.width;
-    const d = parseFloat(document.getElementById('confirmDepth')?.value) || r.depth;
-    const h = parseFloat(document.getElementById('confirmHeight')?.value) || r.height;
     const area = w * d;
 
-    // Estimate window area as 15% of floor area (typical Wohnzimmer)
-    const winArea = +(area * 0.15).toFixed(1);
-    // Two exterior walls minus window area
-    const wallArea = +((w + d) * h - winArea).toFixed(1);
+    const detectedWinArea = (this.s.detectedOpenings || [])
+      .reduce((s, o) => s + o.area, 0);
+    const hasDetected = detectedWinArea > 0;
+
+    // Window estimate: 15% of floor area — only when the scan found no real openings
+    const winArea = hasDetected ? 0 : +(area * 0.15).toFixed(1);
+    // Two exterior walls minus openings (detected or estimated)
+    const wallArea = +Math.max(1, (w + d) * h - (hasDetected ? detectedWinArea : winArea)).toFixed(1);
     const ceilArea = +area.toFixed(1);
 
-    this.s.suggested = [
-      { id: 'sg_wall',    type: 'wall',     description: 'Außenwand',      area: wallArea, uValue: u.wall,   label: `${wallArea} m² · U=${u.wall.toFixed(2)}` },
-      { id: 'sg_window',  type: 'window',   description: 'Fenster',         area: winArea,  uValue: u.window, label: `${winArea} m² · U=${u.window.toFixed(2)}` },
-      { id: 'sg_ceiling', type: 'ceiling',  description: 'Decke / Dachboden', area: ceilArea, uValue: u.roof, label: `${ceilArea} m² · U=${u.roof.toFixed(2)}` },
+    const list = [
+      { id: 'sg_wall',    type: 'wall',    description: 'Außenwand',        area: wallArea, uValue: u.wall,   label: `${wallArea} m² · U=${u.wall.toFixed(2)}` },
+      { id: 'sg_ceiling', type: 'ceiling', description: 'Decke / Dachboden', area: ceilArea, uValue: u.roof,  label: `${ceilArea} m² · U=${u.roof.toFixed(2)}` },
     ];
+    if (!hasDetected) {
+      list.splice(1, 0, { id: 'sg_window', type: 'window', description: 'Fenster (Schätzung 15%)', area: winArea, uValue: u.window, label: `${winArea} m² · U=${u.window.toFixed(2)}` });
+    }
+    return list;
+  },
 
+  _confirmVal(id, fallback) {
+    const v = parseFloat(document.getElementById(id)?.value);
+    return isFinite(v) && v > 0 ? v : fallback;
+  },
+
+  _renderSuggestedComponents() {
+    const el = document.getElementById('suggestedComponents');
+    if (!el) return;
+
+    // Preserve checkbox state across re-renders (dimensions edited → re-render)
+    const prevChecked = {};
+    el.querySelectorAll('input[type=checkbox]').forEach(cb => { prevChecked[cb.id] = cb.checked; });
+
+    const suggested = this._buildSuggested();
+    this.s.suggested = suggested;
+    if (!suggested.length) { el.innerHTML = ''; return; }
+
+    const year = parseInt(window.state?.project?.constructionYear) || 1975;
     el.innerHTML = `
       <div style="margin-top:14px;padding:10px 12px;background:rgba(79,195,247,.07);border:1px solid rgba(79,195,247,.2);border-radius:10px;">
         <div style="font-weight:700;font-size:.88rem;margin-bottom:8px;color:#4FC3F7;">
           🧱 Bauteile aus Scan vorbelegen <span style="font-weight:400;font-size:.78rem;color:rgba(255,255,255,.45);">(Baujahr ${year})</span>
         </div>
-        ${this.s.suggested.map(s => `
+        ${suggested.map(s => `
           <label style="display:flex;align-items:center;gap:10px;padding:7px 4px;border-bottom:1px solid rgba(255,255,255,.07);cursor:pointer;">
-            <input type="checkbox" id="${s.id}" checked style="width:16px;height:16px;accent-color:#4FC3F7;flex-shrink:0;">
+            <input type="checkbox" id="${s.id}" ${prevChecked[s.id] === false ? '' : 'checked'} style="width:16px;height:16px;accent-color:#4FC3F7;flex-shrink:0;">
             <div style="flex:1;font-size:.83rem;">
               <span style="font-weight:600;">${s.description}</span>
               <span style="color:rgba(255,255,255,.5);margin-left:6px;">${s.label}</span>
@@ -4206,7 +4246,10 @@ const Scanner = {
   _adjDim(id, delta) {
     const el = document.getElementById(id);
     if (!el) return;
-    el.value = Math.max(+el.min || 0.1, +(parseFloat(el.value) + delta).toFixed(2));
+    const min = parseFloat(el.min) || 0.1;
+    const cur = parseFloat(el.value);
+    const base = isFinite(cur) ? cur : min; // empty/cleared field → start from min, not NaN
+    el.value = Math.max(min, +(base + delta).toFixed(2));
     this._updateConfirmArea();
   },
 
@@ -4215,6 +4258,8 @@ const Scanner = {
     const d = parseFloat(document.getElementById('confirmDepth')?.value) || 0;
     const el = document.getElementById('confirmArea');
     if (el) el.textContent = (w * d).toFixed(1) + ' m²';
+    // Suggested component areas depend on the dimensions → keep them in sync
+    this._renderSuggestedComponents();
   },
 
   confirmApply() {
@@ -4248,8 +4293,9 @@ const Scanner = {
         added++;
       });
 
-      // Vorgeschlagene Bauteile aus Scan-Maßen
-      const suggested = this.s.suggested || [];
+      // Vorgeschlagene Bauteile aus Scan-Maßen — frisch aus den aktuellen
+      // Eingabewerten berechnet, damit Anpassungen per +/− übernommen werden
+      const suggested = this._buildSuggested();
       suggested.forEach(s => {
         const cb = document.getElementById(s.id);
         if (!cb?.checked) return;

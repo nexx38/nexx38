@@ -247,14 +247,14 @@ const Modules = {
     document.getElementById('radCfDisplay').innerHTML =
       `Korrekturfaktor: <strong>${(cfGlobal * 100).toFixed(0)}%</strong> bei ${newFlow}/${newReturn}°C vs. ${nomFlow}/${nomReturn}°C`;
 
-    const assessment = RadiatorModule.assessRooms(result.rooms, newFlow, newReturn, nomFlow, nomReturn);
+    const assessment = RadiatorModule.assessRooms(result.rooms, newFlow, newReturn, nomFlow, nomReturn, state.rooms);
 
     document.getElementById('radTableBody').innerHTML = assessment.map(r => {
       const barPct = Math.min(100, r.cfPct);
       const barCls = r.cfPct >= 70 ? '' : r.cfPct >= 50 ? 'warn' : 'bad';
       return `
         <tr>
-          <td><strong>${escUI(r.roomName)}</strong></td>
+          <td><strong>${escUI(r.roomName)}</strong><span style="color:var(--text-muted);font-size:.78rem;"> · ${r.roomTemp}°C</span></td>
           <td>${Math.round(r.heatingLoad)}</td>
           <td>
             <div class="cf-bar"><div class="cf-fill ${barCls}" style="width:${barPct}%"></div></div>

@@ -77,8 +77,8 @@ const HPModule = {
   calcAnnualEnergy(heatingLoad_W, jaz) {
     // VDI 4655: approx 2000 full-load hours for heating in Germany
     const fullLoadHours = 1800;
-    const annualHeatKwh = (heatingLoad_W / 1000) * fullLoadHours;
-    return { annualHeatKwh, annualElecKwh: +(annualHeatKwh / jaz).toFixed(0) };
+    const annualHeatKwh = Math.round((heatingLoad_W / 1000) * fullLoadHours);
+    return { annualHeatKwh, annualElecKwh: Math.round(annualHeatKwh / jaz) };
   },
 
   // Filter and rank heat pumps for given load
@@ -235,16 +235,21 @@ const RadiatorModule = {
     return candidates.sort((a, b) => a.w75 - b.w75)[0];
   },
 
-  // Assess all rooms
-  assessRooms(roomResults, newFlow, newReturn, nomFlow, nomReturn) {
+  // Assess all rooms. `rooms` (the state rooms) supplies the per-room indoor
+  // temperature — a 24°C bathroom has a smaller temperature head to the heating
+  // water than a 20°C living room, so its correction factor is genuinely worse.
+  assessRooms(roomResults, newFlow, newReturn, nomFlow, nomReturn, rooms) {
     const rtDef = PRODUCTS.radiatorTypes.find(r => r.id === 'conv_22');
     const n = rtDef?.n || 1.33;
 
     return roomResults.map(rr => {
-      const roomTemp = 20; // use per-room temp if available
+      const room     = rooms?.find(r => r.id === rr.id);
+      const roomTemp = room?.indoorTemp ?? 20;
+      // Nominal radiator rating (w75) is defined at 20°C room per EN 442;
+      // the actual operating point uses the room's real temperature.
       const cf     = this.correctionFactor(newFlow, newReturn, roomTemp, nomFlow, nomReturn, 20, n);
-      const reqNom = +(rr.total / cf).toFixed(0);
-      const rec    = this.findRadiator(reqNom, 600);
+      const reqNom = cf > 0 ? +(rr.total / cf).toFixed(0) : Infinity;
+      const rec    = isFinite(reqNom) ? this.findRadiator(reqNom, 600) : null;
 
       let status = 'ok', statusText = 'Ausreichend';
       if (cf < 0.5)  { status = 'danger';  statusText = 'Zu klein – Tausch nötig'; }
@@ -253,10 +258,11 @@ const RadiatorModule = {
       return {
         roomId:      rr.id,
         roomName:    rr.name,
+        roomTemp,
         heatingLoad: rr.total,
         cf:          +cf.toFixed(3),
         cfPct:       +(cf * 100).toFixed(0),
-        reqNomW:     reqNom,
+        reqNomW:     isFinite(reqNom) ? reqNom : 0,
         recSize:     rec ? `${rec.h}×${rec.l} mm (${rec.w75} W)` : '→ Sondermaß',
         status,
         statusText,

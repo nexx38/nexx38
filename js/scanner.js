@@ -1046,7 +1046,7 @@ const Scanner = {
 
     const list = [
       { id: 'sg_wall',    type: 'wall',    description: 'Außenwand',        area: wallArea, uValue: u.wall,   label: `${wallArea} m² · U=${u.wall.toFixed(2)}` },
-      { id: 'sg_ceiling', type: 'ceiling', description: 'Decke / Dachboden', area: ceilArea, uValue: u.roof,  label: `${ceilArea} m² · U=${u.roof.toFixed(2)}` },
+      { id: 'sg_ceiling', type: 'roof', description: 'Decke / Dachboden', area: ceilArea, uValue: u.roof,  label: `${ceilArea} m² · U=${u.roof.toFixed(2)}` },
     ];
     if (!hasDetected) {
       list.splice(1, 0, { id: 'sg_window', type: 'window', description: 'Fenster (Schätzung 15%)', area: winArea, uValue: u.window, label: `${winArea} m² · U=${u.window.toFixed(2)}` });

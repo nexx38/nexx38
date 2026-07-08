@@ -872,12 +872,110 @@ const App = {
   },
 
   // ── PDF Export ───────────────────────────────────────────
+  // Baut einen druckfertigen Bericht in #printReport und öffnet den
+  // Druckdialog. Auf iPhone/iPad: Drucken → Vorschau aufziehen → Teilen als PDF.
   exportPDF() {
     this.syncProjectFromForm();
     const room = this.getRoom(state.selectedRoomId);
     if (room) this.syncRoomFromForm(room);
-    this.renderResults();
-    setTimeout(() => window.print(), 300);
+
+    const result = HLB_CALC.calcProject(state);
+    if (!result) { this.toast('Keine Räume vorhanden — bitte zuerst Räume anlegen', 'error'); return; }
+
+    document.getElementById('printReport').innerHTML = this._buildReportHTML(result);
+    setTimeout(() => window.print(), 150);
+  },
+
+  _buildReportHTML(result) {
+    const p = state.project;
+    const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const fmtW = (w) => w >= 10000 ? (w / 1000).toFixed(1).replace('.', ',') + ' kW' : Math.round(w).toLocaleString('de') + ' W';
+    const num = (v, d = 1) => (+v).toLocaleString('de', { minimumFractionDigits: d, maximumFractionDigits: d });
+    const today = new Date().toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+
+    // Raumzeilen der Übersichtstabelle
+    const roomRows = result.rooms.map(rr => {
+      const room = this.getRoom(rr.id);
+      return `<tr>
+        <td>${esc(rr.name)}</td>
+        <td class="num">${num(rr.area)}</td>
+        <td class="num">${num(room?.height ?? 0, 2)}</td>
+        <td class="num">${room?.indoorTemp ?? ''} °C</td>
+        <td class="num">${fmtW(rr.transmission + rr.thermalBridges)}</td>
+        <td class="num">${fmtW(rr.ventilation)}</td>
+        <td class="num"><strong>${fmtW(rr.total)}</strong></td>
+        <td class="num">${Math.round(rr.specificLoad)}</td>
+      </tr>`;
+    }).join('');
+
+    // Bauteil-Details pro Raum
+    const roomDetails = result.rooms.map(rr => {
+      const room = this.getRoom(rr.id);
+      if (!room || !room.components.length) return '';
+      const compRows = rr.componentDetail.map(c => `
+        <tr>
+          <td>${esc(HLB_DATA.componentLabels[c.type] || c.type)}</td>
+          <td>${esc(c.description || '—')}</td>
+          <td class="num">${num(c.area)}</td>
+          <td class="num">${num(c.uValue, 2)}</td>
+          <td class="num">${c.type === 'internal' && c.adjacentTemp != null ? c.adjacentTemp + ' °C' : (p.outdoorTemp + ' °C')}</td>
+          <td class="num">${fmtW(c.loss)}</td>
+        </tr>`).join('');
+      return `
+        <div class="pr-room">
+          <h3>${esc(rr.name)} <span class="pr-room-load">${fmtW(rr.total)} · ${Math.round(rr.specificLoad)} W/m²</span></h3>
+          <table class="pr-table">
+            <thead><tr><th>Bauteil</th><th>Bezeichnung</th><th class="num">Fläche m²</th><th class="num">U-Wert</th><th class="num">θ angrenzend</th><th class="num">Verlust</th></tr></thead>
+            <tbody>${compRows}</tbody>
+            <tfoot>
+              <tr><td colspan="5">Transmission gesamt (inkl. ${p.thermalBridges}% Wärmebrücken)</td><td class="num">${fmtW(rr.transmission + rr.thermalBridges)}</td></tr>
+              <tr><td colspan="5">Lüftungsverlust (n = ${room.vent.airChange}/h · V = ${num(room.area * room.height)} m³)</td><td class="num">${fmtW(rr.ventilation)}</td></tr>
+              <tr class="pr-total"><td colspan="5"><strong>Heizlast ${esc(rr.name)}</strong></td><td class="num"><strong>${fmtW(rr.total)}</strong></td></tr>
+            </tfoot>
+          </table>
+        </div>`;
+    }).join('');
+
+    return `
+      <div class="pr-header">
+        <div>
+          <div class="pr-title">Heizlastberechnung</div>
+          <div class="pr-subtitle">nach DIN EN 12831 (vereinfachtes Verfahren)</div>
+        </div>
+        <div class="pr-brand">🔥 HeizlastProfi</div>
+      </div>
+
+      <table class="pr-meta">
+        <tr><td>Projekt</td><td><strong>${esc(p.name)}</strong></td><td>Datum</td><td>${today}</td></tr>
+        <tr><td>Standort</td><td>${esc(p.city)} (θₑ = ${p.outdoorTemp} °C)</td><td>Baujahr</td><td>${p.constructionYear}</td></tr>
+        <tr><td>Gebäudetyp</td><td>${p.buildingType === 'residential' ? 'Wohngebäude' : 'Nichtwohngebäude'}</td><td>Wärmebrücken-Zuschlag</td><td>${p.thermalBridges} %</td></tr>
+      </table>
+
+      <div class="pr-kpis">
+        <div class="pr-kpi pr-kpi-main"><div class="pr-kpi-val">${fmtW(result.totalLoad)}</div><div class="pr-kpi-lbl">Gesamtheizlast</div></div>
+        <div class="pr-kpi"><div class="pr-kpi-val">${fmtW(result.totalTransmission + result.totalThermalBridges)}</div><div class="pr-kpi-lbl">Transmission Φ_T</div></div>
+        <div class="pr-kpi"><div class="pr-kpi-val">${fmtW(result.totalVentilation)}</div><div class="pr-kpi-lbl">Lüftung Φ_V</div></div>
+        <div class="pr-kpi"><div class="pr-kpi-val">${result.totalArea > 0 ? Math.round(result.totalLoad / result.totalArea) : 0} W/m²</div><div class="pr-kpi-lbl">spezifisch (${num(result.totalArea)} m²)</div></div>
+      </div>
+
+      <h2>Raumübersicht</h2>
+      <table class="pr-table">
+        <thead><tr><th>Raum</th><th class="num">Fläche m²</th><th class="num">Höhe m</th><th class="num">θᵢ</th><th class="num">Φ_T</th><th class="num">Φ_V</th><th class="num">Heizlast</th><th class="num">W/m²</th></tr></thead>
+        <tbody>${roomRows}</tbody>
+        <tfoot><tr class="pr-total"><td><strong>Gesamt</strong></td><td class="num">${num(result.totalArea)}</td><td></td><td></td>
+          <td class="num">${fmtW(result.totalTransmission + result.totalThermalBridges)}</td>
+          <td class="num">${fmtW(result.totalVentilation)}</td>
+          <td class="num"><strong>${fmtW(result.totalLoad)}</strong></td>
+          <td class="num">${result.totalArea > 0 ? Math.round(result.totalLoad / result.totalArea) : 0}</td></tr></tfoot>
+      </table>
+
+      <h2>Bauteile je Raum</h2>
+      ${roomDetails || '<p class="pr-note">Keine Bauteile erfasst.</p>'}
+
+      <div class="pr-footer">
+        Berechnung nach DIN EN 12831 (vereinfachtes Verfahren) · erstellt mit HeizlastProfi am ${today} ·
+        Angaben ohne Gewähr — für GEG-Nachweise und Förderanträge ist eine normkonforme Detailberechnung erforderlich.
+      </div>`;
   },
 
   // ── Toast ────────────────────────────────────────────────

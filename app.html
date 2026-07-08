@@ -783,18 +783,60 @@ input[type=checkbox] {
 .toast.success { background: var(--success); }
 .toast.error   { background: var(--danger); }
 
-/* ── Print styles ────────────────────────────────────── */
+/* ── PDF-Bericht (#printReport) ──────────────────────── */
+#printReport { display: none; }
+
 @media print {
-  .app-header, .app-nav, .room-sidebar,
-  .header-actions, .action-bar, .btn { display: none !important; }
-  .app-main, .tab-content { overflow: visible; }
-  .tab-content { display: block !important; }
-  #tab-project, #tab-rooms { display: none !important; }
-  #tab-results { display: block !important; padding: 0; }
-  .kpi-grid { grid-template-columns: repeat(4, 1fr); }
-  .results-grid { grid-template-columns: 1fr; }
-  .card { break-inside: avoid; }
-  body { font-size: 12px; }
+  @page { size: A4; margin: 14mm 12mm; }
+
+  /* App komplett ausblenden — nur der Bericht wird gedruckt */
+  body > *:not(#printReport) { display: none !important; }
+  #printReport { display: block; }
+
+  body { background: #fff; font-size: 11px; color: #1a1a2e; }
+
+  .pr-header {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    border-bottom: 3px solid #1a3a5c; padding-bottom: 10px; margin-bottom: 14px;
+  }
+  .pr-title    { font-size: 22px; font-weight: 800; color: #1a3a5c; }
+  .pr-subtitle { font-size: 11px; color: #666; margin-top: 2px; }
+  .pr-brand    { font-size: 13px; font-weight: 700; color: #1a3a5c; }
+
+  .pr-meta { width: 100%; border-collapse: collapse; margin-bottom: 14px; font-size: 11px; }
+  .pr-meta td { padding: 3px 8px 3px 0; }
+  .pr-meta td:nth-child(odd) { color: #888; width: 16%; white-space: nowrap; }
+
+  .pr-kpis { display: flex; gap: 8px; margin-bottom: 16px; }
+  .pr-kpi {
+    flex: 1; border: 1px solid #d8dee6; border-radius: 6px;
+    padding: 8px 10px; text-align: center;
+  }
+  .pr-kpi-main { background: #1a3a5c; border-color: #1a3a5c; }
+  .pr-kpi-main .pr-kpi-val, .pr-kpi-main .pr-kpi-lbl { color: #fff; }
+  .pr-kpi-val { font-size: 16px; font-weight: 800; color: #1a3a5c; }
+  .pr-kpi-lbl { font-size: 9px; color: #777; margin-top: 2px; }
+
+  #printReport h2 { font-size: 13px; color: #1a3a5c; margin: 16px 0 6px; border-bottom: 1px solid #d8dee6; padding-bottom: 3px; }
+  #printReport h3 { font-size: 11.5px; margin: 12px 0 4px; }
+  .pr-room { break-inside: avoid; }
+  .pr-room-load { font-weight: 400; color: #666; font-size: 10px; margin-left: 8px; }
+
+  .pr-table { width: 100%; border-collapse: collapse; font-size: 10px; margin-bottom: 6px; }
+  .pr-table th {
+    text-align: left; background: #eef2f6; color: #445;
+    padding: 4px 6px; border-bottom: 1.5px solid #1a3a5c; font-weight: 700;
+  }
+  .pr-table td { padding: 3.5px 6px; border-bottom: 1px solid #e4e8ee; }
+  .pr-table .num { text-align: right; white-space: nowrap; }
+  .pr-table tfoot td { border-bottom: none; color: #555; }
+  .pr-table .pr-total td { border-top: 1.5px solid #1a3a5c; color: #1a1a2e; }
+
+  .pr-note { color: #888; font-size: 10px; }
+  .pr-footer {
+    margin-top: 20px; padding-top: 8px; border-top: 1px solid #d8dee6;
+    font-size: 8.5px; color: #999; line-height: 1.5;
+  }
 }
 
 /* ── Mobile Responsive ───────────────────────────────── */
@@ -2949,6 +2991,9 @@ input[type=checkbox] {
 
 <!-- Scripts -->
 
+<!-- ── PDF-Bericht (nur im Druck sichtbar) ─────────────── -->
+<div id="printReport"></div>
+
 <script>
 // PWA: Service Worker für Offline-Betrieb registrieren
 if ('serviceWorker' in navigator) {
@@ -4217,7 +4262,7 @@ const Scanner = {
 
     const list = [
       { id: 'sg_wall',    type: 'wall',    description: 'Außenwand',        area: wallArea, uValue: u.wall,   label: `${wallArea} m² · U=${u.wall.toFixed(2)}` },
-      { id: 'sg_ceiling', type: 'ceiling', description: 'Decke / Dachboden', area: ceilArea, uValue: u.roof,  label: `${ceilArea} m² · U=${u.roof.toFixed(2)}` },
+      { id: 'sg_ceiling', type: 'roof', description: 'Decke / Dachboden', area: ceilArea, uValue: u.roof,  label: `${ceilArea} m² · U=${u.roof.toFixed(2)}` },
     ];
     if (!hasDetected) {
       list.splice(1, 0, { id: 'sg_window', type: 'window', description: 'Fenster (Schätzung 15%)', area: winArea, uValue: u.window, label: `${winArea} m² · U=${u.window.toFixed(2)}` });
@@ -6548,12 +6593,110 @@ const App = {
   },
 
   // ── PDF Export ───────────────────────────────────────────
+  // Baut einen druckfertigen Bericht in #printReport und öffnet den
+  // Druckdialog. Auf iPhone/iPad: Drucken → Vorschau aufziehen → Teilen als PDF.
   exportPDF() {
     this.syncProjectFromForm();
     const room = this.getRoom(state.selectedRoomId);
     if (room) this.syncRoomFromForm(room);
-    this.renderResults();
-    setTimeout(() => window.print(), 300);
+
+    const result = HLB_CALC.calcProject(state);
+    if (!result) { this.toast('Keine Räume vorhanden — bitte zuerst Räume anlegen', 'error'); return; }
+
+    document.getElementById('printReport').innerHTML = this._buildReportHTML(result);
+    setTimeout(() => window.print(), 150);
+  },
+
+  _buildReportHTML(result) {
+    const p = state.project;
+    const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const fmtW = (w) => w >= 10000 ? (w / 1000).toFixed(1).replace('.', ',') + ' kW' : Math.round(w).toLocaleString('de') + ' W';
+    const num = (v, d = 1) => (+v).toLocaleString('de', { minimumFractionDigits: d, maximumFractionDigits: d });
+    const today = new Date().toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+
+    // Raumzeilen der Übersichtstabelle
+    const roomRows = result.rooms.map(rr => {
+      const room = this.getRoom(rr.id);
+      return `<tr>
+        <td>${esc(rr.name)}</td>
+        <td class="num">${num(rr.area)}</td>
+        <td class="num">${num(room?.height ?? 0, 2)}</td>
+        <td class="num">${room?.indoorTemp ?? ''} °C</td>
+        <td class="num">${fmtW(rr.transmission + rr.thermalBridges)}</td>
+        <td class="num">${fmtW(rr.ventilation)}</td>
+        <td class="num"><strong>${fmtW(rr.total)}</strong></td>
+        <td class="num">${Math.round(rr.specificLoad)}</td>
+      </tr>`;
+    }).join('');
+
+    // Bauteil-Details pro Raum
+    const roomDetails = result.rooms.map(rr => {
+      const room = this.getRoom(rr.id);
+      if (!room || !room.components.length) return '';
+      const compRows = rr.componentDetail.map(c => `
+        <tr>
+          <td>${esc(HLB_DATA.componentLabels[c.type] || c.type)}</td>
+          <td>${esc(c.description || '—')}</td>
+          <td class="num">${num(c.area)}</td>
+          <td class="num">${num(c.uValue, 2)}</td>
+          <td class="num">${c.type === 'internal' && c.adjacentTemp != null ? c.adjacentTemp + ' °C' : (p.outdoorTemp + ' °C')}</td>
+          <td class="num">${fmtW(c.loss)}</td>
+        </tr>`).join('');
+      return `
+        <div class="pr-room">
+          <h3>${esc(rr.name)} <span class="pr-room-load">${fmtW(rr.total)} · ${Math.round(rr.specificLoad)} W/m²</span></h3>
+          <table class="pr-table">
+            <thead><tr><th>Bauteil</th><th>Bezeichnung</th><th class="num">Fläche m²</th><th class="num">U-Wert</th><th class="num">θ angrenzend</th><th class="num">Verlust</th></tr></thead>
+            <tbody>${compRows}</tbody>
+            <tfoot>
+              <tr><td colspan="5">Transmission gesamt (inkl. ${p.thermalBridges}% Wärmebrücken)</td><td class="num">${fmtW(rr.transmission + rr.thermalBridges)}</td></tr>
+              <tr><td colspan="5">Lüftungsverlust (n = ${room.vent.airChange}/h · V = ${num(room.area * room.height)} m³)</td><td class="num">${fmtW(rr.ventilation)}</td></tr>
+              <tr class="pr-total"><td colspan="5"><strong>Heizlast ${esc(rr.name)}</strong></td><td class="num"><strong>${fmtW(rr.total)}</strong></td></tr>
+            </tfoot>
+          </table>
+        </div>`;
+    }).join('');
+
+    return `
+      <div class="pr-header">
+        <div>
+          <div class="pr-title">Heizlastberechnung</div>
+          <div class="pr-subtitle">nach DIN EN 12831 (vereinfachtes Verfahren)</div>
+        </div>
+        <div class="pr-brand">🔥 HeizlastProfi</div>
+      </div>
+
+      <table class="pr-meta">
+        <tr><td>Projekt</td><td><strong>${esc(p.name)}</strong></td><td>Datum</td><td>${today}</td></tr>
+        <tr><td>Standort</td><td>${esc(p.city)} (θₑ = ${p.outdoorTemp} °C)</td><td>Baujahr</td><td>${p.constructionYear}</td></tr>
+        <tr><td>Gebäudetyp</td><td>${p.buildingType === 'residential' ? 'Wohngebäude' : 'Nichtwohngebäude'}</td><td>Wärmebrücken-Zuschlag</td><td>${p.thermalBridges} %</td></tr>
+      </table>
+
+      <div class="pr-kpis">
+        <div class="pr-kpi pr-kpi-main"><div class="pr-kpi-val">${fmtW(result.totalLoad)}</div><div class="pr-kpi-lbl">Gesamtheizlast</div></div>
+        <div class="pr-kpi"><div class="pr-kpi-val">${fmtW(result.totalTransmission + result.totalThermalBridges)}</div><div class="pr-kpi-lbl">Transmission Φ_T</div></div>
+        <div class="pr-kpi"><div class="pr-kpi-val">${fmtW(result.totalVentilation)}</div><div class="pr-kpi-lbl">Lüftung Φ_V</div></div>
+        <div class="pr-kpi"><div class="pr-kpi-val">${result.totalArea > 0 ? Math.round(result.totalLoad / result.totalArea) : 0} W/m²</div><div class="pr-kpi-lbl">spezifisch (${num(result.totalArea)} m²)</div></div>
+      </div>
+
+      <h2>Raumübersicht</h2>
+      <table class="pr-table">
+        <thead><tr><th>Raum</th><th class="num">Fläche m²</th><th class="num">Höhe m</th><th class="num">θᵢ</th><th class="num">Φ_T</th><th class="num">Φ_V</th><th class="num">Heizlast</th><th class="num">W/m²</th></tr></thead>
+        <tbody>${roomRows}</tbody>
+        <tfoot><tr class="pr-total"><td><strong>Gesamt</strong></td><td class="num">${num(result.totalArea)}</td><td></td><td></td>
+          <td class="num">${fmtW(result.totalTransmission + result.totalThermalBridges)}</td>
+          <td class="num">${fmtW(result.totalVentilation)}</td>
+          <td class="num"><strong>${fmtW(result.totalLoad)}</strong></td>
+          <td class="num">${result.totalArea > 0 ? Math.round(result.totalLoad / result.totalArea) : 0}</td></tr></tfoot>
+      </table>
+
+      <h2>Bauteile je Raum</h2>
+      ${roomDetails || '<p class="pr-note">Keine Bauteile erfasst.</p>'}
+
+      <div class="pr-footer">
+        Berechnung nach DIN EN 12831 (vereinfachtes Verfahren) · erstellt mit HeizlastProfi am ${today} ·
+        Angaben ohne Gewähr — für GEG-Nachweise und Förderanträge ist eine normkonforme Detailberechnung erforderlich.
+      </div>`;
   },
 
   // ── Toast ────────────────────────────────────────────────

@@ -30,6 +30,7 @@ const Scanner = {
     this.s.suggested = [];
     this.s.pcPoints = null;
     this.s.pcBounds = null;
+    this.s.roomPlanWallArea = 0;
     document.getElementById('scannerOverlay').classList.add('active');
 
     // iPad mit Desktop-UA meldet sich als MacIntel mit Touchscreen
@@ -287,9 +288,10 @@ const Scanner = {
     const w = parseFloat(document.getElementById('camWidth')?.value)  || 0;
     const d = parseFloat(document.getElementById('camDepth')?.value)  || 0;
     const h = parseFloat(document.getElementById('camHeight')?.value) || 2.5;
-    // Öffnungen stammen immer aus einem PLY-Scan — für manuell gemessene Räume zurücksetzen
+    // Öffnungen/Wandflächen stammen aus einem Scan — für manuell gemessene Räume zurücksetzen
     this.s.detectedOpenings = [];
     this.s.detectedOpeningsNote = null;
+    this.s.roomPlanWallArea = 0;
     this.s.result = {
       width:  w,
       depth:  d,
@@ -396,11 +398,17 @@ const Scanner = {
     dropZone.style.display = 'none';
 
     try {
+      // RoomPlan-Export der nativen HeizlastScan-App: fertige Wände/Fenster/Türen
+      if (name.endsWith('.json')) {
+        await this._loadRoomPlanJSON(file, progressEl);
+        return;
+      }
+
       let points;
       if (name.endsWith('.ply'))      points = await this._parsePLY(file, progressEl);
       else if (name.endsWith('.xyz')) points = await this._parseXYZ(file, progressEl);
       else if (name.endsWith('.obj')) points = await this._parseOBJ(file, progressEl);
-      else throw new Error('Format nicht unterstützt. Bitte PLY, XYZ oder OBJ.');
+      else throw new Error('Format nicht unterstützt. Bitte PLY, XYZ, OBJ oder JSON (HeizlastScan).');
 
       // Scaniverse exportiert mit wechselnder "Oben"-Achse → so drehen, dass Y immer oben ist
       points = this._orientUp(points);
@@ -428,6 +436,62 @@ const Scanner = {
       dropZone.style.display = 'flex';
       alert('Fehler: ' + err.message);
     }
+  },
+
+  // Import a RoomPlan export from the native HeizlastScan iOS app.
+  // Walls/windows/doors are already recognised objects → build the confirm
+  // screen directly, no point-cloud statistics needed.
+  async _loadRoomPlanJSON(file, progEl) {
+    this._setProgress(progEl, 40);
+    let data;
+    try {
+      data = JSON.parse(await file.text());
+    } catch {
+      throw new Error('JSON konnte nicht gelesen werden.');
+    }
+    if (data.app !== 'HeizlastScan' || !data.floorArea) {
+      throw new Error('Keine gültige HeizlastScan-Datei.');
+    }
+    this._setProgress(progEl, 90);
+
+    const area   = +(+data.floorArea).toFixed(2);
+    const height = +(+data.height || 2.5).toFixed(2);
+    // Derive width/depth from area assuming a roughly square room, so the
+    // confirm inputs are pre-filled sensibly; the area itself is authoritative.
+    const side = Math.sqrt(area);
+
+    this.s.pcPoints = null;
+    this.s.pcBounds = null;
+    this.s.result = { width: +side.toFixed(2), depth: +side.toFixed(2), height, area };
+
+    // Real recognised openings become detected openings (windows + doors)
+    const toOpening = (o, type) => ({
+      wall: 'Scan',
+      type,
+      width: +(+o.width).toFixed(2),
+      height: +(+o.height).toFixed(2),
+      area: +((+o.width) * (+o.height)).toFixed(2),
+      sillHeight: 0,
+      uDefault: type === 'window'
+        ? HLB_DATA.uDefaultsByYear(window.state?.project?.constructionYear).window
+        : HLB_DATA.uDefaultsByYear(window.state?.project?.constructionYear).door,
+    });
+    const windows = (data.windows || []).map(o => toOpening(o, 'window'));
+    const doors   = (data.doors   || []).map(o => toOpening(o, 'door'));
+    this.s.detectedOpenings = [...doors, ...windows];
+    this.s.detectedOpeningsNote = null;
+
+    // Total exterior wall area from recognised walls (net of openings RoomPlan
+    // already cut out), stored so the suggested Außenwand uses the real value.
+    this.s.roomPlanWallArea = (data.walls || [])
+      .reduce((s, w) => s + (+w.width) * (+w.height), 0);
+
+    if (data.name) this.s.result.name = data.name;
+
+    this._setProgress(progEl, 100);
+    progEl.classList.remove('active');
+    App.toast?.(`RoomPlan-Scan geladen: ${area.toFixed(1)} m² · ${windows.length} Fenster · ${doors.length} Türen`, 'success');
+    this._showConfirm();
   },
 
   _boundsPlausible(b) {
@@ -1035,8 +1099,11 @@ const Scanner = {
 
     // Window estimate: 15% of floor area — only when the scan found no real openings
     const winArea = hasDetected ? 0 : +(area * 0.15).toFixed(1);
-    // Two exterior walls minus openings (detected or estimated)
-    const wallArea = +Math.max(1, (w + d) * h - (hasDetected ? detectedWinArea : winArea)).toFixed(1);
+    // Wall area: RoomPlan gives the real recognised total (net of openings);
+    // otherwise estimate two exterior walls minus openings.
+    const wallArea = this.s.roomPlanWallArea > 0
+      ? +this.s.roomPlanWallArea.toFixed(1)
+      : +Math.max(1, (w + d) * h - (hasDetected ? detectedWinArea : winArea)).toFixed(1);
     const ceilArea = +area.toFixed(1);
 
     const list = [

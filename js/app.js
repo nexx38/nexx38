@@ -22,6 +22,12 @@ const state = {
   _editingCompId: null,
 };
 
+// Expose on window so other modules (scanner.js) can read the live project
+// state. `const state` is a lexical binding, NOT a window property, so
+// `window.state` would otherwise be undefined and scanner U-value lookups
+// would silently fall back to their default construction year.
+window.state = state;
+
 let _idCounter = 1;
 let _roomCounter = 0;
 const newId = () => 'id_' + (_idCounter++);

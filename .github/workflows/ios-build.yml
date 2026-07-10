@@ -1,0 +1,60 @@
+name: Build HeizlastScan IPA (unsigned)
+
+# Baut eine unsignierte IPA für Sideloadly.
+# Manuell auslösbar (Actions-Tab → "Run workflow") oder bei Änderungen unter ios/.
+on:
+  workflow_dispatch:
+  push:
+    branches: ["claude/heating-report-camera-layout-02mu7l", "main"]
+    paths: ["ios/**", ".github/workflows/ios-build.yml"]
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode 15
+        run: sudo xcode-select -s /Applications/Xcode_15.4.app
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        working-directory: ios
+        run: xcodegen generate
+
+      - name: Build unsigned archive
+        working-directory: ios
+        run: |
+          xcodebuild \
+            -project HeizlastScan.xcodeproj \
+            -scheme HeizlastScan \
+            -configuration Release \
+            -sdk iphoneos \
+            -archivePath "$PWD/build/HeizlastScan.xcarchive" \
+            archive \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            DEVELOPMENT_TEAM=""
+
+      - name: Package unsigned IPA
+        working-directory: ios
+        run: |
+          cd build/HeizlastScan.xcarchive/Products/Applications
+          mkdir Payload
+          mv HeizlastScan.app Payload/
+          zip -r HeizlastScan.ipa Payload >/dev/null
+          mkdir -p "$GITHUB_WORKSPACE/ios/artifacts"
+          mv HeizlastScan.ipa "$GITHUB_WORKSPACE/ios/artifacts/"
+          echo "IPA gebaut:"
+          ls -lh "$GITHUB_WORKSPACE/ios/artifacts/"
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: HeizlastScan-unsigned-ipa
+          path: ios/artifacts/HeizlastScan.ipa
+          retention-days: 30

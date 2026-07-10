@@ -1012,12 +1012,7 @@ const Scanner = {
   },
 
   _uDefaults(year) {
-    if (year <= 1968) return { wall: 1.75, window: 2.80, roof: 2.00 };
-    if (year <= 1978) return { wall: 1.40, window: 2.80, roof: 1.50 };
-    if (year <= 1984) return { wall: 0.90, window: 2.50, roof: 0.80 };
-    if (year <= 1995) return { wall: 0.60, window: 1.80, roof: 0.50 };
-    if (year <= 2002) return { wall: 0.45, window: 1.40, roof: 0.35 };
-    return { wall: 0.28, window: 1.10, roof: 0.20 };
+    return HLB_DATA.uDefaultsByYear(year);
   },
 
   // Compute suggested components from current confirm-input dimensions.
@@ -1197,10 +1192,8 @@ const Scanner = {
     if (roomH < 1.5) return []; // bad scan
 
     const year = parseInt(window.state?.project?.constructionYear) || 2000;
-    const getUDefault = (type) => {
-      if (type === 'window') return year < 1975 ? 2.80 : year < 1995 ? 1.80 : year < 2010 ? 1.10 : 0.70;
-      return year < 1990 ? 3.00 : year < 2010 ? 1.80 : 0.90;
-    };
+    const uDef = HLB_DATA.uDefaultsByYear(year);
+    const getUDefault = (type) => (type === 'window' ? uDef.window : uDef.door);
 
     const wallDefs = [
       { name: 'Nordwand', ai: 2, fv: bounds.minZ, ui: 0, uMin: bounds.minX, uMax: bounds.maxX },

@@ -734,6 +734,33 @@ input[type=checkbox] {
 .modal-close:hover { background: var(--border); }
 
 .modal-body { padding: 20px; overflow-y: auto; }
+
+/* ── Gebäude-Vorlagen ────────────────────────────────── */
+.template-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+}
+.template-card {
+  background: var(--surface);
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  padding: 16px 12px;
+  cursor: pointer;
+  text-align: center;
+  transition: border-color .15s, transform .1s, box-shadow .15s;
+  font-family: inherit;
+}
+.template-card:hover {
+  border-color: var(--primary);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 14px rgba(0, 87, 184, .12);
+}
+.template-icon  { font-size: 2rem; margin-bottom: 6px; }
+.template-label { font-weight: 700; font-size: .92rem; }
+.template-sub   { font-size: .78rem; color: var(--text-muted); margin-top: 2px; }
+.template-meta  { font-size: .74rem; color: var(--primary); font-weight: 600; margin-top: 8px; }
+
 .modal-footer {
   padding: 14px 20px;
   border-top: 1px solid var(--border);

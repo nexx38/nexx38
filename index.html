@@ -218,7 +218,10 @@
       <div class="room-sidebar">
         <div class="room-sidebar-header">
           <h2>Räume</h2>
-          <button class="btn btn-primary btn-sm" onclick="App.addRoom()">+ Raum</button>
+          <div style="display:flex;gap:6px;">
+            <button class="btn btn-outline btn-sm" onclick="App.openTemplateModal()" title="Ganzes Gebäude aus Vorlage anlegen">🏠 Vorlage</button>
+            <button class="btn btn-primary btn-sm" onclick="App.addRoom()">+ Raum</button>
+          </div>
         </div>
         <div id="roomList" class="room-list"></div>
         <div class="room-sidebar-footer">
@@ -237,7 +240,10 @@
             <polyline points="9 22 9 12 15 12 15 22"/>
           </svg>
           <p>Wähle einen Raum oder lege einen neuen an.</p>
-          <button class="btn btn-primary" onclick="App.addRoom()">+ Ersten Raum anlegen</button>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;">
+            <button class="btn btn-outline" onclick="App.openTemplateModal()">🏠 Aus Vorlage anlegen</button>
+            <button class="btn btn-primary" onclick="App.addRoom()">+ Ersten Raum anlegen</button>
+          </div>
         </div>
         <div id="roomDetailContent" style="display:none;"></div>
       </div>
@@ -575,6 +581,24 @@
   </div>
 
 </main>
+
+<!-- ── Modal: Gebäude-Vorlage ─────────────────────────── -->
+<div class="modal-overlay" id="templateModal" style="display:none;" onclick="if(event.target===this)App.closeTemplateModal()">
+  <div class="modal" style="max-width:560px;">
+    <div class="modal-header">
+      <h3>🏠 Gebäude aus Vorlage anlegen</h3>
+      <button class="modal-close" onclick="App.closeTemplateModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:.85rem;color:var(--text-muted);margin-bottom:4px;">
+        Alle Räume inkl. Außenwände, Fenster, Decken und Böden werden automatisch angelegt —
+        danach einfach Flächen anpassen.
+      </p>
+      <p id="templateYearInfo" style="font-size:.8rem;color:var(--primary);font-weight:600;margin-bottom:14px;"></p>
+      <div id="templateGrid" class="template-grid"></div>
+    </div>
+  </div>
+</div>
 
 <!-- ── Modal: Bauteil hinzufügen / bearbeiten ─────────── -->
 <div class="modal-overlay" id="componentModal" style="display:none;" onclick="if(event.target===this)App.closeModal()">

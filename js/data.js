@@ -91,6 +91,101 @@ const HLB_DATA = {
     ],
   },
 
+  // Canonical U-value defaults by construction year [W/(m²K)].
+  // Single source of truth — used by scan suggestions, building templates
+  // and the component dialog. DIN 4108 / Baualtersklassen reference values.
+  uDefaultsByYear(year) {
+    const y = parseInt(year) || 1975;
+    if (y <= 1968) return { wall: 1.75, window: 2.80, roof: 2.00, floor: 1.20, door: 3.50 };
+    if (y <= 1978) return { wall: 1.40, window: 2.80, roof: 1.50, floor: 1.00, door: 3.00 };
+    if (y <= 1984) return { wall: 0.90, window: 2.50, roof: 0.80, floor: 0.80, door: 2.50 };
+    if (y <= 1995) return { wall: 0.60, window: 1.80, roof: 0.50, floor: 0.60, door: 1.80 };
+    if (y <= 2002) return { wall: 0.45, window: 1.40, roof: 0.35, floor: 0.50, door: 1.60 };
+    if (y <= 2015) return { wall: 0.28, window: 1.10, roof: 0.20, floor: 0.35, door: 1.20 };
+    return { wall: 0.20, window: 0.90, roof: 0.15, floor: 0.25, door: 0.90 };
+  },
+
+  // ── Gebäude-Vorlagen ─────────────────────────────────────
+  // Typical German room programs. Per room:
+  //   type/area/height  → room data (temp & airChange come from roomTypes)
+  //   ext               → number of exterior wall sides (corner room = 2)
+  //   winShare          → window area as fraction of floor area
+  //   roof              → ceiling to unheated attic / roof above
+  //   floor             → floor to unheated cellar (adjacentTemp 10°C)
+  // Wall length is approximated from the floor area (square room assumption).
+  buildingTemplates: [
+    {
+      id: 'efh_klein', icon: '🏠', label: 'EFH klein', sub: '~100 m² · 2 Etagen',
+      height: 2.50,
+      rooms: [
+        { name: 'Wohnzimmer EG',   type: 'living',  area: 28, ext: 2, winShare: 0.20, floor: true },
+        { name: 'Küche EG',        type: 'kitchen', area: 12, ext: 1, winShare: 0.12, floor: true },
+        { name: 'Flur EG',         type: 'hallway', area: 8,  ext: 1, winShare: 0.04, floor: true },
+        { name: 'WC EG',           type: 'toilet',  area: 3,  ext: 1, winShare: 0.06, floor: true },
+        { name: 'Schlafzimmer OG', type: 'bedroom', area: 16, ext: 2, winShare: 0.12, roof: true },
+        { name: 'Kinderzimmer OG', type: 'kids',    area: 14, ext: 2, winShare: 0.12, roof: true },
+        { name: 'Bad OG',          type: 'bath',    area: 8,  ext: 1, winShare: 0.08, roof: true },
+        { name: 'Flur OG',         type: 'hallway', area: 6,  ext: 0, winShare: 0,    roof: true },
+      ],
+    },
+    {
+      id: 'efh_gross', icon: '🏡', label: 'EFH groß', sub: '~150 m² · 2 Etagen',
+      height: 2.60,
+      rooms: [
+        { name: 'Wohnzimmer EG',    type: 'living',  area: 35, ext: 2, winShare: 0.22, floor: true },
+        { name: 'Esszimmer EG',     type: 'dining',  area: 14, ext: 1, winShare: 0.15, floor: true },
+        { name: 'Küche EG',         type: 'kitchen', area: 14, ext: 1, winShare: 0.12, floor: true },
+        { name: 'Flur EG',          type: 'hallway', area: 10, ext: 1, winShare: 0.04, floor: true },
+        { name: 'WC EG',            type: 'toilet',  area: 4,  ext: 1, winShare: 0.06, floor: true },
+        { name: 'HWR EG',           type: 'utility', area: 8,  ext: 1, winShare: 0.05, floor: true },
+        { name: 'Schlafzimmer OG',  type: 'bedroom', area: 18, ext: 2, winShare: 0.12, roof: true },
+        { name: 'Kinderzimmer 1 OG',type: 'kids',    area: 14, ext: 2, winShare: 0.12, roof: true },
+        { name: 'Kinderzimmer 2 OG',type: 'kids',    area: 14, ext: 1, winShare: 0.12, roof: true },
+        { name: 'Bad OG',           type: 'bath',    area: 10, ext: 1, winShare: 0.08, roof: true },
+        { name: 'Flur OG',          type: 'hallway', area: 8,  ext: 0, winShare: 0,    roof: true },
+      ],
+    },
+    {
+      id: 'dhh', icon: '🏘️', label: 'Doppelhaushälfte', sub: '~120 m² · 2 Etagen',
+      height: 2.50,
+      rooms: [
+        { name: 'Wohnzimmer EG',   type: 'living',  area: 30, ext: 2, winShare: 0.20, floor: true },
+        { name: 'Küche EG',        type: 'kitchen', area: 12, ext: 1, winShare: 0.12, floor: true },
+        { name: 'Flur EG',         type: 'hallway', area: 8,  ext: 1, winShare: 0.04, floor: true },
+        { name: 'WC EG',           type: 'toilet',  area: 3,  ext: 1, winShare: 0.06, floor: true },
+        { name: 'Schlafzimmer OG', type: 'bedroom', area: 16, ext: 2, winShare: 0.12, roof: true },
+        { name: 'Kinderzimmer 1 OG', type: 'kids',  area: 14, ext: 1, winShare: 0.12, roof: true },
+        { name: 'Kinderzimmer 2 OG', type: 'kids',  area: 12, ext: 1, winShare: 0.12, roof: true },
+        { name: 'Bad OG',          type: 'bath',    area: 8,  ext: 1, winShare: 0.08, roof: true },
+      ],
+    },
+    {
+      id: 'bungalow', icon: '🛖', label: 'Bungalow', sub: '~110 m² · 1 Etage',
+      height: 2.50,
+      rooms: [
+        { name: 'Wohnzimmer',  type: 'living',  area: 35, ext: 2, winShare: 0.22, roof: true, floor: true },
+        { name: 'Küche',       type: 'kitchen', area: 14, ext: 1, winShare: 0.12, roof: true, floor: true },
+        { name: 'Schlafzimmer',type: 'bedroom', area: 16, ext: 2, winShare: 0.12, roof: true, floor: true },
+        { name: 'Kinderzimmer',type: 'kids',    area: 14, ext: 2, winShare: 0.12, roof: true, floor: true },
+        { name: 'Bad',         type: 'bath',    area: 10, ext: 1, winShare: 0.08, roof: true, floor: true },
+        { name: 'Flur',        type: 'hallway', area: 12, ext: 0, winShare: 0,    roof: true, floor: true },
+        { name: 'WC',          type: 'toilet',  area: 3,  ext: 1, winShare: 0.06, roof: true, floor: true },
+      ],
+    },
+    {
+      id: 'wohnung', icon: '🏢', label: 'Etagenwohnung', sub: '~80 m² · beheizte Nachbarn',
+      height: 2.50,
+      rooms: [
+        { name: 'Wohnzimmer',  type: 'living',  area: 26, ext: 2, winShare: 0.20 },
+        { name: 'Schlafzimmer',type: 'bedroom', area: 15, ext: 1, winShare: 0.12 },
+        { name: 'Kinderzimmer',type: 'kids',    area: 12, ext: 1, winShare: 0.12 },
+        { name: 'Küche',       type: 'kitchen', area: 10, ext: 1, winShare: 0.12 },
+        { name: 'Bad',         type: 'bath',    area: 7,  ext: 0, winShare: 0 },
+        { name: 'Flur',        type: 'hallway', area: 8,  ext: 0, winShare: 0 },
+      ],
+    },
+  ],
+
   componentLabels: {
     wall: 'Außenwand',
     window: 'Fenster',

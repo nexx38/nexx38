@@ -51,11 +51,11 @@ const App = {
     });
   },
 
+  // Persist only — form values are already synced into state by the field
+  // handlers (onRoomFormChange / syncProjectFromForm). Reading the form here
+  // would corrupt a freshly selected room with the previous room's values.
   _autoSave() {
     try {
-      this.syncProjectFromForm();
-      const room = this.getRoom(state.selectedRoomId);
-      if (room) this.syncRoomFromForm(room);
       localStorage.setItem('hlb_autosave', JSON.stringify({
         project: state.project,
         rooms: state.rooms,
@@ -183,6 +183,86 @@ const App = {
     this.switchTab('rooms');
   },
 
+  // ── Gebäude-Vorlagen ─────────────────────────────────────
+  openTemplateModal() {
+    const year = parseInt(state.project.constructionYear) || 2000;
+    const grid = document.getElementById('templateGrid');
+    if (grid) {
+      grid.innerHTML = HLB_DATA.buildingTemplates.map(t => {
+        const totalArea = t.rooms.reduce((s, r) => s + r.area, 0);
+        return `
+          <button class="template-card" onclick="App.applyTemplate('${t.id}')">
+            <div class="template-icon">${t.icon}</div>
+            <div class="template-label">${t.label}</div>
+            <div class="template-sub">${t.sub}</div>
+            <div class="template-meta">${t.rooms.length} Räume · ${totalArea} m²</div>
+          </button>`;
+      }).join('');
+    }
+    const info = document.getElementById('templateYearInfo');
+    if (info) info.textContent = `U-Werte automatisch für Baujahr ${year} (im Projekt änderbar)`;
+    document.getElementById('templateModal').style.display = 'flex';
+  },
+
+  closeTemplateModal() {
+    document.getElementById('templateModal').style.display = 'none';
+  },
+
+  applyTemplate(templateId) {
+    const tpl = HLB_DATA.buildingTemplates.find(t => t.id === templateId);
+    if (!tpl) return;
+    const year = parseInt(state.project.constructionYear) || 2000;
+    const u = HLB_DATA.uDefaultsByYear(year);
+
+    const created = tpl.rooms.map(tr => {
+      const defaults = HLB_DATA.roomTypes[tr.type] || HLB_DATA.roomTypes.other;
+      _roomCounter++;
+
+      // Wall length approximated from floor area (square room), one side per ext wall
+      const side    = Math.sqrt(tr.area);
+      const winArea = +(tr.area * (tr.winShare || 0)).toFixed(1);
+      const wallArea = +Math.max(0, (tr.ext || 0) * side * tpl.height - winArea).toFixed(1);
+
+      const components = [];
+      if (wallArea > 0) components.push({
+        id: newId(), type: 'wall', description: 'Außenwand',
+        area: wallArea, uValue: u.wall, adjacentTemp: null,
+      });
+      if (winArea > 0) components.push({
+        id: newId(), type: 'window', description: 'Fenster',
+        area: winArea, uValue: u.window, adjacentTemp: null,
+      });
+      if (tr.roof) components.push({
+        id: newId(), type: 'roof', description: 'Decke / Dach',
+        area: tr.area, uValue: u.roof, adjacentTemp: null,
+      });
+      if (tr.floor) components.push({
+        id: newId(), type: 'floor', description: 'Boden geg. Keller (10°C)',
+        area: tr.area, uValue: u.floor, adjacentTemp: 10,
+      });
+
+      return {
+        id: newId(),
+        name: tr.name,
+        type: tr.type,
+        area: tr.area,
+        height: tpl.height,
+        indoorTemp: defaults.temp,
+        components,
+        vent: { airChange: defaults.airChange, hasHeatRecovery: false, recoveryEff: 80 },
+      };
+    });
+
+    state.rooms.push(...created);
+    state.selectedRoomId = created[0].id;
+    this.closeTemplateModal();
+    this._autoSave();
+    this.render();
+    this.renderRoomDetail();
+    this.switchTab('rooms');
+    this.toast(`${tpl.label}: ${created.length} Räume mit Bauteilen angelegt (Baujahr ${year})`, 'success');
+  },
+
   deleteRoom(id) {
     const name = state.rooms.find(r => r.id === id)?.name || 'Raum';
     state.rooms = state.rooms.filter(r => r.id !== id);
@@ -251,13 +331,9 @@ const App = {
     document.getElementById('compType').value = 'wall';
     document.getElementById('compDescription').value = '';
     document.getElementById('compArea').value = '10';
-    // Pre-select U-value based on construction year
+    // Pre-select U-value based on construction year (wall as dialog default type)
     const year = parseInt(state.project.constructionYear) || 2000;
-    const defaultU = year < 1960 ? 2.10
-                   : year < 1980 ? 1.60
-                   : year < 1995 ? 1.20
-                   : year < 2009 ? 0.80
-                   : 0.30;
+    const defaultU = HLB_DATA.uDefaultsByYear(year).wall;
     document.getElementById('compUValue').value = defaultU.toFixed(2);
     this.onCompTypeChange();
     // Auto-select matching preset
@@ -418,7 +494,7 @@ const App = {
       ? room.components.map((c, idx) => {
           const loss = rr ? (rr.componentDetail[idx]?.loss ?? 0) : 0;
           const barW = Math.round(loss / maxLoss * 100);
-          const adjInfo = c.type === 'internal' ? ` · θ_adj = ${c.adjacentTemp}°C` : '';
+          const adjInfo = c.adjacentTemp != null ? ` · θ_adj = ${c.adjacentTemp}°C` : '';
           return `
             <tr>
               <td><span class="comp-type-badge ${c.type}">${HLB_DATA.componentLabels[c.type]}</span></td>

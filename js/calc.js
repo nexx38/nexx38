@@ -1,8 +1,10 @@
 const HLB_CALC = {
   // Transmission heat loss for one component [W]
-  // ΦT = A × U × Δθ (with temperature correction for internal boundaries)
+  // ΦT = A × U × Δθ. Any component may set adjacentTemp for a boundary that
+  // is not outdoor air (unbeheizter Keller ~10°C, Nachbarraum etc.);
+  // without adjacentTemp the full indoor–outdoor difference applies.
   calcComponent(comp, indoorTemp, outdoorTemp) {
-    const dt = comp.type === 'internal' && comp.adjacentTemp != null
+    const dt = comp.adjacentTemp != null
       ? indoorTemp - comp.adjacentTemp
       : indoorTemp - outdoorTemp;
     return Math.max(0, comp.area * comp.uValue * dt);

@@ -1067,7 +1067,7 @@ const App = {
           <td>${esc(c.description || '—')}</td>
           <td class="num">${num(c.area)}</td>
           <td class="num">${num(c.uValue, 2)}</td>
-          <td class="num">${c.type === 'internal' && c.adjacentTemp != null ? c.adjacentTemp + ' °C' : (p.outdoorTemp + ' °C')}</td>
+          <td class="num">${c.adjacentTemp != null ? c.adjacentTemp + ' °C' : (p.outdoorTemp + ' °C')}</td>
           <td class="num">${fmtW(c.loss)}</td>
         </tr>`).join('');
       return `
@@ -1085,14 +1085,37 @@ const App = {
         </div>`;
     }).join('');
 
+    // Ersteller (SHK-Betrieb) und Objekt/Auftraggeber aus dem Angebots-Modul,
+    // damit die Daten nur einmal eingegeben werden müssen.
+    const co = (typeof QuoteModule !== 'undefined' ? QuoteModule.state.company : {}) || {};
+    const cu = (typeof QuoteModule !== 'undefined' ? QuoteModule.state.customer : {}) || {};
+    const anyCo = co.name || co.street || co.city;
+    const anyCu = cu.name || cu.street || cu.city;
+
+    const partiesBlock = `
+      <div class="pr-parties">
+        <div class="pr-party">
+          <div class="pr-party-label">Ersteller</div>
+          ${anyCo ? `<strong>${esc(co.name)}</strong><br>${esc(co.street)}<br>${esc(co.city)}${co.phone ? '<br>' + esc(co.phone) : ''}${co.email ? '<br>' + esc(co.email) : ''}`
+                  : '<span class="pr-empty">— im Angebot-Tab hinterlegen —</span>'}
+        </div>
+        <div class="pr-party">
+          <div class="pr-party-label">Objekt / Auftraggeber</div>
+          ${anyCu ? `<strong>${esc(cu.name)}</strong><br>${esc(cu.street)}<br>${esc(cu.city)}`
+                  : '<span class="pr-empty">— im Angebot-Tab hinterlegen —</span>'}
+        </div>
+      </div>`;
+
     return `
       <div class="pr-header">
         <div>
           <div class="pr-title">Heizlastberechnung</div>
-          <div class="pr-subtitle">nach DIN EN 12831 (vereinfachtes Verfahren)</div>
+          <div class="pr-subtitle">Nachweis nach DIN EN 12831-1 · Grundlage für BEG/KfW-Heizungsförderung (z. B. KfW 458)</div>
         </div>
         <div class="pr-brand">🔥 HeizlastProfi</div>
       </div>
+
+      ${partiesBlock}
 
       <table class="pr-meta">
         <tr><td>Projekt</td><td><strong>${esc(p.name)}</strong></td><td>Datum</td><td>${today}</td></tr>
@@ -1121,9 +1144,32 @@ const App = {
       <h2>Bauteile je Raum</h2>
       ${roomDetails || '<p class="pr-note">Keine Bauteile erfasst.</p>'}
 
+      <h2>Berechnungsgrundlagen</h2>
+      <table class="pr-basis">
+        <tr><td>Norm</td><td>DIN EN 12831-1 (Heizungsanlagen in Gebäuden — Verfahren zur Berechnung der Norm-Heizlast)</td></tr>
+        <tr><td>Norm-Außentemperatur</td><td>θₑ = ${p.outdoorTemp} °C (Standort ${esc(p.city)}, Klimazone nach DIN EN 12831 Beiblatt)</td></tr>
+        <tr><td>Norm-Innentemperaturen</td><td>raumweise nach Nutzung (Wohnräume 20 °C, Bad 24 °C, Schlafräume 18 °C u. a.)</td></tr>
+        <tr><td>Transmission Φ_T</td><td>Φ_T = Σ (A · U · Δθ), Wärmebrücken-Zuschlag pauschal ${p.thermalBridges} %</td></tr>
+        <tr><td>Lüftung Φ_V</td><td>Φ_V = 0,34 · n · V · Δθ (n = Luftwechselrate je Raum)</td></tr>
+        <tr><td>Verfahren</td><td>Vereinfachtes Verfahren (raumweise Norm-Heizlast, ohne Aufheizleistung)</td></tr>
+      </table>
+
+      <div class="pr-signature">
+        <div class="pr-sign-line">
+          <div class="pr-sign-rule"></div>
+          <div class="pr-sign-lbl">Ort, Datum</div>
+        </div>
+        <div class="pr-sign-line">
+          <div class="pr-sign-rule"></div>
+          <div class="pr-sign-lbl">Unterschrift / Stempel Ersteller</div>
+        </div>
+      </div>
+
       <div class="pr-footer">
-        Berechnung nach DIN EN 12831 (vereinfachtes Verfahren) · erstellt mit HeizlastProfi am ${today} ·
-        Angaben ohne Gewähr — für GEG-Nachweise und Förderanträge ist eine normkonforme Detailberechnung erforderlich.
+        Norm-Heizlast nach DIN EN 12831-1 (vereinfachtes Verfahren) · erstellt mit HeizlastProfi am ${today}.
+        Diese Berechnung dient als Heizlastnachweis für BEG/KfW-Förderanträge (z. B. KfW 458).
+        Die förmliche „Bestätigung zum Antrag" (BzA) ist durch eine·n eingetragene·n Energieeffizienz-Expert·in (dena-Liste) auszustellen.
+        Angaben ohne Gewähr.
       </div>`;
   },
 

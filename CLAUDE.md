@@ -60,3 +60,30 @@ n8n Tools (via MCP):
 ## Scaniverse-Export (für Kunden/Monteure)
 1. Scaniverse App → Scan öffnen → Export → **PLY (Mesh)**
 2. In Downloads speichern → in HeizlastProfi unter "LiDAR-Scan" hochladen
+
+## Geplant: Native iOS-App mit RoomPlan (statt Scaniverse-Umweg)
+Ziel: Wände/Türen/Fenster direkt per LiDAR erkennen (cm-genau, wie autarc.energy),
+ohne Umweg über Scaniverse + PLY-Import. Grund: **Safari/WebXR gibt LiDAR-Tiefendaten
+auf iOS nicht frei** — das geht nur über eine native App, nicht im Browser.
+
+Recherche-Ergebnis (Juli 2026):
+- App wird mit Swift + Apples **RoomPlan**-Framework gebaut → liefert Wände/Türen/
+  Fenster als fertiges parametrisches Modell (kein Punktwolken-Gefummel wie bei PLY)
+- **Kein Apple Developer Account nötig zum Start:** GitHub Actions (macOS-Runner,
+  kostenlos) baut eine **unsignierte IPA** (`CODE_SIGNING_ALLOWED=NO`)
+- Installation aufs iPhone via **Sideloadly** (Windows/Mac) + normale kostenlose
+  Apple-ID → App läuft 7 Tage, Sideloadly kann automatisch neu signieren solange
+  der PC im selben WLAN läuft
+- Upgrade-Pfad später: Apple Developer Account (99 €/Jahr) → 1 Jahr Gültigkeit
+  oder TestFlight, kein Neu-Signieren mehr nötig
+- Der alte Mac 2014 wird **nicht gebraucht** — Build läuft komplett in der Cloud
+
+Workflow (Zielbild):
+1. Neue App "HeizlastScan" scannt Raum mit RoomPlan → Export als JSON
+   (Wände, Türen, Fenster mit Position/Maßen)
+2. JSON-Import in HeizlastProfi (neuer Importpfad neben PLY) → Räume + Bauteile
+   automatisch mit echten erkannten Objekten statt Schätzung angelegt
+3. Alter PLY-Weg (Scaniverse) bleibt als Fallback für Android/ältere Geräte
+
+Noch offen: Swift-App-Code schreiben, GitHub-Actions-Workflow für unsigned IPA
+Build, JSON-Schnittstelle zwischen RoomPlan-Export und HeizlastProfi definieren.

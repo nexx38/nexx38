@@ -17,6 +17,7 @@ const state = {
     heatingSystem:   'radiator',
   },
   rooms: [],
+  circuits: [],           // [{ id, name, type: 'radiator'|'underfloor' }]
   selectedRoomId: null,
   _editingCompId: null,
 };
@@ -59,6 +60,7 @@ const App = {
       localStorage.setItem('hlb_autosave', JSON.stringify({
         project: state.project,
         rooms: state.rooms,
+        circuits: state.circuits,
         selectedRoomId: state.selectedRoomId,
       }));
     } catch(e) {}
@@ -71,6 +73,7 @@ const App = {
       const saved = JSON.parse(raw);
       Object.assign(state.project, saved.project || {});
       state.rooms = saved.rooms || [];
+      state.circuits = saved.circuits || [];
       state.selectedRoomId = saved.selectedRoomId || null;
       _idCounter = state.rooms.reduce((m, r) => Math.max(m, parseInt(r.id.replace('id_',''))||0), 0) + 1;
       _roomCounter = state.rooms.reduce((m, r) => Math.max(m, parseInt(r.name.replace('Raum ',''))||0), 0);
@@ -263,6 +266,60 @@ const App = {
     this.toast(`${tpl.label}: ${created.length} Räume mit Bauteilen angelegt (Baujahr ${year})`, 'success');
   },
 
+  // ── Heizkreise ───────────────────────────────────────────
+  openCircuitManager() {
+    this._renderCircuitManager();
+    document.getElementById('circuitModal').style.display = 'flex';
+  },
+
+  closeCircuitManager() {
+    document.getElementById('circuitModal').style.display = 'none';
+    this.renderRoomDetail(); // refresh room dropdown with updated circuits
+  },
+
+  addCircuit() {
+    const n = state.circuits.length + 1;
+    state.circuits.push({ id: newId(), name: 'Heizkreis ' + n, type: 'radiator' });
+    this._autoSave();
+    this._renderCircuitManager();
+  },
+
+  updateCircuit(id, key, val) {
+    const c = state.circuits.find(x => x.id === id);
+    if (c) { c[key] = val; this._autoSave(); }
+  },
+
+  deleteCircuit(id) {
+    state.circuits = state.circuits.filter(c => c.id !== id);
+    // Unassign rooms that pointed at this circuit
+    state.rooms.forEach(r => { if (r.circuitId === id) r.circuitId = null; });
+    this._autoSave();
+    this._renderCircuitManager();
+  },
+
+  _renderCircuitManager() {
+    const body = document.getElementById('circuitManagerBody');
+    if (!body) return;
+    if (state.circuits.length === 0) {
+      body.innerHTML = `<div style="color:var(--text-muted);font-size:.85rem;text-align:center;padding:12px 0;">
+        Noch keine Heizkreise. Lege einen an, um Räume zu Kreisen zu gruppieren (z. B. FBH EG, Heizkörper OG).</div>`;
+    } else {
+      body.innerHTML = state.circuits.map(c => {
+        const roomCount = state.rooms.filter(r => r.circuitId === c.id).length;
+        return `
+          <div style="display:flex;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);">
+            <input type="text" value="${esc(c.name)}" onchange="App.updateCircuit('${c.id}','name',this.value)" style="flex:1;">
+            <select onchange="App.updateCircuit('${c.id}','type',this.value)">
+              <option value="radiator"   ${c.type === 'radiator'   ? 'selected' : ''}>🌡 Heizkörper</option>
+              <option value="underfloor" ${c.type === 'underfloor' ? 'selected' : ''}>♨️ Fußbodenheizung</option>
+            </select>
+            <span style="font-size:.78rem;color:var(--text-muted);white-space:nowrap;">${roomCount} Räume</span>
+            <button class="item-del" onclick="App.deleteCircuit('${c.id}')">×</button>
+          </div>`;
+      }).join('');
+    }
+  },
+
   deleteRoom(id) {
     const name = state.rooms.find(r => r.id === id)?.name || 'Raum';
     state.rooms = state.rooms.filter(r => r.id !== id);
@@ -284,6 +341,7 @@ const App = {
       indoorTemp: 20, thermalBridges: 5, heatingSystem: 'radiator',
     });
     state.rooms = [];
+    state.circuits = [];
     state.selectedRoomId = null;
     _idCounter = 1;
     _roomCounter = 0;
@@ -319,6 +377,8 @@ const App = {
     room.area       = parseFloat(document.getElementById('rArea')?.value) || 0;
     room.height     = parseFloat(document.getElementById('rHeight')?.value) || 0;
     room.indoorTemp = parseFloat(document.getElementById('rTemp')?.value) || 20;
+    const circEl = document.getElementById('rCircuit');
+    if (circEl) room.circuitId = circEl.value || null;
     room.vent.airChange      = parseFloat(document.getElementById('rAirChange')?.value) || 0.5;
     room.vent.hasHeatRecovery = document.getElementById('rHeatRecovery')?.checked || false;
     room.vent.recoveryEff    = parseFloat(document.getElementById('rRecoveryEff')?.value) || 80;
@@ -487,6 +547,10 @@ const App = {
       .map(([k, v]) => `<option value="${k}" ${room.type === k ? 'selected' : ''}>${roomEmoji[k] || ''} ${v.label}</option>`)
       .join('');
 
+    // Heizkreis options
+    const circuitOptions = '<option value="">— kein Heizkreis —</option>' +
+      state.circuits.map(c => `<option value="${c.id}" ${room.circuitId === c.id ? 'selected' : ''}>${c.type === 'underfloor' ? '♨️' : '🌡'} ${esc(c.name)}</option>`).join('');
+
     // Component rows — use index (not ID) to match componentDetail, since detail is
     // always built as room.components.map(...) and has the same order and length.
     const maxLoss = rr ? Math.max(...rr.componentDetail.map(c => c.loss), 1) : 1;
@@ -601,6 +665,13 @@ const App = {
               <div class="form-group">
                 <label>Innentemperatur [°C]</label>
                 <input type="number" id="rTemp" value="${room.indoorTemp}" step="1" oninput="App.onRoomFormChange()">
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Heizkreis <span style="font-weight:400;color:var(--text-muted);font-size:.8rem;">· für hydraulischen Abgleich nach Kreisen</span></label>
+              <div style="display:flex;gap:6px;">
+                <select id="rCircuit" onchange="App.onRoomFormChange()" style="flex:1;">${circuitOptions}</select>
+                <button type="button" class="btn btn-outline btn-sm" onclick="App.openCircuitManager()" title="Heizkreise verwalten" style="white-space:nowrap;">⚙ Kreise</button>
               </div>
             </div>
           </div>
@@ -909,6 +980,7 @@ const App = {
     localStorage.setItem('hlb_state', JSON.stringify({
       project: state.project,
       rooms: state.rooms,
+      circuits: state.circuits,
       selectedRoomId: state.selectedRoomId,
     }));
     this.toast('Projekt gespeichert ✓', 'success');
@@ -921,6 +993,7 @@ const App = {
       const saved = JSON.parse(raw);
       Object.assign(state.project, saved.project);
       state.rooms = saved.rooms || [];
+      state.circuits = saved.circuits || [];
       state.selectedRoomId = saved.selectedRoomId || null;
       _idCounter = state.rooms.reduce((max, r) => {
         const n = parseInt(r.id.replace('id_', '')) || 0;

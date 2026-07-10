@@ -600,6 +600,27 @@
   </div>
 </div>
 
+<!-- ── Modal: Heizkreise verwalten ────────────────────── -->
+<div class="modal-overlay" id="circuitModal" style="display:none;z-index:1100;" onclick="if(event.target===this)App.closeCircuitManager()">
+  <div class="modal" style="max-width:520px;">
+    <div class="modal-header">
+      <h3>⚙ Heizkreise verwalten</h3>
+      <button class="modal-close" onclick="App.closeCircuitManager()">×</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:.85rem;color:var(--text-muted);margin-bottom:12px;">
+        Gruppiere Räume zu Heizkreisen (z. B. Fußbodenheizung EG, Heizkörper OG).
+        Der hydraulische Abgleich zeigt dann Volumenstrom &amp; Last je Kreis.
+      </p>
+      <div id="circuitManagerBody"></div>
+      <button class="btn btn-outline btn-sm" onclick="App.addCircuit()" style="margin-top:12px;">+ Heizkreis</button>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" onclick="App.closeCircuitManager()">Fertig</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── Modal: U-Wert-Rechner (schichtweise) ───────────── -->
 <div class="modal-overlay" id="uwertModal" style="display:none;z-index:1100;" onclick="if(event.target===this)Modules.closeUWert()">
   <div class="modal" style="max-width:620px;">

@@ -168,7 +168,7 @@ const Modules = {
     const totalFlow = rows.reduce((s, r) => s + r.flowLh, 0);
     const totalLoad = rows.reduce((s, r) => s + r.heatingLoad, 0);
 
-    document.getElementById('hydrTableBody').innerHTML = rows.map(r => `
+    const roomRow = (r) => `
       <tr>
         <td><strong>${escUI(r.roomName)}</strong></td>
         <td>${Math.round(r.heatingLoad)}</td>
@@ -182,7 +182,34 @@ const Modules = {
         <td>${r.kv.toFixed(3)}</td>
         <td><span class="presetting-badge ${r.presetting >= 6.5 ? 'high' : ''}">${r.presetting.toFixed(1)}</span></td>
         <td style="font-size:.8rem;color:var(--warning)">${r.note}</td>
-      </tr>`).join('');
+      </tr>`;
+
+    // Group by Heizkreis when circuits are defined; otherwise flat list
+    const roomCircuit = (roomId) => state.rooms.find(r => r.id === roomId)?.circuitId || null;
+    if (state.circuits.length > 0) {
+      const groups = [
+        ...state.circuits.map(c => ({ id: c.id, name: c.name, type: c.type })),
+        { id: null, name: 'Ohne Heizkreis', type: null },
+      ];
+      const html = groups.map(g => {
+        const gr = rows.filter(r => roomCircuit(r.roomId) === g.id);
+        if (gr.length === 0) return '';
+        const gLoad = gr.reduce((s, r) => s + r.heatingLoad, 0);
+        const gFlow = gr.reduce((s, r) => s + r.flowLh, 0);
+        const icon = g.type === 'underfloor' ? '♨️' : g.type === 'radiator' ? '🌡' : '•';
+        return `
+          <tr class="hydr-group-head">
+            <td colspan="7" style="background:var(--surface);font-weight:700;padding:8px 10px;">
+              ${icon} ${escUI(g.name)}
+              <span style="font-weight:400;color:var(--text-muted);font-size:.82rem;margin-left:8px;">${gr.length} Räume · ${Math.round(gLoad)} W · ${gFlow.toFixed(1)} L/h</span>
+            </td>
+          </tr>
+          ${gr.map(roomRow).join('')}`;
+      }).join('');
+      document.getElementById('hydrTableBody').innerHTML = html;
+    } else {
+      document.getElementById('hydrTableBody').innerHTML = rows.map(roomRow).join('');
+    }
 
     document.getElementById('hydrTableFoot').innerHTML = `
       <tr>

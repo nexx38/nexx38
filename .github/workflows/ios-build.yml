@@ -40,7 +40,12 @@ jobs:
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
-            DEVELOPMENT_TEAM=""
+            DEVELOPMENT_TEAM="" \
+            SWIFT_OPTIMIZATION_LEVEL=-Onone \
+            SWIFT_ENABLE_DEFAULT_CMO=NO
+          # -Onone + no cross-module optimisation avoids the Release-archive
+          # bug where an NSObject delegate subclass is wrongly required to
+          # conform to NSCoding. Optimisation is irrelevant for this scan app.
 
       - name: Package unsigned IPA
         working-directory: ios

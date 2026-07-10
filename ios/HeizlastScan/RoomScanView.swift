@@ -20,26 +20,29 @@ struct RoomScanView: UIViewRepresentable {
 
     func updateUIView(_ uiView: RoomCaptureView, context: Context) {}
 
-    func makeCoordinator() -> Coordinator { Coordinator(model: model) }
+    func makeCoordinator() -> RoomScanCoordinator { RoomScanCoordinator(model: model) }
+}
 
-    final class Coordinator: NSObject, RoomCaptureViewDelegate, RoomCaptureSessionDelegate {
-        let model: ScanModel
-        weak var captureView: RoomCaptureView?
+// Top-level (not nested in the struct) so this NSObject subclass gets a stable
+// Objective-C runtime name — a nested NSObject subclass fails to archive under
+// release-build whole-module optimisation ("unstable name via NSCoding").
+final class RoomScanCoordinator: NSObject, RoomCaptureViewDelegate, RoomCaptureSessionDelegate {
+    let model: ScanModel
+    weak var captureView: RoomCaptureView?
 
-        init(model: ScanModel) { self.model = model }
+    init(model: ScanModel) { self.model = model }
 
-        // Allow RoomCaptureView to run its own post-processing pass.
-        func captureView(shouldPresent roomDataForProcessing: CapturedRoomData, error: Error?) -> Bool {
-            return true
+    // Allow RoomCaptureView to run its own post-processing pass.
+    func captureView(shouldPresent roomDataForProcessing: CapturedRoomData, error: Error?) -> Bool {
+        return true
+    }
+
+    // Final processed room delivered here.
+    func captureView(didPresent processedResult: CapturedRoom, error: Error?) {
+        if let error = error {
+            DispatchQueue.main.async { self.model.errorText = error.localizedDescription }
+            return
         }
-
-        // Final processed room delivered here.
-        func captureView(didPresent processedResult: CapturedRoom, error: Error?) {
-            if let error = error {
-                DispatchQueue.main.async { self.model.errorText = error.localizedDescription }
-                return
-            }
-            DispatchQueue.main.async { self.model.finish(with: processedResult) }
-        }
+        DispatchQueue.main.async { self.model.finish(with: processedResult) }
     }
 }

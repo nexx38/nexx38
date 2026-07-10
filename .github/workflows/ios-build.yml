@@ -10,13 +10,15 @@ on:
 
 jobs:
   build:
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Select Xcode 15
-        run: sudo xcode-select -s /Applications/Xcode_15.4.app
+      - name: Show Xcode version
+        # Use the runner's default (latest) Xcode — needs to be new enough to
+        # read the pbxproj format XcodeGen emits (format 77 → Xcode 16+).
+        run: xcodebuild -version
 
       - name: Install XcodeGen
         run: brew install xcodegen

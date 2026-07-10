@@ -761,6 +761,17 @@ input[type=checkbox] {
 .template-sub   { font-size: .78rem; color: var(--text-muted); margin-top: 2px; }
 .template-meta  { font-size: .74rem; color: var(--primary); font-weight: 600; margin-top: 8px; }
 
+/* ── U-Wert-Rechner ──────────────────────────────────── */
+.uw-table-wrap { overflow-x: auto; }
+.uw-table { width: 100%; border-collapse: collapse; font-size: .84rem; }
+.uw-table th {
+  text-align: left; font-size: .72rem; text-transform: uppercase; letter-spacing: .03em;
+  color: var(--text-muted); padding: 4px 6px; border-bottom: 1px solid var(--border);
+}
+.uw-table td { padding: 4px 6px; border-bottom: 1px solid var(--border); }
+.uw-table select { width: 100%; min-width: 150px; }
+.uw-table input { padding: 4px 6px; }
+
 .modal-footer {
   padding: 14px 20px;
   border-top: 1px solid var(--border);

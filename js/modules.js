@@ -452,6 +452,29 @@ const CRMModule = {
   },
 };
 
+// ════════════════════════════════════════════════════════
+//  9. U-WERT-RECHNER (schichtweise nach DIN EN ISO 6946)
+// ════════════════════════════════════════════════════════
+const UWertModule = {
+  // Working set of layers: [{ material, lambda, d_cm }]
+  layers: [],
+  boundary: 'wall',   // wall | roof | floor | internal
+  targetInputId: null, // which U-value field to write the result back into
+
+  // U = 1 / (Rsi + Σ(d/λ) + Rse)
+  calc(layers, boundary) {
+    const sr = HLB_DATA.surfaceResistances[boundary] || HLB_DATA.surfaceResistances.wall;
+    let rLayers = 0;
+    for (const l of layers) {
+      const d = (l.d_cm || 0) / 100; // cm → m
+      if (l.lambda > 0 && d > 0) rLayers += d / l.lambda;
+    }
+    const rTotal = sr.rsi + rLayers + sr.rse;
+    const u = rTotal > 0 ? 1 / rTotal : 0;
+    return { u: +u.toFixed(3), rTotal: +rTotal.toFixed(3), rLayers: +rLayers.toFixed(3), rsi: sr.rsi, rse: sr.rse };
+  },
+};
+
 // ── Shared helpers ──────────────────────────────────────
 function fmtEuro(n) {
   return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(n);

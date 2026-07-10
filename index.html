@@ -600,6 +600,40 @@
   </div>
 </div>
 
+<!-- ── Modal: U-Wert-Rechner (schichtweise) ───────────── -->
+<div class="modal-overlay" id="uwertModal" style="display:none;z-index:1100;" onclick="if(event.target===this)Modules.closeUWert()">
+  <div class="modal" style="max-width:620px;">
+    <div class="modal-header">
+      <h3>🧱 U-Wert-Rechner</h3>
+      <button class="modal-close" onclick="Modules.closeUWert()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label for="uwBoundary">Bauteil-Lage (Wärmeübergang)</label>
+        <select id="uwBoundary" onchange="Modules.uwSetBoundary(this.value)">
+          <option value="wall">Außenwand (Rsi 0,13 / Rse 0,04)</option>
+          <option value="roof">Dach / Decke (Rsi 0,10 / Rse 0,04)</option>
+          <option value="floor">Fußboden (Rsi 0,17 / Rse 0,04)</option>
+          <option value="internal">Innenbauteil (Rsi 0,13 / Rse 0,13)</option>
+        </select>
+      </div>
+      <div style="font-size:.78rem;color:var(--text-muted);margin:2px 0 8px;">Schichten von innen nach außen · λ ist der Bemessungswert nach DIN 4108-4, überschreibbar</div>
+      <div class="uw-table-wrap">
+        <table class="uw-table">
+          <thead><tr><th>Material</th><th>Dicke cm</th><th>λ W/mK</th><th>R</th><th></th></tr></thead>
+          <tbody id="uwLayersBody"></tbody>
+        </table>
+      </div>
+      <button class="btn btn-outline btn-sm" onclick="Modules.uwAddLayer()" style="margin-top:10px;">+ Schicht</button>
+      <div id="uwResult" style="margin-top:16px;padding:14px;background:var(--surface);border:1px solid var(--border);border-radius:10px;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="Modules.closeUWert()">Abbrechen</button>
+      <button class="btn btn-primary" onclick="Modules.uwApply()">✓ U-Wert übernehmen</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── Modal: Bauteil hinzufügen / bearbeiten ─────────── -->
 <div class="modal-overlay" id="componentModal" style="display:none;" onclick="if(event.target===this)App.closeModal()">
   <div class="modal">
@@ -630,7 +664,10 @@
         </div>
         <div class="form-group">
           <label for="compUValue">U-Wert [W/(m²·K)]</label>
-          <input type="number" id="compUValue" value="0.30" step="0.01" min="0.01">
+          <div style="display:flex;gap:6px;">
+            <input type="number" id="compUValue" value="0.30" step="0.01" min="0.01" style="flex:1;">
+            <button type="button" class="btn btn-outline btn-sm" onclick="Modules.openUWert('compUValue', document.getElementById('compType').value)" title="U-Wert aus Materialschichten berechnen" style="white-space:nowrap;">🧱 Rechnen</button>
+          </div>
         </div>
       </div>
       <div class="form-group">

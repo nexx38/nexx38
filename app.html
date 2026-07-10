@@ -780,6 +780,17 @@ input[type=checkbox] {
 .template-sub   { font-size: .78rem; color: var(--text-muted); margin-top: 2px; }
 .template-meta  { font-size: .74rem; color: var(--primary); font-weight: 600; margin-top: 8px; }
 
+/* ── U-Wert-Rechner ──────────────────────────────────── */
+.uw-table-wrap { overflow-x: auto; }
+.uw-table { width: 100%; border-collapse: collapse; font-size: .84rem; }
+.uw-table th {
+  text-align: left; font-size: .72rem; text-transform: uppercase; letter-spacing: .03em;
+  color: var(--text-muted); padding: 4px 6px; border-bottom: 1px solid var(--border);
+}
+.uw-table td { padding: 4px 6px; border-bottom: 1px solid var(--border); }
+.uw-table select { width: 100%; min-width: 150px; }
+.uw-table input { padding: 4px 6px; }
+
 .modal-footer {
   padding: 14px 20px;
   border-top: 1px solid var(--border);
@@ -2701,6 +2712,40 @@ input[type=checkbox] {
   </div>
 </div>
 
+<!-- ── Modal: U-Wert-Rechner (schichtweise) ───────────── -->
+<div class="modal-overlay" id="uwertModal" style="display:none;z-index:1100;" onclick="if(event.target===this)Modules.closeUWert()">
+  <div class="modal" style="max-width:620px;">
+    <div class="modal-header">
+      <h3>🧱 U-Wert-Rechner</h3>
+      <button class="modal-close" onclick="Modules.closeUWert()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label for="uwBoundary">Bauteil-Lage (Wärmeübergang)</label>
+        <select id="uwBoundary" onchange="Modules.uwSetBoundary(this.value)">
+          <option value="wall">Außenwand (Rsi 0,13 / Rse 0,04)</option>
+          <option value="roof">Dach / Decke (Rsi 0,10 / Rse 0,04)</option>
+          <option value="floor">Fußboden (Rsi 0,17 / Rse 0,04)</option>
+          <option value="internal">Innenbauteil (Rsi 0,13 / Rse 0,13)</option>
+        </select>
+      </div>
+      <div style="font-size:.78rem;color:var(--text-muted);margin:2px 0 8px;">Schichten von innen nach außen · λ ist der Bemessungswert nach DIN 4108-4, überschreibbar</div>
+      <div class="uw-table-wrap">
+        <table class="uw-table">
+          <thead><tr><th>Material</th><th>Dicke cm</th><th>λ W/mK</th><th>R</th><th></th></tr></thead>
+          <tbody id="uwLayersBody"></tbody>
+        </table>
+      </div>
+      <button class="btn btn-outline btn-sm" onclick="Modules.uwAddLayer()" style="margin-top:10px;">+ Schicht</button>
+      <div id="uwResult" style="margin-top:16px;padding:14px;background:var(--surface);border:1px solid var(--border);border-radius:10px;"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="Modules.closeUWert()">Abbrechen</button>
+      <button class="btn btn-primary" onclick="Modules.uwApply()">✓ U-Wert übernehmen</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── Modal: Bauteil hinzufügen / bearbeiten ─────────── -->
 <div class="modal-overlay" id="componentModal" style="display:none;" onclick="if(event.target===this)App.closeModal()">
   <div class="modal">
@@ -2731,7 +2776,10 @@ input[type=checkbox] {
         </div>
         <div class="form-group">
           <label for="compUValue">U-Wert [W/(m²·K)]</label>
-          <input type="number" id="compUValue" value="0.30" step="0.01" min="0.01">
+          <div style="display:flex;gap:6px;">
+            <input type="number" id="compUValue" value="0.30" step="0.01" min="0.01" style="flex:1;">
+            <button type="button" class="btn btn-outline btn-sm" onclick="Modules.openUWert('compUValue', document.getElementById('compType').value)" title="U-Wert aus Materialschichten berechnen" style="white-space:nowrap;">🧱 Rechnen</button>
+          </div>
         </div>
       </div>
       <div class="form-group">
@@ -3161,6 +3209,52 @@ const HLB_DATA = {
     if (y <= 2002) return { wall: 0.45, window: 1.40, roof: 0.35, floor: 0.50, door: 1.60 };
     if (y <= 2015) return { wall: 0.28, window: 1.10, roof: 0.20, floor: 0.35, door: 1.20 };
     return { wall: 0.20, window: 0.90, roof: 0.15, floor: 0.25, door: 0.90 };
+  },
+
+  // ── Baustoffe für U-Wert-Rechner ─────────────────────────
+  // λ = Wärmeleitfähigkeit [W/(m·K)], Bemessungswerte nach DIN 4108-4 / DIN EN ISO 10456
+  materials: [
+    { cat: 'Mauerwerk', items: [
+      { name: 'Vollziegel / Klinker',            lambda: 0.96 },
+      { name: 'Hochlochziegel',                  lambda: 0.40 },
+      { name: 'Wärmedämmziegel (T8/T9)',         lambda: 0.09 },
+      { name: 'Kalksandstein',                   lambda: 0.99 },
+      { name: 'Porenbeton (Gasbeton)',           lambda: 0.13 },
+      { name: 'Leichtbeton',                     lambda: 0.40 },
+      { name: 'Stahlbeton',                      lambda: 2.30 },
+      { name: 'Naturstein (massiv)',             lambda: 2.30 },
+    ]},
+    { cat: 'Dämmstoffe', items: [
+      { name: 'Mineralwolle (Stein/Glas)',       lambda: 0.035 },
+      { name: 'EPS / Styropor (WDVS)',           lambda: 0.035 },
+      { name: 'XPS (Perimeter)',                 lambda: 0.035 },
+      { name: 'PUR / PIR Hartschaum',            lambda: 0.024 },
+      { name: 'Holzfaser',                       lambda: 0.042 },
+      { name: 'Zellulose (Einblas)',             lambda: 0.040 },
+      { name: 'Vakuumdämmung (VIP)',             lambda: 0.007 },
+    ]},
+    { cat: 'Holz / Platten', items: [
+      { name: 'Nadelholz / Konstruktion',        lambda: 0.13 },
+      { name: 'Brettschichtholz / KVH',          lambda: 0.13 },
+      { name: 'OSB / Spanplatte',                lambda: 0.13 },
+      { name: 'Gipskartonplatte',                lambda: 0.25 },
+      { name: 'Gipsfaserplatte',                 lambda: 0.32 },
+    ]},
+    { cat: 'Putz / Estrich / Belag', items: [
+      { name: 'Kalkzementputz',                  lambda: 1.00 },
+      { name: 'Gipsputz',                        lambda: 0.35 },
+      { name: 'Zementestrich',                   lambda: 1.40 },
+      { name: 'Anhydritestrich',                 lambda: 1.20 },
+      { name: 'Fliesen / Keramik',               lambda: 1.30 },
+    ]},
+  ],
+
+  // Surface heat-transfer resistances Rsi / Rse [m²K/W] by heat-flow direction (DIN EN ISO 6946)
+  surfaceResistances: {
+    wall:     { rsi: 0.13, rse: 0.04, label: 'Außenwand (horizontal)' },
+    roof:     { rsi: 0.10, rse: 0.04, label: 'Dach / Decke (aufwärts)' },
+    floor:    { rsi: 0.17, rse: 0.04, label: 'Fußboden (abwärts)' },
+    internal: { rsi: 0.13, rse: 0.13, label: 'Innenbauteil (beidseitig innen)' },
   },
 
   // ── Gebäude-Vorlagen ─────────────────────────────────────
@@ -5367,6 +5461,29 @@ const CRMModule = {
   },
 };
 
+// ════════════════════════════════════════════════════════
+//  9. U-WERT-RECHNER (schichtweise nach DIN EN ISO 6946)
+// ════════════════════════════════════════════════════════
+const UWertModule = {
+  // Working set of layers: [{ material, lambda, d_cm }]
+  layers: [],
+  boundary: 'wall',   // wall | roof | floor | internal
+  targetInputId: null, // which U-value field to write the result back into
+
+  // U = 1 / (Rsi + Σ(d/λ) + Rse)
+  calc(layers, boundary) {
+    const sr = HLB_DATA.surfaceResistances[boundary] || HLB_DATA.surfaceResistances.wall;
+    let rLayers = 0;
+    for (const l of layers) {
+      const d = (l.d_cm || 0) / 100; // cm → m
+      if (l.lambda > 0 && d > 0) rLayers += d / l.lambda;
+    }
+    const rTotal = sr.rsi + rLayers + sr.rse;
+    const u = rTotal > 0 ? 1 / rTotal : 0;
+    return { u: +u.toFixed(3), rTotal: +rTotal.toFixed(3), rLayers: +rLayers.toFixed(3), rsi: sr.rsi, rse: sr.rse };
+  },
+};
+
 // ── Shared helpers ──────────────────────────────────────
 function fmtEuro(n) {
   return new Intl.NumberFormat('de-DE', { style: 'currency', currency: 'EUR' }).format(n);
@@ -5761,6 +5878,112 @@ const Modules = {
     w.document.write(html);
     w.document.close();
     setTimeout(() => w.print(), 400);
+  },
+
+  // ════════════════════════════════════════════════════════
+  //  U-WERT-RECHNER (Modal, aus Bauteil-Dialog aufgerufen)
+  // ════════════════════════════════════════════════════════
+  openUWert(targetInputId, boundary) {
+    UWertModule.targetInputId = targetInputId || 'compUValue';
+    UWertModule.boundary = HLB_DATA.surfaceResistances[boundary] ? boundary : 'wall';
+    if (UWertModule.layers.length === 0) {
+      // Sensible starting stack: 2 cm plaster + 24 cm brick + 12 cm insulation
+      UWertModule.layers = [
+        { material: 'Kalkzementputz',       lambda: 1.00,  d_cm: 2 },
+        { material: 'Vollziegel / Klinker', lambda: 0.96,  d_cm: 24 },
+        { material: 'Mineralwolle (Stein/Glas)', lambda: 0.035, d_cm: 12 },
+      ];
+    }
+    const bsel = document.getElementById('uwBoundary');
+    if (bsel) bsel.value = UWertModule.boundary;
+    this._renderUWert();
+    document.getElementById('uwertModal').style.display = 'flex';
+  },
+
+  closeUWert() {
+    document.getElementById('uwertModal').style.display = 'none';
+  },
+
+  uwSetBoundary(b) {
+    UWertModule.boundary = b;
+    this._renderUWert();
+  },
+
+  uwAddLayer() {
+    const first = HLB_DATA.materials[0].items[0];
+    UWertModule.layers.push({ material: first.name, lambda: first.lambda, d_cm: 5 });
+    this._renderUWert();
+  },
+
+  uwDeleteLayer(i) {
+    UWertModule.layers.splice(i, 1);
+    this._renderUWert();
+  },
+
+  uwUpdateLayer(i, key, val) {
+    if (key === 'material') {
+      // Look up lambda for the chosen material
+      for (const cat of HLB_DATA.materials) {
+        const m = cat.items.find(x => x.name === val);
+        if (m) { UWertModule.layers[i].material = m.name; UWertModule.layers[i].lambda = m.lambda; break; }
+      }
+    } else if (key === 'lambda') {
+      UWertModule.layers[i].lambda = parseFloat(val) || 0;
+    } else if (key === 'd_cm') {
+      UWertModule.layers[i].d_cm = parseFloat(val) || 0;
+    }
+    this._renderUWert();
+  },
+
+  _renderUWert() {
+    const matOptions = (selected) => HLB_DATA.materials.map(cat =>
+      `<optgroup label="${escUI(cat.cat)}">` +
+      cat.items.map(m => `<option value="${escUI(m.name)}" ${m.name === selected ? 'selected' : ''}>${escUI(m.name)} (λ=${m.lambda})</option>`).join('') +
+      `</optgroup>`).join('');
+
+    const body = document.getElementById('uwLayersBody');
+    if (body) {
+      body.innerHTML = UWertModule.layers.map((l, i) => `
+        <tr>
+          <td><select onchange="Modules.uwUpdateLayer(${i},'material',this.value)">${matOptions(l.material)}</select></td>
+          <td><input type="number" value="${l.d_cm}" step="0.5" min="0" onchange="Modules.uwUpdateLayer(${i},'d_cm',this.value)" style="width:64px;text-align:right"></td>
+          <td><input type="number" value="${l.lambda}" step="0.001" min="0.001" onchange="Modules.uwUpdateLayer(${i},'lambda',this.value)" style="width:70px;text-align:right"></td>
+          <td style="text-align:right;color:var(--text-muted)">${l.lambda > 0 && l.d_cm > 0 ? ((l.d_cm/100)/l.lambda).toFixed(3) : '—'}</td>
+          <td><button class="item-del" onclick="Modules.uwDeleteLayer(${i})">×</button></td>
+        </tr>`).join('');
+    }
+
+    const res = UWertModule.calc(UWertModule.layers, UWertModule.boundary);
+    const rate = res.u <= 0.24 ? { t: 'GEG-Neubau ✓', c: 'var(--success)' }
+               : res.u <= 0.45 ? { t: 'Gut saniert',   c: 'var(--success)' }
+               : res.u <= 0.80 ? { t: 'Teilsaniert',   c: 'var(--warning)' }
+               : { t: 'Altbau ungedämmt', c: 'var(--danger)' };
+    const out = document.getElementById('uwResult');
+    if (out) {
+      const totalD = UWertModule.layers.reduce((s, l) => s + (l.d_cm || 0), 0);
+      out.innerHTML = `
+        <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;">
+          <span style="font-size:2rem;font-weight:800;color:var(--primary);">U = ${res.u.toFixed(2)}</span>
+          <span style="color:var(--text-muted);">W/(m²·K)</span>
+          <span style="margin-left:auto;font-weight:700;color:${rate.c};">${rate.t}</span>
+        </div>
+        <div style="font-size:.8rem;color:var(--text-muted);margin-top:4px;">
+          R = ${res.rTotal.toFixed(2)} m²K/W  (Rsi ${res.rsi} + Schichten ${res.rLayers.toFixed(2)} + Rse ${res.rse}) · Gesamtdicke ${totalD.toFixed(1)} cm
+        </div>`;
+    }
+  },
+
+  uwApply() {
+    const res = UWertModule.calc(UWertModule.layers, UWertModule.boundary);
+    const target = document.getElementById(UWertModule.targetInputId || 'compUValue');
+    if (target) {
+      target.value = res.u.toFixed(2);
+      // Clear any preset selection so the manual value sticks
+      const preset = document.getElementById('compPreset');
+      if (preset && UWertModule.targetInputId === 'compUValue') preset.value = '';
+    }
+    this.closeUWert();
+    App.toast(`U-Wert ${res.u.toFixed(2)} W/m²K übernommen`, 'success');
   },
 
   // ════════════════════════════════════════════════════════

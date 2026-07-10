@@ -105,6 +105,52 @@ const HLB_DATA = {
     return { wall: 0.20, window: 0.90, roof: 0.15, floor: 0.25, door: 0.90 };
   },
 
+  // ── Baustoffe für U-Wert-Rechner ─────────────────────────
+  // λ = Wärmeleitfähigkeit [W/(m·K)], Bemessungswerte nach DIN 4108-4 / DIN EN ISO 10456
+  materials: [
+    { cat: 'Mauerwerk', items: [
+      { name: 'Vollziegel / Klinker',            lambda: 0.96 },
+      { name: 'Hochlochziegel',                  lambda: 0.40 },
+      { name: 'Wärmedämmziegel (T8/T9)',         lambda: 0.09 },
+      { name: 'Kalksandstein',                   lambda: 0.99 },
+      { name: 'Porenbeton (Gasbeton)',           lambda: 0.13 },
+      { name: 'Leichtbeton',                     lambda: 0.40 },
+      { name: 'Stahlbeton',                      lambda: 2.30 },
+      { name: 'Naturstein (massiv)',             lambda: 2.30 },
+    ]},
+    { cat: 'Dämmstoffe', items: [
+      { name: 'Mineralwolle (Stein/Glas)',       lambda: 0.035 },
+      { name: 'EPS / Styropor (WDVS)',           lambda: 0.035 },
+      { name: 'XPS (Perimeter)',                 lambda: 0.035 },
+      { name: 'PUR / PIR Hartschaum',            lambda: 0.024 },
+      { name: 'Holzfaser',                       lambda: 0.042 },
+      { name: 'Zellulose (Einblas)',             lambda: 0.040 },
+      { name: 'Vakuumdämmung (VIP)',             lambda: 0.007 },
+    ]},
+    { cat: 'Holz / Platten', items: [
+      { name: 'Nadelholz / Konstruktion',        lambda: 0.13 },
+      { name: 'Brettschichtholz / KVH',          lambda: 0.13 },
+      { name: 'OSB / Spanplatte',                lambda: 0.13 },
+      { name: 'Gipskartonplatte',                lambda: 0.25 },
+      { name: 'Gipsfaserplatte',                 lambda: 0.32 },
+    ]},
+    { cat: 'Putz / Estrich / Belag', items: [
+      { name: 'Kalkzementputz',                  lambda: 1.00 },
+      { name: 'Gipsputz',                        lambda: 0.35 },
+      { name: 'Zementestrich',                   lambda: 1.40 },
+      { name: 'Anhydritestrich',                 lambda: 1.20 },
+      { name: 'Fliesen / Keramik',               lambda: 1.30 },
+    ]},
+  ],
+
+  // Surface heat-transfer resistances Rsi / Rse [m²K/W] by heat-flow direction (DIN EN ISO 6946)
+  surfaceResistances: {
+    wall:     { rsi: 0.13, rse: 0.04, label: 'Außenwand (horizontal)' },
+    roof:     { rsi: 0.10, rse: 0.04, label: 'Dach / Decke (aufwärts)' },
+    floor:    { rsi: 0.17, rse: 0.04, label: 'Fußboden (abwärts)' },
+    internal: { rsi: 0.13, rse: 0.13, label: 'Innenbauteil (beidseitig innen)' },
+  },
+
   // ── Gebäude-Vorlagen ─────────────────────────────────────
   // Typical German room programs. Per room:
   //   type/area/height  → room data (temp & airChange come from roomTypes)

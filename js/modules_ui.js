@@ -386,6 +386,112 @@ const Modules = {
   },
 
   // ════════════════════════════════════════════════════════
+  //  U-WERT-RECHNER (Modal, aus Bauteil-Dialog aufgerufen)
+  // ════════════════════════════════════════════════════════
+  openUWert(targetInputId, boundary) {
+    UWertModule.targetInputId = targetInputId || 'compUValue';
+    UWertModule.boundary = HLB_DATA.surfaceResistances[boundary] ? boundary : 'wall';
+    if (UWertModule.layers.length === 0) {
+      // Sensible starting stack: 2 cm plaster + 24 cm brick + 12 cm insulation
+      UWertModule.layers = [
+        { material: 'Kalkzementputz',       lambda: 1.00,  d_cm: 2 },
+        { material: 'Vollziegel / Klinker', lambda: 0.96,  d_cm: 24 },
+        { material: 'Mineralwolle (Stein/Glas)', lambda: 0.035, d_cm: 12 },
+      ];
+    }
+    const bsel = document.getElementById('uwBoundary');
+    if (bsel) bsel.value = UWertModule.boundary;
+    this._renderUWert();
+    document.getElementById('uwertModal').style.display = 'flex';
+  },
+
+  closeUWert() {
+    document.getElementById('uwertModal').style.display = 'none';
+  },
+
+  uwSetBoundary(b) {
+    UWertModule.boundary = b;
+    this._renderUWert();
+  },
+
+  uwAddLayer() {
+    const first = HLB_DATA.materials[0].items[0];
+    UWertModule.layers.push({ material: first.name, lambda: first.lambda, d_cm: 5 });
+    this._renderUWert();
+  },
+
+  uwDeleteLayer(i) {
+    UWertModule.layers.splice(i, 1);
+    this._renderUWert();
+  },
+
+  uwUpdateLayer(i, key, val) {
+    if (key === 'material') {
+      // Look up lambda for the chosen material
+      for (const cat of HLB_DATA.materials) {
+        const m = cat.items.find(x => x.name === val);
+        if (m) { UWertModule.layers[i].material = m.name; UWertModule.layers[i].lambda = m.lambda; break; }
+      }
+    } else if (key === 'lambda') {
+      UWertModule.layers[i].lambda = parseFloat(val) || 0;
+    } else if (key === 'd_cm') {
+      UWertModule.layers[i].d_cm = parseFloat(val) || 0;
+    }
+    this._renderUWert();
+  },
+
+  _renderUWert() {
+    const matOptions = (selected) => HLB_DATA.materials.map(cat =>
+      `<optgroup label="${escUI(cat.cat)}">` +
+      cat.items.map(m => `<option value="${escUI(m.name)}" ${m.name === selected ? 'selected' : ''}>${escUI(m.name)} (λ=${m.lambda})</option>`).join('') +
+      `</optgroup>`).join('');
+
+    const body = document.getElementById('uwLayersBody');
+    if (body) {
+      body.innerHTML = UWertModule.layers.map((l, i) => `
+        <tr>
+          <td><select onchange="Modules.uwUpdateLayer(${i},'material',this.value)">${matOptions(l.material)}</select></td>
+          <td><input type="number" value="${l.d_cm}" step="0.5" min="0" onchange="Modules.uwUpdateLayer(${i},'d_cm',this.value)" style="width:64px;text-align:right"></td>
+          <td><input type="number" value="${l.lambda}" step="0.001" min="0.001" onchange="Modules.uwUpdateLayer(${i},'lambda',this.value)" style="width:70px;text-align:right"></td>
+          <td style="text-align:right;color:var(--text-muted)">${l.lambda > 0 && l.d_cm > 0 ? ((l.d_cm/100)/l.lambda).toFixed(3) : '—'}</td>
+          <td><button class="item-del" onclick="Modules.uwDeleteLayer(${i})">×</button></td>
+        </tr>`).join('');
+    }
+
+    const res = UWertModule.calc(UWertModule.layers, UWertModule.boundary);
+    const rate = res.u <= 0.24 ? { t: 'GEG-Neubau ✓', c: 'var(--success)' }
+               : res.u <= 0.45 ? { t: 'Gut saniert',   c: 'var(--success)' }
+               : res.u <= 0.80 ? { t: 'Teilsaniert',   c: 'var(--warning)' }
+               : { t: 'Altbau ungedämmt', c: 'var(--danger)' };
+    const out = document.getElementById('uwResult');
+    if (out) {
+      const totalD = UWertModule.layers.reduce((s, l) => s + (l.d_cm || 0), 0);
+      out.innerHTML = `
+        <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;">
+          <span style="font-size:2rem;font-weight:800;color:var(--primary);">U = ${res.u.toFixed(2)}</span>
+          <span style="color:var(--text-muted);">W/(m²·K)</span>
+          <span style="margin-left:auto;font-weight:700;color:${rate.c};">${rate.t}</span>
+        </div>
+        <div style="font-size:.8rem;color:var(--text-muted);margin-top:4px;">
+          R = ${res.rTotal.toFixed(2)} m²K/W  (Rsi ${res.rsi} + Schichten ${res.rLayers.toFixed(2)} + Rse ${res.rse}) · Gesamtdicke ${totalD.toFixed(1)} cm
+        </div>`;
+    }
+  },
+
+  uwApply() {
+    const res = UWertModule.calc(UWertModule.layers, UWertModule.boundary);
+    const target = document.getElementById(UWertModule.targetInputId || 'compUValue');
+    if (target) {
+      target.value = res.u.toFixed(2);
+      // Clear any preset selection so the manual value sticks
+      const preset = document.getElementById('compPreset');
+      if (preset && UWertModule.targetInputId === 'compUValue') preset.value = '';
+    }
+    this.closeUWert();
+    App.toast(`U-Wert ${res.u.toFixed(2)} W/m²K übernommen`, 'success');
+  },
+
+  // ════════════════════════════════════════════════════════
   //  TAB 8 — CRM
   // ════════════════════════════════════════════════════════
   _selectedCustomerId: null,

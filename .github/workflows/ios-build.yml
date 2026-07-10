@@ -30,23 +30,17 @@ jobs:
       - name: Build unsigned archive
         working-directory: ios
         run: |
-          # Debug config: no whole-module optimisation and no const-value
-          # extraction, which is what triggers the spurious "NSObject delegate
-          # subclass must conform to NSCoding" archive error under Release WMO.
-          # A Debug-configured archive installs perfectly fine via sideloading.
           xcodebuild \
             -project HeizlastScan.xcodeproj \
             -scheme HeizlastScan \
-            -configuration Debug \
+            -configuration Release \
             -sdk iphoneos \
             -archivePath "$PWD/build/HeizlastScan.xcarchive" \
             archive \
             CODE_SIGN_IDENTITY="" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO \
-            DEVELOPMENT_TEAM="" \
-            SWIFT_COMPILATION_MODE=singlefile \
-            ONLY_ACTIVE_ARCH=NO
+            DEVELOPMENT_TEAM=""
 
       - name: Package unsigned IPA
         working-directory: ios

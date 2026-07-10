@@ -32,6 +32,11 @@ final class RoomScanCoordinator: NSObject, RoomCaptureViewDelegate, RoomCaptureS
 
     init(model: ScanModel) { self.model = model }
 
+    // A RoomPlan delegate protocol pulls in NSCoding; we never archive this
+    // coordinator, so provide inert stubs to satisfy the conformance.
+    required init?(coder: NSCoder) { return nil }
+    func encode(with coder: NSCoder) {}
+
     // Allow RoomCaptureView to run its own post-processing pass.
     func captureView(shouldPresent roomDataForProcessing: CapturedRoomData, error: Error?) -> Bool {
         return true

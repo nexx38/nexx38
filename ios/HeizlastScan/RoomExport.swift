@@ -59,33 +59,44 @@ enum RoomExporter {
         return hs[hs.count / 2]
     }
 
-    // Floor area from the axis-aligned bounding box spanned by the wall
-    // endpoints (world x/z). Uses only Surface.transform / .dimensions, which
-    // are stable across RoomPlan SDK versions. (The iOS-17 floor-polygon API
-    // would be more exact for L-shaped rooms — a later refinement.)
+    // Floor area = minimum-area ORIENTED bounding box of the wall endpoints.
+    // An axis-aligned box hugely overestimates a room scanned at an angle
+    // (a 45°-rotated 5.5×3.2 m room has a ~36 m² axis-aligned box but is only
+    // ~18 m²). Brute-forcing the rotation that minimises the box recovers the
+    // true footprint regardless of scan orientation.
     private static func floorArea(_ room: CapturedRoom) -> Double {
-        return boundingBoxArea(room)
-    }
-
-    // Min/max of wall endpoint positions in world x/z → rectangular footprint.
-    private static func boundingBoxArea(_ room: CapturedRoom) -> Double {
-        var minX = Double.greatestFiniteMagnitude, maxX = -Double.greatestFiniteMagnitude
-        var minZ = Double.greatestFiniteMagnitude, maxZ = -Double.greatestFiniteMagnitude
+        // Collect both endpoints of every wall as 2-D (x, z) points.
+        var pts: [(x: Double, z: Double)] = []
         for wall in room.walls {
             let t = wall.transform
             let cx = Double(t.columns.3.x)
             let cz = Double(t.columns.3.z)
             let halfLen = Double(wall.dimensions.x) / 2.0
-            // wall's local x axis in world space
-            let ax = Double(t.columns.0.x)
+            let ax = Double(t.columns.0.x)   // wall's local x axis in world space
             let az = Double(t.columns.0.z)
-            let ex = cx + ax * halfLen, ex2 = cx - ax * halfLen
-            let ez = cz + az * halfLen, ez2 = cz - az * halfLen
-            minX = min(minX, ex, ex2); maxX = max(maxX, ex, ex2)
-            minZ = min(minZ, ez, ez2); maxZ = max(maxZ, ez, ez2)
+            pts.append((cx + ax * halfLen, cz + az * halfLen))
+            pts.append((cx - ax * halfLen, cz - az * halfLen))
         }
-        guard maxX > minX, maxZ > minZ else { return 0 }
-        return (maxX - minX) * (maxZ - minZ)
+        guard pts.count >= 2 else { return 0 }
+
+        var best = Double.greatestFiniteMagnitude
+        var deg = 0
+        while deg < 90 {
+            let t = Double(deg) * .pi / 180
+            let c = cos(t), s = sin(t)
+            var minU = Double.greatestFiniteMagnitude, maxU = -Double.greatestFiniteMagnitude
+            var minV = Double.greatestFiniteMagnitude, maxV = -Double.greatestFiniteMagnitude
+            for p in pts {
+                let u = p.x * c + p.z * s
+                let v = -p.x * s + p.z * c
+                minU = min(minU, u); maxU = max(maxU, u)
+                minV = min(minV, v); maxV = max(maxV, v)
+            }
+            let area = (maxU - minU) * (maxV - minV)
+            if area < best { best = area }
+            deg += 1
+        }
+        return best.isFinite ? best : 0
     }
 
     private static func round2(_ v: Double) -> Double { (v * 100).rounded() / 100 }

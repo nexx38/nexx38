@@ -22,11 +22,6 @@
   <dict/>
   <key>NSCameraUsageDescription</key>
   <string>Die Kamera und der LiDAR-Sensor werden zum Vermessen des Raumes verwendet.</string>
-  <key>UIApplicationSceneManifest</key>
-  <dict>
-    <key>UIApplicationSupportsMultipleScenes</key>
-    <false/>
-  </dict>
   <key>UISupportedInterfaceOrientations</key>
   <array>
     <string>UIInterfaceOrientationPortrait</string>

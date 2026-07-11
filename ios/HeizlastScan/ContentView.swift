@@ -41,10 +41,16 @@ final class ScanModel: ObservableObject {
     }
 }
 
+// Identifiable wrapper so the share sheet only presents once the URL exists
+// (driving a sheet by two separate @State vars races → black screen).
+struct ShareItem: Identifiable {
+    let id = UUID()
+    let url: URL
+}
+
 struct ContentView: View {
     @StateObject private var model = ScanModel()
-    @State private var showShare = false
-    @State private var shareURL: URL?
+    @State private var shareItem: ShareItem?
 
     var body: some View {
         Group {
@@ -116,8 +122,11 @@ struct ContentView: View {
 
                 VStack(spacing: 12) {
                     Button {
-                        shareURL = model.exportURL()
-                        showShare = shareURL != nil
+                        if let url = model.exportURL() {
+                            shareItem = ShareItem(url: url)
+                        } else {
+                            model.errorText = "JSON konnte nicht erstellt werden."
+                        }
                     } label: {
                         Label("JSON teilen / sichern", systemImage: "square.and.arrow.up")
                             .font(.headline)
@@ -133,8 +142,8 @@ struct ContentView: View {
             }
             .padding(20)
         }
-        .sheet(isPresented: $showShare) {
-            if let url = shareURL { ShareSheet(items: [url]) }
+        .sheet(item: $shareItem) { item in
+            ShareSheet(items: [item.url])
         }
     }
 

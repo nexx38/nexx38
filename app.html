@@ -3967,18 +3967,28 @@ const Scanner = {
     this.s.pcBounds = null;
     this.s.result = { width: +side.toFixed(2), depth: +side.toFixed(2), height, area };
 
-    // Real recognised openings become detected openings (windows + doors)
-    const toOpening = (o, type) => ({
-      wall: 'Scan',
-      type,
-      width: +(+o.width).toFixed(2),
-      height: +(+o.height).toFixed(2),
-      area: +((+o.width) * (+o.height)).toFixed(2),
-      sillHeight: 0,
-      uDefault: type === 'window'
-        ? HLB_DATA.uDefaultsByYear(window.state?.project?.constructionYear).window
-        : HLB_DATA.uDefaultsByYear(window.state?.project?.constructionYear).door,
-    });
+    // Real recognised openings become detected openings (windows + doors).
+    // RoomPlan classifies purely by geometry (floor-to-ceiling opening =
+    // "door"), so a fully glazed sliding/patio door ("Schiebetür") comes back
+    // as type 'door' just like a solid wood front door — RoomPlan has no
+    // material info to tell them apart. Default wide doors (≥1.4 m, typical
+    // of sliding/patio doors vs. ~0.8-1.0 m standard doors) to "glazed" so
+    // the far-better window U-value is pre-selected; the user can still
+    // toggle it in the confirm screen either way.
+    const u = HLB_DATA.uDefaultsByYear(window.state?.project?.constructionYear);
+    const toOpening = (o, type) => {
+      const glazed = type === 'door' && (+o.width) >= 1.4;
+      return {
+        wall: 'Scan',
+        type,
+        glazed,
+        width: +(+o.width).toFixed(2),
+        height: +(+o.height).toFixed(2),
+        area: +((+o.width) * (+o.height)).toFixed(2),
+        sillHeight: 0,
+        uDefault: type === 'window' ? u.window : (glazed ? u.window : u.door),
+      };
+    };
     const windows = (data.windows || []).map(o => toOpening(o, 'window'));
     const doors   = (data.doors   || []).map(o => toOpening(o, 'door'));
     this.s.detectedOpenings = [...doors, ...windows];
@@ -4549,30 +4559,7 @@ const Scanner = {
     if (hEl) hEl.value = r.height.toFixed(2);
     this._updateConfirmArea();
 
-    // Detected openings
-    const openings = this.s.detectedOpenings || [];
-    const openEl = document.getElementById('detectedOpenings');
-    if (openEl) {
-      if (!openings.length) {
-        const note = this.s.detectedOpeningsNote || '';
-        openEl.innerHTML = note
-          ? `<div style="color:var(--text-muted);font-size:.82rem;text-align:center;padding:4px 0;">${note}</div>`
-          : '';
-      } else {
-        openEl.innerHTML = `
-          <div style="font-weight:600;margin-bottom:8px;font-size:.9rem;">🔍 Erkannte Öffnungen (${openings.length})</div>
-          ${openings.map((o, i) => `
-            <label style="display:flex;align-items:center;gap:10px;padding:8px;background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;cursor:pointer;">
-              <input type="checkbox" id="opening_${i}" checked style="width:16px;height:16px;accent-color:var(--primary);">
-              <div style="flex:1">
-                <div style="font-weight:600;font-size:.85rem;">${o.type === 'door' ? '🚪 Außentür' : '🪟 Fenster'} – ${o.wall}</div>
-                <div style="font-size:.78rem;color:var(--text-muted);">${o.width.toFixed(2)} m × ${o.height.toFixed(2)} m = ${o.area.toFixed(2)} m²</div>
-              </div>
-              <div style="font-size:.75rem;color:var(--primary);font-weight:600;">U = ${o.uDefault.toFixed(2)}</div>
-            </label>
-          `).join('')}`;
-      }
-    }
+    this._renderDetectedOpenings();
 
     // Suggested Bauteile from scan dimensions
     this._renderSuggestedComponents();
@@ -4622,6 +4609,58 @@ const Scanner = {
   _confirmVal(id, fallback) {
     const v = parseFloat(document.getElementById(id)?.value);
     return isFinite(v) && v > 0 ? v : fallback;
+  },
+
+  // Detected doors can be toggled between "massiv" (opaque, door U-value)
+  // and "verglast" (Fenstertür/Schiebetür, window U-value) — RoomPlan can't
+  // tell a solid front door from a floor-to-ceiling glass sliding door, both
+  // come back as type 'door'.
+  _toggleGlazed(i) {
+    const o = this.s.detectedOpenings?.[i];
+    if (!o || o.type !== 'door') return;
+    o.glazed = !o.glazed;
+    const u = HLB_DATA.uDefaultsByYear(window.state?.project?.constructionYear);
+    o.uDefault = o.glazed ? u.window : u.door;
+    this._renderDetectedOpenings();
+  },
+
+  _renderDetectedOpenings() {
+    const openings = this.s.detectedOpenings || [];
+    const openEl = document.getElementById('detectedOpenings');
+    if (!openEl) return;
+
+    if (!openings.length) {
+      const note = this.s.detectedOpeningsNote || '';
+      openEl.innerHTML = note
+        ? `<div style="color:var(--text-muted);font-size:.82rem;text-align:center;padding:4px 0;">${note}</div>`
+        : '';
+      return;
+    }
+
+    // Preserve checkbox state across re-renders (glazed toggle → re-render)
+    const prevChecked = {};
+    openEl.querySelectorAll('input[type=checkbox]').forEach(cb => { prevChecked[cb.id] = cb.checked; });
+
+    openEl.innerHTML = `
+      <div style="font-weight:600;margin-bottom:8px;font-size:.9rem;">🔍 Erkannte Öffnungen (${openings.length})</div>
+      ${openings.map((o, i) => {
+        const id = 'opening_' + i;
+        const isDoor = o.type === 'door';
+        const label = isDoor
+          ? (o.glazed ? '🪟 Fenstertür (verglast)' : '🚪 Außentür (massiv)')
+          : '🪟 Fenster';
+        return `
+          <label style="display:flex;align-items:center;gap:10px;padding:8px;background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-bottom:6px;cursor:pointer;">
+            <input type="checkbox" id="${id}" ${prevChecked[id] === false ? '' : 'checked'} style="width:16px;height:16px;accent-color:var(--primary);flex-shrink:0;">
+            <div style="flex:1">
+              <div style="font-weight:600;font-size:.85rem;">${label} – ${o.wall}</div>
+              <div style="font-size:.78rem;color:var(--text-muted);">${o.width.toFixed(2)} m × ${o.height.toFixed(2)} m = ${o.area.toFixed(2)} m²</div>
+            </div>
+            ${isDoor ? `<button type="button" onclick="event.preventDefault();Scanner._toggleGlazed(${i})" style="font-size:.72rem;padding:4px 8px;border-radius:20px;border:1px solid var(--primary);background:transparent;color:var(--primary);cursor:pointer;white-space:nowrap;">umschalten</button>` : ''}
+            <div style="font-size:.75rem;color:var(--primary);font-weight:600;">U = ${o.uDefault.toFixed(2)}</div>
+          </label>
+        `;
+      }).join('')}`;
   },
 
   _renderSuggestedComponents() {
@@ -4694,10 +4733,13 @@ const Scanner = {
       openings.forEach((o, i) => {
         const cb = document.getElementById('opening_' + i);
         if (!cb?.checked) return;
+        const isDoor = o.type === 'door';
         room.components.push({
           id: App._newId?.() || ('id_sc_' + Date.now() + '_' + i),
-          type: o.type === 'door' ? 'door' : 'window',
-          description: o.type === 'door' ? ('Tür ' + o.wall) : ('Fenster ' + o.wall),
+          type: isDoor ? 'door' : 'window',
+          description: isDoor
+            ? (o.glazed ? ('Fenstertür (verglast) ' + o.wall) : ('Tür ' + o.wall))
+            : ('Fenster ' + o.wall),
           area: +o.area.toFixed(2),
           uValue: o.uDefault,
           adjacentTemp: null,

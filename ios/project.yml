@@ -18,7 +18,6 @@ settings:
     SWIFT_VERSION: "5.9"
     TARGETED_DEVICE_FAMILY: "1,2"   # iPhone + iPad
     GENERATE_INFOPLIST_FILE: NO
-    INFOPLIST_FILE: HeizlastScan/Info.plist
 
 targets:
   HeizlastScan:
@@ -26,5 +25,18 @@ targets:
     platform: iOS
     sources:
       - HeizlastScan
+    # XcodeGen regenerates the Info.plist at this path from `properties`
+    # below. All custom keys MUST live here — a bare `info.path` would emit
+    # only the default bundle keys and drop NSCameraUsageDescription, which
+    # crashes the app the moment it touches the camera/LiDAR (TCC violation).
     info:
       path: HeizlastScan/Info.plist
+      properties:
+        CFBundleDisplayName: HeizlastScan
+        LSRequiresIPhoneOS: true
+        UILaunchScreen: {}
+        NSCameraUsageDescription: "Die Kamera und der LiDAR-Sensor werden zum Vermessen des Raumes verwendet."
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        UIRequiredDeviceCapabilities:
+          - arkit

@@ -3959,13 +3959,17 @@ const Scanner = {
 
     const area   = +(+data.floorArea).toFixed(2);
     const height = +(+data.height || 2.5).toFixed(2);
-    // Derive width/depth from area assuming a roughly square room, so the
-    // confirm inputs are pre-filled sensibly; the area itself is authoritative.
-    const side = Math.sqrt(area);
+    // Breite = längste gescannte Wand (echter Messwert statt Quadrat-Annahme,
+    // die z.B. bei einem 3,24×5,53-Raum fälschlich 4,24×4,24 zeigte und nicht
+    // zur separat berechneten Außenwandfläche passte). Tiefe wird so bestimmt,
+    // dass Breite×Tiefe weiterhin exakt der (maßgeblichen) Scan-Fläche entspricht.
+    const wallLengths = (data.walls || []).map(w => +w.width).filter(w => w > 0);
+    const width = wallLengths.length ? Math.max(...wallLengths) : Math.sqrt(area);
+    const depth = width > 0 ? area / width : Math.sqrt(area);
 
     this.s.pcPoints = null;
     this.s.pcBounds = null;
-    this.s.result = { width: +side.toFixed(2), depth: +side.toFixed(2), height, area };
+    this.s.result = { width: +width.toFixed(2), depth: +depth.toFixed(2), height, area };
 
     // Real recognised openings become detected openings (windows + doors).
     // RoomPlan classifies purely by geometry (floor-to-ceiling opening =

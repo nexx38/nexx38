@@ -67,18 +67,25 @@ ios/
 ## JSON-Schema (Schnittstelle zu HeizlastProfi)
 ```json
 {
-  "app": "HeizlastScan", "version": 1,
+  "app": "HeizlastScan", "version": 2,
   "scannedAt": "2026-07-10T14:00:00Z",
   "name": "Wohnzimmer",
   "floorArea": 24.5, "height": 2.55,
-  "walls":   [{ "width": 4.9, "height": 2.55 }],
-  "windows": [{ "width": 1.4, "height": 1.3 }],
-  "doors":   [{ "width": 0.9, "height": 2.0 }]
+  "walls":   [{ "width": 4.9, "height": 2.55, "x1": 0, "z1": 0, "x2": 4.9, "z2": 0 }],
+  "windows": [{ "width": 1.4, "height": 1.3,  "x1": 1.5, "z1": 0, "x2": 2.9, "z2": 0 }],
+  "doors":   [{ "width": 0.9, "height": 2.0,  "x1": 4.9, "z1": 1.0, "x2": 4.9, "z2": 1.9 }]
 }
 ```
+`x1/z1/x2/z2` (ab v2) sind die beiden Endpunkte jedes Bauteils in einem
+gemeinsamen, raum-lokalen 2D-Koordinatensystem (Meter) — daraus zeichnet
+`Scanner.drawFloorPlan()` den Grundriss. v1-Dateien ohne diese Felder werden
+weiter unterstützt, zeigen aber keinen Grundriss.
 Muss synchron bleiben mit `scanner.js` → `_loadRoomPlanJSON`.
 
 ## Bekannte Grenzen / nächste Schritte
-- Grundfläche = rechteckige Bounding-Box der Wände. Für L-förmige Räume später
-  auf die iOS-17-Floor-Polygon-API umstellen (exakter).
+- Grundfläche = orientierte Bounding-Box der Wände (OBB, robust gegen
+  schrägen Scan). Für L-förmige Räume später auf die iOS-17-Floor-Polygon-API
+  umstellen (exakter).
 - Mehrere Räume: aktuell 1 Scan = 1 Raum. Multi-Room folgt bei Bedarf.
+- 2D-Grundriss: siehe `Scanner.drawFloorPlan()` in `js/scanner.js` — wird im
+  Scan-Bestätigungsbildschirm und im Raum-Editor (falls gespeichert) gezeigt.

@@ -640,6 +640,16 @@ const App = {
 
         ${banner}
 
+        ${room.floorPlan ? `
+        <div class="section-card">
+          <div class="section-header">
+            <div class="section-title">📐 Grundriss (aus LiDAR-Scan)</div>
+          </div>
+          <div class="section-body">
+            <canvas id="roomFloorPlanCanvas" style="width:100%;height:220px;border-radius:10px;display:block;background:#0a0a0f;"></canvas>
+          </div>
+        </div>` : ''}
+
         <!-- Basic data -->
         <div class="section-card">
           <div class="section-header">
@@ -752,6 +762,11 @@ const App = {
         </div>
 
       </div>`;
+
+    if (room.floorPlan) {
+      const fpCanvas = document.getElementById('roomFloorPlanCanvas');
+      if (fpCanvas) Scanner.drawFloorPlan(fpCanvas, room.floorPlan);
+    }
 
     // Toggle WRG row visibility
     document.getElementById('rHeatRecovery')?.addEventListener('change', function() {

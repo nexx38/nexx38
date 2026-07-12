@@ -31,6 +31,7 @@ const Scanner = {
     this.s.pcPoints = null;
     this.s.pcBounds = null;
     this.s.roomPlanWallArea = 0;
+    this.s.floorPlan = null;
     document.getElementById('scannerOverlay').classList.add('active');
 
     // iPad mit Desktop-UA meldet sich als MacIntel mit Touchscreen
@@ -499,6 +500,16 @@ const Scanner = {
     // already cut out), stored so the suggested Außenwand uses the real value.
     this.s.roomPlanWallArea = (data.walls || [])
       .reduce((s, w) => s + (+w.width) * (+w.height), 0);
+
+    // 2D floor-plan segments (v2 export). Each opening carries x1/z1/x2/z2 in
+    // a shared room-local frame — undefined on older (v1) files, in which
+    // case the plan is simply skipped.
+    const hasPositions = (data.walls || []).some(w => isFinite(w.x1));
+    this.s.floorPlan = hasPositions ? {
+      walls:   (data.walls   || []).filter(w => isFinite(w.x1)).map(w => ({ x1: +w.x1, z1: +w.z1, x2: +w.x2, z2: +w.z2 })),
+      windows: (data.windows || []).filter(w => isFinite(w.x1)).map(w => ({ x1: +w.x1, z1: +w.z1, x2: +w.x2, z2: +w.z2 })),
+      doors:   (data.doors   || []).filter(w => isFinite(w.x1)).map(w => ({ x1: +w.x1, z1: +w.z1, x2: +w.x2, z2: +w.z2 })),
+    } : null;
 
     if (data.name) this.s.result.name = data.name;
 
@@ -1061,9 +1072,63 @@ const Scanner = {
     this._updateConfirmArea();
 
     this._renderDetectedOpenings();
+    this._renderFloorPlan();
 
     // Suggested Bauteile from scan dimensions
     this._renderSuggestedComponents();
+  },
+
+  // 2D-Grundriss aus den RoomPlan-Positionsdaten (nur bei JSON-Import mit
+  // v2-Schema vorhanden; bei PLY-Scans oder älteren JSON-Dateien wird die
+  // Fläche einfach ausgeblendet).
+  _renderFloorPlan() {
+    const wrap = document.getElementById('floorPlanWrap');
+    const canvas = document.getElementById('floorPlanCanvas');
+    const plan = this.s.floorPlan;
+    if (!wrap || !canvas) return;
+    if (!plan || !plan.walls?.length) { wrap.style.display = 'none'; return; }
+    wrap.style.display = 'block';
+    this.drawFloorPlan(canvas, plan);
+  },
+
+  // Shared 2D-floor-plan renderer — used by the scan confirm screen and by
+  // the room detail view (App.renderRoomDetail) for a previously saved plan.
+  drawFloorPlan(canvas, plan) {
+    const allPts = [...plan.walls, ...plan.windows, ...plan.doors]
+      .flatMap(s => [{ x: s.x1, z: s.z1 }, { x: s.x2, z: s.z2 }]);
+    if (!allPts.length) return;
+    const minX = Math.min(...allPts.map(p => p.x)), maxX = Math.max(...allPts.map(p => p.x));
+    const minZ = Math.min(...allPts.map(p => p.z)), maxZ = Math.max(...allPts.map(p => p.z));
+    const spanX = Math.max(0.5, maxX - minX), spanZ = Math.max(0.5, maxZ - minZ);
+
+    const W = canvas.offsetWidth || 320;
+    const H = canvas.offsetHeight || 240;
+    canvas.width = W; canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#0a0a0f';
+    ctx.fillRect(0, 0, W, H);
+
+    const pad = 28;
+    const scale = Math.min((W - pad * 2) / spanX, (H - pad * 2) / spanZ);
+    const offX = (W - spanX * scale) / 2;
+    const offZ = (H - spanZ * scale) / 2;
+    const toPx = (x, z) => [offX + (x - minX) * scale, H - (offZ + (z - minZ) * scale)];
+
+    const drawSeg = (s, color, width) => {
+      const [x1, y1] = toPx(s.x1, s.z1);
+      const [x2, y2] = toPx(s.x2, s.z2);
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+    };
+
+    plan.walls.forEach(s   => drawSeg(s, '#4FC3F7', 4));
+    plan.doors.forEach(s   => drawSeg(s, '#FF9800', 6));
+    plan.windows.forEach(s => drawSeg(s, '#66BB6A', 6));
   },
 
   _uDefaults(year) {
@@ -1226,6 +1291,7 @@ const Scanner = {
     if (room) {
       room.area   = area;
       room.height = height;
+      if (this.s.floorPlan) room.floorPlan = this.s.floorPlan;
 
       let added = 0;
 

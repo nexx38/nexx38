@@ -31,22 +31,14 @@ jobs:
 
       - name: Build archive (unsigned)
         run: |
+          set -eo pipefail
           xcodebuild \
             -project KuehllastScan.xcodeproj \
             -scheme KuehllastScan \
             -configuration Release \
             -sdk iphoneos \
-            -archivePath build/KuehllastScan.xcarchive \
-            archive \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY="" \
-            | xcpretty || xcodebuild \
-            -project KuehllastScan.xcodeproj \
-            -scheme KuehllastScan \
-            -configuration Release \
-            -sdk iphoneos \
-            -archivePath build/KuehllastScan.xcarchive \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$PWD/build/KuehllastScan.xcarchive" \
             archive \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
@@ -54,14 +46,16 @@ jobs:
 
       - name: Package .ipa
         run: |
-          set -e
-          APP_DIR="build/KuehllastScan.xcarchive/Products/Applications"
-          cd "$APP_DIR"
-          mkdir -p Payload
-          mv KuehllastScan.app Payload/
-          zip -qr KuehllastScan.ipa Payload
-          mkdir -p "$GITHUB_WORKSPACE/out"
-          mv KuehllastScan.ipa "$GITHUB_WORKSPACE/out/"
+          set -eo pipefail
+          echo "Archiv-Inhalt:"
+          ls -R build/KuehllastScan.xcarchive/Products || { echo "Kein Products-Ordner – Archive-Schritt hat nichts gebaut."; exit 1; }
+          APP=$(find build/KuehllastScan.xcarchive/Products/Applications -maxdepth 1 -name '*.app' | head -1)
+          if [ -z "$APP" ]; then echo "Keine .app gefunden."; exit 1; fi
+          echo "Gefundene App: $APP"
+          rm -rf out && mkdir -p out/Payload
+          cp -R "$APP" out/Payload/
+          ( cd out && zip -qr KuehllastScan.ipa Payload && rm -rf Payload )
+          ls -lh out/
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4

@@ -7,7 +7,7 @@ name: Build unsigned IPA
 
 on:
   push:
-    branches: [main]
+    branches: [kuehllastscan, main]
   workflow_dispatch:      # erlaubt manuellen Start per Knopfdruck auf GitHub
 
 jobs:

@@ -1,0 +1,71 @@
+name: Build unsigned IPA
+
+# Baut die App auf einem macOS-Runner (Mac in der Cloud) und legt eine
+# UNSIGNIERTE .ipa als Download-Artefakt ab. Diese .ipa lädst du herunter und
+# installierst sie mit Sideloadly auf dem iPhone (Sideloadly signiert sie dann
+# mit deiner Apple-ID). Kein eigener Mac nötig.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:      # erlaubt manuellen Start per Knopfdruck auf GitHub
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_15.4.app
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Run core tests
+        run: swift test
+
+      - name: Build archive (unsigned)
+        run: |
+          xcodebuild \
+            -project KuehllastScan.xcodeproj \
+            -scheme KuehllastScan \
+            -configuration Release \
+            -sdk iphoneos \
+            -archivePath build/KuehllastScan.xcarchive \
+            archive \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            | xcpretty || xcodebuild \
+            -project KuehllastScan.xcodeproj \
+            -scheme KuehllastScan \
+            -configuration Release \
+            -sdk iphoneos \
+            -archivePath build/KuehllastScan.xcarchive \
+            archive \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY=""
+
+      - name: Package .ipa
+        run: |
+          set -e
+          APP_DIR="build/KuehllastScan.xcarchive/Products/Applications"
+          cd "$APP_DIR"
+          mkdir -p Payload
+          mv KuehllastScan.app Payload/
+          zip -qr KuehllastScan.ipa Payload
+          mkdir -p "$GITHUB_WORKSPACE/out"
+          mv KuehllastScan.ipa "$GITHUB_WORKSPACE/out/"
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: KuehllastScan-unsigned-ipa
+          path: out/KuehllastScan.ipa
+          if-no-files-found: error

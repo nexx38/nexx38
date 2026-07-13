@@ -1,0 +1,38 @@
+name: KuehllastScan
+options:
+  bundleIdPrefix: de.shk-innovation
+  deploymentTarget:
+    iOS: "16.0"
+packages:
+  KuehllastCore:
+    path: .
+targets:
+  KuehllastScan:
+    type: application
+    platform: iOS
+    sources:
+      - App
+    dependencies:
+      - package: KuehllastCore
+    info:
+      path: App/Info.plist
+      properties:
+        CFBundleDisplayName: Kühllast
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+    settings:
+      base:
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        GENERATE_INFOPLIST_FILE: NO
+        TARGETED_DEVICE_FAMILY: "1"
+schemes:
+  KuehllastScan:
+    build:
+      targets:
+        KuehllastScan: all
+    run:
+      config: Debug
+    archive:
+      config: Release

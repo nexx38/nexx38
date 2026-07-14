@@ -30,8 +30,8 @@ enum RoomPlanConverter {
                    orientation: .sued)
         }
 
-        let height = walls.map(\.height).max() ?? 2.5
-        let floorArea = estimatedFloorArea(from: captured.walls, fallbackHeight: height)
+        let height = medianHeight(of: captured.walls)
+        let floorArea = orientedFloorArea(from: captured.walls)
 
         return Room(
             name: name,
@@ -44,27 +44,47 @@ enum RoomPlanConverter {
         )
     }
 
-    /// Schätzt die Grundfläche aus der Ausdehnung der Wandpositionen im Grundriss
-    /// (x/z-Ebene). Grobe, aber brauchbare Ausgangsgröße – im Editor korrigierbar.
-    private static func estimatedFloorArea(from walls: [CapturedRoom.Surface],
-                                           fallbackHeight: Double) -> Double {
-        guard !walls.isEmpty else { return 20 }
+    /// Lichte Raumhöhe = Median der Wandhöhen (robust gegen eine fehl­erkannte Wand).
+    private static func medianHeight(of walls: [CapturedRoom.Surface]) -> Double {
+        let hs = walls.map { Double($0.dimensions.y) }.filter { $0 > 1.0 }.sorted()
+        guard !hs.isEmpty else { return 2.5 }
+        return hs[hs.count / 2]
+    }
 
-        var minX = Float.greatestFiniteMagnitude
-        var maxX = -Float.greatestFiniteMagnitude
-        var minZ = Float.greatestFiniteMagnitude
-        var maxZ = -Float.greatestFiniteMagnitude
-
+    /// Grundfläche über die flächenkleinste gedrehte Bounding-Box der Wand-Endpunkte.
+    /// Eine achsparallele Box überschätzt schräg gescannte Räume massiv (ein um 45°
+    /// gedrehter 5,5×3,2-m-Raum hätte achsparallel ~36 m², real sind es ~18 m²).
+    /// Das Durchprobieren der Drehung findet die echte Grundfläche unabhängig von
+    /// der Scan-Ausrichtung. Übernommen aus dem bewährten HeizlastScan-Code.
+    private static func orientedFloorArea(from walls: [CapturedRoom.Surface]) -> Double {
+        var pts: [(x: Double, z: Double)] = []
         for wall in walls {
-            let p = wall.transform.columns.3   // Position der Wandmitte
-            minX = min(minX, p.x); maxX = max(maxX, p.x)
-            minZ = min(minZ, p.z); maxZ = max(maxZ, p.z)
+            let t = wall.transform
+            let cx = Double(t.columns.3.x), cz = Double(t.columns.3.z)
+            let halfLen = Double(wall.dimensions.x) / 2.0
+            let ax = Double(t.columns.0.x), az = Double(t.columns.0.z)
+            pts.append((cx + ax * halfLen, cz + az * halfLen))
+            pts.append((cx - ax * halfLen, cz - az * halfLen))
         }
+        guard pts.count >= 2 else { return 20 }
 
-        let width = Double(maxX - minX)
-        let depth = Double(maxZ - minZ)
-        let area = width * depth
-
-        return area > 1 ? area : 20   // Notnagel, falls die Schätzung unbrauchbar ist
+        var bestArea = Double.greatestFiniteMagnitude
+        var deg = 0
+        while deg < 90 {
+            let t = Double(deg) * .pi / 180
+            let c = cos(t), s = sin(t)
+            var minU = Double.greatestFiniteMagnitude, maxU = -Double.greatestFiniteMagnitude
+            var minV = Double.greatestFiniteMagnitude, maxV = -Double.greatestFiniteMagnitude
+            for p in pts {
+                let u = p.x * c + p.z * s
+                let v = -p.x * s + p.z * c
+                minU = min(minU, u); maxU = max(maxU, u)
+                minV = min(minV, v); maxV = max(maxV, v)
+            }
+            let area = (maxU - minU) * (maxV - minV)
+            if area < bestArea { bestArea = area }
+            deg += 1
+        }
+        return bestArea.isFinite && bestArea > 1 ? bestArea : 20
     }
 }

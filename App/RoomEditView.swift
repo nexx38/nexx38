@@ -88,6 +88,13 @@ struct RoomEditView: View {
         }
         .navigationTitle(room.name)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                ShareLink(item: RoomJSONExport.fileURL(for: room)) {
+                    Image(systemName: "square.and.arrow.up")
+                }
+            }
+        }
     }
 }
 

@@ -2,30 +2,47 @@ import SwiftUI
 import RoomPlan
 import KuehllastCore
 
-/// Prüft, ob das Gerät einen LiDAR-Sensor hat und Raumscans unterstützt.
+/// Prüft, ob das Gerät LiDAR hat und Raumscans unterstützt.
 /// RoomPlan braucht ein iPhone 12 Pro/Pro Max oder neuer (Pro-Reihe) bzw. ein iPad Pro mit LiDAR.
 enum RoomScanAvailability {
-    static var isSupported: Bool {
-        RoomCaptureSession.isSupported
-    }
+    static var isSupported: Bool { RoomCaptureSession.isSupported }
 }
 
-/// Scannt einen Raum per Kamera + LiDAR (Apple RoomPlan) – der direkte Ersatz
-/// für das manuelle Vermessen. Erfasst Wände, Türen und Fenster automatisch.
-/// Fensterausrichtung und g-Wert setzt man danach wie gewohnt im Raum-Editor,
-/// da RoomPlan die Himmelsrichtung nicht mitliefert.
+/// Beobachtbarer Zustand des Scans, den die SwiftUI-Ansicht anzeigt.
+/// Alle Änderungen laufen über den Main-Thread (der Coordinator dispatcht dorthin).
+final class ScanModel: ObservableObject {
+    @Published var statusMessage: String? = "Raum langsam abgehen – Wände, Türen und Fenster werden erfasst"
+    @Published var canFinish = false
+    @Published var errorText: String?
+
+    var onStart: (() -> Void)?
+    var onStop: (() -> Void)?
+    var onFinished: ((CapturedRoom) -> Void)?
+
+    func start() { onStart?() }
+
+    /// Beendet den Scan und stößt die Nachbearbeitung an (liefert am Ende den Raum).
+    func requestFinish() {
+        statusMessage = "Wird verarbeitet …"
+        onStop?()
+    }
+
+    func finish(with room: CapturedRoom) { onFinished?(room) }
+}
+
+/// SwiftUI-Ansicht: Kamera-Scan mit Bedien-Overlay (Abbrechen / Fertig).
 struct RoomScanView: View {
     @EnvironmentObject var store: RoomStore
     @Environment(\.dismiss) private var dismiss
-    @StateObject private var coordinator = RoomScanCoordinator()
+    @StateObject private var model = ScanModel()
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            RoomCaptureRepresentable(coordinator: coordinator)
+            RoomScanRepresentable(model: model)
                 .ignoresSafeArea()
 
             VStack(spacing: 12) {
-                if let message = coordinator.statusMessage {
+                if let message = model.statusMessage {
                     Text(message)
                         .font(.footnote)
                         .padding(.horizontal, 14)
@@ -34,22 +51,22 @@ struct RoomScanView: View {
                 }
                 HStack(spacing: 16) {
                     Button("Abbrechen", role: .cancel) {
-                        coordinator.stop()
+                        model.onStop?()
                         dismiss()
                     }
                     .buttonStyle(.bordered)
 
                     Button("Fertig") {
-                        coordinator.finish()
+                        model.requestFinish()
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(!coordinator.canFinish)
+                    .disabled(!model.canFinish)
                 }
             }
             .padding(.bottom, 48)
         }
         .onAppear {
-            coordinator.onComplete = { captured in
+            model.onFinished = { captured in
                 store.add(RoomPlanConverter.room(from: captured))
                 dismiss()
             }
@@ -58,87 +75,63 @@ struct RoomScanView: View {
     }
 }
 
-/// Verbindet SwiftUI mit Apples `RoomCaptureView` (UIKit) und wertet die
-/// Ergebnisse über die RoomPlan-Delegates aus.
-@MainActor
-final class RoomScanCoordinator: NSObject, ObservableObject,
-                                 RoomCaptureViewDelegate, RoomCaptureSessionDelegate {
-    @Published var statusMessage: String? = "Raum langsam abgehen – Wände, Türen und Fenster werden erfasst"
-    @Published var canFinish = false
+/// Bindeglied zwischen SwiftUI und Apples `RoomCaptureView` (UIKit).
+struct RoomScanRepresentable: UIViewRepresentable {
+    @ObservedObject var model: ScanModel
 
-    /// Wird aufgerufen, sobald der Scan fertig verarbeitet ist.
-    var onComplete: ((CapturedRoom) -> Void)?
-
-    let captureView = RoomCaptureView(frame: .zero)
-    private let sessionConfig = RoomCaptureSession.Configuration()
-    private var started = false
-
-    override init() {
-        super.init()
-        captureView.delegate = self
-        captureView.captureSession.delegate = self
+    func makeUIView(context: Context) -> RoomCaptureView {
+        let view = RoomCaptureView(frame: .zero)
+        view.captureSession.delegate = context.coordinator
+        view.delegate = context.coordinator
+        context.coordinator.captureView = view
+        model.onStart = { view.captureSession.run(configuration: RoomCaptureSession.Configuration()) }
+        model.onStop  = { view.captureSession.stop() }
+        // Scan startet automatisch, sobald die Ansicht erscheint.
+        DispatchQueue.main.async { model.start() }
+        return view
     }
 
-    // RoomCaptureViewDelegate erbt NSCoding, weil RoomCaptureView seinen
-    // Delegate intern zur Laufzeit archiviert/dearchiviert. Ohne diese
-    // Konformität lehnt der Compiler die Protokoll-Zusicherung ab; ein `nil`
-    // aus dieser Initialisierung würde RoomPlan beim Dearchivieren abstürzen
-    // lassen – daher eine echte, aber inaktive Instanz zurückgeben. Die
-    // eigentlichen Callbacks laufen über die in `makeUIView` zugewiesene
-    // lebende Instanz.
+    func updateUIView(_ uiView: RoomCaptureView, context: Context) {}
+
+    func makeCoordinator() -> RoomScanCoordinator { RoomScanCoordinator(model: model) }
+}
+
+/// Top-level (nicht verschachtelt), damit diese NSObject-Unterklasse einen stabilen
+/// Objective-C-Laufzeitnamen bekommt – eine verschachtelte NSObject-Unterklasse
+/// scheitert beim Archivieren im Release-Build.
+final class RoomScanCoordinator: NSObject, RoomCaptureViewDelegate, RoomCaptureSessionDelegate {
+    let model: ScanModel
+    weak var captureView: RoomCaptureView?
+
+    init(model: ScanModel) { self.model = model }
+
+    // RoomCaptureViewDelegate erbt NSCoding, weil RoomCaptureView seinen Delegate
+    // intern zur Laufzeit archiviert. `nil` würde RoomPlan abstürzen lassen – daher
+    // eine echte, aber inaktive Instanz. Die Callbacks erreichen weiter den in
+    // makeUIView zugewiesenen, lebenden Coordinator.
     required init?(coder: NSCoder) {
+        self.model = ScanModel()
         super.init()
     }
     func encode(with coder: NSCoder) {}
 
-    func start() {
-        guard !started else { return }
-        started = true
-        captureView.captureSession.run(configuration: sessionConfig)
-    }
-
-    func stop() {
-        captureView.captureSession.stop()
-    }
-
-    func finish() {
-        statusMessage = "Wird verarbeitet …"
-        captureView.captureSession.stop()
-    }
-
     // MARK: RoomCaptureSessionDelegate
 
-    nonisolated func captureSession(_ session: RoomCaptureSession, didUpdate room: CapturedRoom) {
-        Task { @MainActor in
-            canFinish = !room.walls.isEmpty
-        }
+    func captureSession(_ session: RoomCaptureSession, didUpdate room: CapturedRoom) {
+        DispatchQueue.main.async { self.model.canFinish = !room.walls.isEmpty }
     }
 
     // MARK: RoomCaptureViewDelegate
 
-    nonisolated func captureView(shouldPresent roomDataForProcessing: CapturedRoomData,
-                                 error: Error?) -> Bool {
-        error == nil
+    func captureView(shouldPresent roomDataForProcessing: CapturedRoomData, error: Error?) -> Bool {
+        true
     }
 
-    nonisolated func captureView(didPresent processedResult: CapturedRoom, error: Error?) {
-        Task { @MainActor in
-            guard error == nil else {
-                statusMessage = "Verarbeitung fehlgeschlagen: \(error!.localizedDescription)"
-                return
-            }
-            onComplete?(processedResult)
+    func captureView(didPresent processedResult: CapturedRoom, error: Error?) {
+        if let error = error {
+            DispatchQueue.main.async { self.model.errorText = error.localizedDescription }
+            return
         }
+        DispatchQueue.main.async { self.model.finish(with: processedResult) }
     }
-}
-
-struct RoomCaptureRepresentable: UIViewRepresentable {
-    let coordinator: RoomScanCoordinator
-
-    func makeUIView(context: Context) -> RoomCaptureView {
-        coordinator.start()
-        return coordinator.captureView
-    }
-
-    func updateUIView(_ uiView: RoomCaptureView, context: Context) {}
 }

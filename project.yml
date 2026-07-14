@@ -2,7 +2,7 @@ name: KuehllastScan
 options:
   bundleIdPrefix: de.shk-innovation
   deploymentTarget:
-    iOS: "16.0"
+    iOS: "17.0"
 packages:
   KuehllastCore:
     path: .
@@ -18,10 +18,13 @@ targets:
       path: App/Info.plist
       properties:
         CFBundleDisplayName: Kühllast
+        LSRequiresIPhoneOS: true
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
         NSCameraUsageDescription: Für den 3D-Scan eines Raums wird die Kamera benötigt.
+        UIRequiredDeviceCapabilities:
+          - arkit
     settings:
       base:
         MARKETING_VERSION: "1.0"

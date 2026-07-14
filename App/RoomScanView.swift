@@ -79,6 +79,18 @@ final class RoomScanCoordinator: NSObject, ObservableObject,
         captureView.captureSession.delegate = self
     }
 
+    // RoomCaptureViewDelegate erbt NSCoding, weil RoomCaptureView seinen
+    // Delegate intern zur Laufzeit archiviert/dearchiviert. Ohne diese
+    // Konformität lehnt der Compiler die Protokoll-Zusicherung ab; ein `nil`
+    // aus dieser Initialisierung würde RoomPlan beim Dearchivieren abstürzen
+    // lassen – daher eine echte, aber inaktive Instanz zurückgeben. Die
+    // eigentlichen Callbacks laufen über die in `makeUIView` zugewiesene
+    // lebende Instanz.
+    required init?(coder: NSCoder) {
+        super.init()
+    }
+    func encode(with coder: NSCoder) {}
+
     func start() {
         guard !started else { return }
         started = true

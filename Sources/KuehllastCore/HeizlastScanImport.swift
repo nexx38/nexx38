@@ -41,7 +41,7 @@ public enum HeizlastScanImport {
                             climateRegionID: String = ClimateRegion.default.id) throws -> Room {
         let decoder = JSONDecoder()
         guard let raw = try? decoder.decode(Raw.self, from: data) else {
-            throw ImportError(message: "JSON konnte nicht gelesen werden – ist es ein HeizlastScan-Export?")
+            throw ImportError(message: "JSON konnte nicht gelesen werden.")
         }
         guard let floorArea = raw.floorArea, let height = raw.height else {
             throw ImportError(message: "Im Scan fehlen Fläche oder Höhe.")

@@ -25,12 +25,12 @@ struct RoomListView: View {
                         Button {
                             store.add(Room(name: "Neuer Raum", floorArea: 20, height: 2.5))
                         } label: {
-                            Label("Raum manuell anlegen", systemImage: "square.dashed")
+                            Label("Neuer Raum", systemImage: "square.dashed")
                         }
                         Button {
                             showImporter = true
                         } label: {
-                            Label("HeizlastScan importieren", systemImage: "square.and.arrow.down")
+                            Label("JSON-Scan importieren", systemImage: "square.and.arrow.down")
                         }
                     } label: {
                         Image(systemName: "plus")
@@ -74,18 +74,26 @@ struct RoomListView: View {
                 .foregroundStyle(accent)
             Text("Noch keine Räume")
                 .font(.title3.weight(.medium))
-            Text("Lege einen Raum an oder importiere einen Scan aus HeizlastScan.")
+            Text("Lege einen Raum an und gib seine Maße ein.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
             Button {
-                showImporter = true
+                store.add(Room(name: "Neuer Raum", floorArea: 20, height: 2.5))
             } label: {
-                Label("HeizlastScan importieren", systemImage: "square.and.arrow.down")
+                Label("Raum anlegen", systemImage: "plus")
             }
             .buttonStyle(.borderedProminent)
             .tint(accent)
+            Button {
+                showImporter = true
+            } label: {
+                Text("oder JSON-Scan importieren")
+            }
+            .buttonStyle(.plain)
+            .font(.footnote)
+            .foregroundStyle(.secondary)
         }
     }
 

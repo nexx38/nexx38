@@ -5,6 +5,7 @@ import KuehllastCore
 struct RoomListView: View {
     @EnvironmentObject var store: RoomStore
     @State private var showImporter = false
+    @State private var showScanner = false
     @State private var importError: String?
 
     private var accent: Color { Color(red: 0.33, green: 0.29, blue: 0.72) }
@@ -22,6 +23,13 @@ struct RoomListView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
+                        if RoomScanAvailability.isSupported {
+                            Button {
+                                showScanner = true
+                            } label: {
+                                Label("Raum scannen", systemImage: "camera.viewfinder")
+                            }
+                        }
                         Button {
                             store.add(Room(name: "Neuer Raum", floorArea: 20, height: 2.5))
                         } label: {
@@ -41,6 +49,9 @@ struct RoomListView: View {
                           allowedContentTypes: [.json],
                           allowsMultipleSelection: false) { result in
                 handleImport(result)
+            }
+            .fullScreenCover(isPresented: $showScanner) {
+                RoomScanView()
             }
             .alert("Import fehlgeschlagen", isPresented: .constant(importError != nil)) {
                 Button("OK") { importError = nil }
@@ -74,26 +85,47 @@ struct RoomListView: View {
                 .foregroundStyle(accent)
             Text("Noch keine Räume")
                 .font(.title3.weight(.medium))
-            Text("Lege einen Raum an und gib seine Maße ein.")
+            Text(RoomScanAvailability.isSupported
+                 ? "Scanne einen Raum mit der Kamera oder lege ihn von Hand an."
+                 : "Lege einen Raum an und gib seine Maße ein.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
-            Button {
-                store.add(Room(name: "Neuer Raum", floorArea: 20, height: 2.5))
-            } label: {
-                Label("Raum anlegen", systemImage: "plus")
+
+            if RoomScanAvailability.isSupported {
+                Button {
+                    showScanner = true
+                } label: {
+                    Label("Raum scannen", systemImage: "camera.viewfinder")
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(accent)
+                Button {
+                    store.add(Room(name: "Neuer Raum", floorArea: 20, height: 2.5))
+                } label: {
+                    Text("oder Raum von Hand anlegen")
+                }
+                .buttonStyle(.plain)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+            } else {
+                Button {
+                    store.add(Room(name: "Neuer Raum", floorArea: 20, height: 2.5))
+                } label: {
+                    Label("Raum anlegen", systemImage: "plus")
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(accent)
+                Button {
+                    showImporter = true
+                } label: {
+                    Text("oder JSON-Scan importieren")
+                }
+                .buttonStyle(.plain)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
             }
-            .buttonStyle(.borderedProminent)
-            .tint(accent)
-            Button {
-                showImporter = true
-            } label: {
-                Text("oder JSON-Scan importieren")
-            }
-            .buttonStyle(.plain)
-            .font(.footnote)
-            .foregroundStyle(.secondary)
         }
     }
 

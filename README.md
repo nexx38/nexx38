@@ -98,10 +98,17 @@ Geräten – konservativ (maximale Einstrahlung, keine Speichermasse), gut genug
 für die Praxis, aber **kein prüffähiger Nachweis**. Dafür bräuchte es das
 vollständige Stundenverfahren nach VDI 2078 (siehe „Nächste Schritte“).
 
+## Raum scannen (LiDAR)
+
+Auf Geräten mit LiDAR (iPhone 12 Pro und neuer, Pro-Reihe; iPad Pro) kann ein
+Raum direkt mit der Kamera erfasst werden (Apple RoomPlan) – Wände, Türen und
+Fenster werden automatisch vermessen. Dateien: `App/RoomScanView.swift`
+(Kamera-Ansicht) und `App/RoomPlanConverter.swift` (Umwandlung in `Room`).
+Die Fensterausrichtung liefert RoomPlan nicht – die trägt man nach dem Scan im
+Raum-Editor ein. Ohne LiDAR bleibt der manuelle Weg (Raum von Hand anlegen).
+
 ## Nächste Schritte / offen
 
-- **LiDAR-Scan direkt in der App** (Apple RoomPlan), damit man nicht erst durch
-  HeizlastScan muss. Andockpunkt: neue `ScanView`, die einen `Room` erzeugt.
 - **Klimadaten aus DWD-Testreferenzjahren** je Postleitzahl statt der fünf
   hinterlegten Regionen.
 - **Stundenverfahren (V2)** mit Gebäudespeichermasse für prüffähige Nachweise.

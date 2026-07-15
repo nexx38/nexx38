@@ -65,7 +65,7 @@ struct RoomEditView: View {
             } header: {
                 Text("Türen")
             } footer: {
-                Text("Große Schiebefenster erkennt der Scan oft als Tür. Als „verglast" markiert zählen sie wie ein Fenster (Sonneneintrag).")
+                Text("Große Schiebefenster erkennt der Scan oft als Tür. Als 'verglast' markiert zählen sie wie ein Fenster (Sonneneintrag).")
             }
 
             Section("Außenwände") {

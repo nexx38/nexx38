@@ -55,26 +55,44 @@ public struct Wall: Codable, Hashable, Identifiable, Sendable {
     }
 }
 
-/// Eine Tür aus dem Raumscan. Für die Kühllast meist innenliegend (ohne Last).
+/// Eine Tür aus dem Raumscan. RoomPlan erkennt große Schiebefenster/Terrassentüren
+/// oft als „Tür" – deshalb kann eine Tür als `isGlazed` markiert werden und zählt
+/// dann wie ein Fenster (solarer Eintrag über Ausrichtung + g-Wert).
 public struct Door: Codable, Hashable, Identifiable, Sendable {
     public var id = UUID()
     public var width: Double
     public var height: Double
     public var isExternal: Bool
     public var uValue: Double
+    /// Verglast? Dann wie ein Fenster gerechnet (Solar-Eintrag). Sonst nur Transmission.
+    public var isGlazed: Bool
+    /// Himmelsrichtung – nur relevant, wenn verglast.
+    public var orientation: Orientation
+    /// g-Wert des Glases – nur relevant, wenn verglast.
+    public var gValue: Double
+    /// Verschattungsfaktor – nur relevant, wenn verglast.
+    public var shading: Double
 
     public var area: Double { width * height }
 
     public init(id: UUID = UUID(), width: Double, height: Double,
-                isExternal: Bool = false, uValue: Double = 1.8) {
+                isExternal: Bool = false, uValue: Double = 1.8,
+                isGlazed: Bool = false, orientation: Orientation = .sued,
+                gValue: Double = 0.6, shading: Double = 1.0) {
         self.id = id
         self.width = width
         self.height = height
         self.isExternal = isExternal
         self.uValue = uValue
+        self.isGlazed = isGlazed
+        self.orientation = orientation
+        self.gValue = gValue
+        self.shading = shading
     }
 
-    private enum CodingKeys: String, CodingKey { case id, width, height, isExternal, uValue }
+    private enum CodingKeys: String, CodingKey {
+        case id, width, height, isExternal, uValue, isGlazed, orientation, gValue, shading
+    }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -83,6 +101,10 @@ public struct Door: Codable, Hashable, Identifiable, Sendable {
         self.height = try c.decode(Double.self, forKey: .height)
         self.isExternal = (try? c.decode(Bool.self, forKey: .isExternal)) ?? false
         self.uValue = (try? c.decode(Double.self, forKey: .uValue)) ?? 1.8
+        self.isGlazed = (try? c.decode(Bool.self, forKey: .isGlazed)) ?? false
+        self.orientation = (try? c.decode(Orientation.self, forKey: .orientation)) ?? .sued
+        self.gValue = (try? c.decode(Double.self, forKey: .gValue)) ?? 0.6
+        self.shading = (try? c.decode(Double.self, forKey: .shading)) ?? 1.0
     }
 }
 

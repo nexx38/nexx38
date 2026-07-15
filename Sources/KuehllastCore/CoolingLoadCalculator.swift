@@ -58,18 +58,26 @@ public struct CoolingLoadCalculator {
     public func calculate(_ room: Room) -> CoolingLoadResult {
         let deltaT = max(0, region.designOutdoorTemperature - room.indoorTemperature)
 
-        // 1) Solare Last durch Fenster: A · g · I(Ausrichtung) · Verschattung
-        let solar = room.windows.reduce(0.0) { sum, window in
+        // 1) Solare Last durch Fenster und verglaste Türen: A · g · I(Ausrichtung) · Verschattung
+        let windowSolar = room.windows.reduce(0.0) { sum, window in
             let irr = region.irradiance(for: window.orientation)
             return sum + window.area * window.gValue * irr * window.shading
         }
+        let doorSolar = room.doors
+            .filter { $0.isGlazed }
+            .reduce(0.0) { sum, door in
+                let irr = region.irradiance(for: door.orientation)
+                return sum + door.area * door.gValue * irr * door.shading
+            }
+        let solar = windowSolar + doorSolar
 
-        // 2) Transmission über Außenwände, Außentüren und Fensterflächen (U · A · ΔT)
+        // 2) Transmission über Außenwände, Außen-/verglaste Türen und Fenster (U · A · ΔT).
+        //    Verglaste Türen führen nach außen und zählen daher immer mit.
         let wallTrans = room.walls
             .filter { $0.isExternal }
             .reduce(0.0) { $0 + $1.uValue * $1.area * deltaT }
         let doorTrans = room.doors
-            .filter { $0.isExternal }
+            .filter { $0.isExternal || $0.isGlazed }
             .reduce(0.0) { $0 + $1.uValue * $1.area * deltaT }
         let windowTrans = room.windows
             .reduce(0.0) { $0 + $1.uValue * $1.area * deltaT }

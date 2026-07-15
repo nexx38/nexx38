@@ -12,6 +12,8 @@ struct RoomJSONExport: Codable {
     struct Door: Codable {
         let width: Double
         let height: Double
+        let glazed: Bool
+        let orientation: String?
     }
     struct Window: Codable {
         let width: Double
@@ -52,7 +54,11 @@ struct RoomJSONExport: Codable {
             indoorTemperature: room.indoorTemperature,
             climateRegion: region.name,
             walls: room.walls.map { Wall(width: round2($0.width), height: round2($0.height), external: $0.isExternal) },
-            doors: room.doors.map { Door(width: round2($0.width), height: round2($0.height)) },
+            doors: room.doors.map {
+                Door(width: round2($0.width), height: round2($0.height),
+                     glazed: $0.isGlazed,
+                     orientation: $0.isGlazed ? $0.orientation.rawValue : nil)
+            },
             windows: room.windows.map {
                 Window(width: round2($0.width), height: round2($0.height),
                        orientation: $0.orientation.rawValue,

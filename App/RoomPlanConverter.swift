@@ -19,9 +19,15 @@ enum RoomPlanConverter {
                  isExternal: true)
         }
 
-        let doors = captured.doors.map { surface in
-            Door(width: Double(surface.dimensions.x),
-                 height: Double(surface.dimensions.y))
+        let doors = captured.doors.map { surface -> Door in
+            let width = Double(surface.dimensions.x)
+            // Breite „Türen" sind fast immer Schiebefenster/Terrassentüren →
+            // als verglast + außenliegend vorbelegen (im Editor korrigierbar).
+            let likelyGlazed = width >= 1.5
+            return Door(width: width,
+                        height: Double(surface.dimensions.y),
+                        isExternal: likelyGlazed,
+                        isGlazed: likelyGlazed)
         }
 
         let windows = captured.windows.map { surface in

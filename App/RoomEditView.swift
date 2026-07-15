@@ -51,6 +51,23 @@ struct RoomEditView: View {
                 Text("Die Himmelsrichtung bestimmt den solaren Eintrag – bei der Kühllast der größte Posten.")
             }
 
+            Section {
+                ForEach($room.doors) { $door in
+                    DoorEditor(door: $door)
+                }
+                .onDelete { room.doors.remove(atOffsets: $0) }
+                Button {
+                    room.doors.append(Door(width: 2.4, height: 2.2, isExternal: true,
+                                           isGlazed: true))
+                } label: {
+                    Label("Tür / Schiebefenster hinzufügen", systemImage: "plus")
+                }
+            } header: {
+                Text("Türen")
+            } footer: {
+                Text("Große Schiebefenster erkennt der Scan oft als Tür. Als „verglast" markiert zählen sie wie ein Fenster (Sonneneintrag).")
+            }
+
             Section("Außenwände") {
                 ForEach($room.walls) { $wall in
                     Toggle(isOn: $wall.isExternal) {
@@ -128,6 +145,51 @@ private struct WindowEditor: View {
                 Text(String(format: "%.0f %%", window.shading * 100))
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+private struct DoorEditor: View {
+    @Binding var door: Door
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(String(format: "%.2f m²", door.area))
+                    .font(.subheadline.weight(.medium))
+                Spacer()
+                Text(door.isGlazed ? "verglast" : "massiv")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            HStack(spacing: 12) {
+                CompactField(label: "B", value: $door.width, unit: "m")
+                CompactField(label: "H", value: $door.height, unit: "m")
+            }
+            Toggle("Verglast (zählt wie Fenster)", isOn: $door.isGlazed)
+                .font(.subheadline)
+            if door.isGlazed {
+                HStack {
+                    Text("Ausrichtung").font(.caption).foregroundStyle(.secondary)
+                    Spacer()
+                    Picker("", selection: $door.orientation) {
+                        ForEach(Orientation.allCases, id: \.self) { o in
+                            Text(o.label).tag(o)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .labelsHidden()
+                }
+                HStack(spacing: 12) {
+                    CompactField(label: "g", value: $door.gValue, unit: "")
+                    Text("Verschattung").font(.caption).foregroundStyle(.secondary)
+                    Slider(value: $door.shading, in: 0.2...1.0)
+                    Text(String(format: "%.0f %%", door.shading * 100))
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
             }
         }
         .padding(.vertical, 4)

@@ -45,6 +45,30 @@ final class CoolingLoadCalculatorTests: XCTestCase {
         XCTAssertEqual(result.transmission, 18, accuracy: 0.01)
     }
 
+    func testGlazedDoorAddsSolarLikeWindow() {
+        // Schiebefenster als Tür: 4.6 × 2.25 m = 10.35 m², verglast, Süd, g=0.6
+        // Solar = 10.35 · 0.6 · 370 = 2297.7 W
+        let glazed = Door(width: 4.6, height: 2.25, isExternal: true,
+                          isGlazed: true, orientation: .sued, gValue: 0.6)
+        let room = Room(floorArea: 20, height: 2.5, doors: [glazed],
+                        internalLoads: InternalLoads(persons: 0, equipmentWatt: 0, lightingWattPerSqm: 0),
+                        airChangeRate: 0)
+        let result = CoolingLoadCalculator(region: region).calculate(room)
+        XCTAssertEqual(result.solar, 2297.7, accuracy: 0.1)
+    }
+
+    func testSolidDoorHasNoSolar() {
+        // Massive Außentür: nur Transmission, kein Solar.
+        let solid = Door(width: 1.0, height: 2.1, isExternal: true, uValue: 1.8, isGlazed: false)
+        let room = Room(floorArea: 20, height: 2.5, doors: [solid],
+                        internalLoads: InternalLoads(persons: 0, equipmentWatt: 0, lightingWattPerSqm: 0),
+                        indoorTemperature: 26, airChangeRate: 0)
+        let result = CoolingLoadCalculator(region: region).calculate(room)
+        XCTAssertEqual(result.solar, 0, accuracy: 0.001)
+        // Transmission: 1.0·2.1 · 1.8 · 6 = 22.68 W
+        XCTAssertEqual(result.transmission, 22.68, accuracy: 0.01)
+    }
+
     func testInternalLoads() {
         // 3 Personen à 100 W + 200 W Geräte + 8 W/m² · 25 m² Licht = 300 + 200 + 200 = 700 W
         let room = Room(floorArea: 25, height: 2.5,

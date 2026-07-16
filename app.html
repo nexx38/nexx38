@@ -3962,8 +3962,11 @@ const Scanner = {
     } catch {
       throw new Error('JSON konnte nicht gelesen werden.');
     }
-    if (data.app !== 'HeizlastScan' || !data.floorArea) {
-      throw new Error('Keine gültige HeizlastScan-Datei.');
+    // Auch KühllastScan-Exporte akzeptieren — beide Apps teilen dasselbe
+    // Raumformat (Fläche, Höhe, Wände/Fenster/Türen mit width/height), nur
+    // das app-Feld unterscheidet sich.
+    if (!['HeizlastScan', 'KuehllastScan'].includes(data.app) || !data.floorArea) {
+      throw new Error('Keine gültige HeizlastScan- oder KühllastScan-Datei.');
     }
     this._setProgress(progEl, 90);
 
@@ -3991,7 +3994,11 @@ const Scanner = {
     // toggle it in the confirm screen either way.
     const u = HLB_DATA.uDefaultsByYear(window.state?.project?.constructionYear);
     const toOpening = (o, type) => {
-      const glazed = type === 'door' && (+o.width) >= 1.4;
+      // KühllastScan-Türen kennen ihren Verglasungsstatus bereits genau
+      // (o.glazed); HeizlastScan-Dateien haben dieses Feld nicht — dann
+      // die Breiten-Heuristik als Schätzung nutzen.
+      const glazed = type === 'door'
+        && (o.glazed != null ? !!o.glazed : (+o.width) >= 1.4);
       return {
         wall: 'Scan',
         type,
@@ -4010,7 +4017,11 @@ const Scanner = {
 
     // Total exterior wall area from recognised walls (net of openings RoomPlan
     // already cut out), stored so the suggested Außenwand uses the real value.
+    // KühllastScan tags each wall with external:true/false — exclude interior
+    // partitions when that flag is present; HeizlastScan walls have no such
+    // flag (RoomPlan's own walls list) and are counted as before.
     this.s.roomPlanWallArea = (data.walls || [])
+      .filter(w => w.external !== false)
       .reduce((s, w) => s + (+w.width) * (+w.height), 0);
 
     // 2D floor-plan segments (v2 export). Each opening carries x1/z1/x2/z2 in

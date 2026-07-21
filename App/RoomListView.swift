@@ -144,9 +144,13 @@ struct RoomListView: View {
 private struct RoomRow: View {
     let room: Room
 
-    private var load: Double {
+    private var coolingLoad: Double {
         let region = ClimateRegion.region(id: room.climateRegionID)
         return CoolingLoadCalculator(region: region).calculate(room).total
+    }
+
+    private var heatingLoad: Double {
+        HeatingLoadCalculator().calculate(room).total
     }
 
     var body: some View {
@@ -156,11 +160,16 @@ private struct RoomRow: View {
                 Text(String(format: "%.1f m² · %d Fenster", room.floorArea, room.windows.count))
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                HStack(spacing: 12) {
+                    Label(String(format: "%.0f W", coolingLoad.rounded()), systemImage: "air.conditioner.horizontal")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    Label(String(format: "%.0f W", heatingLoad.rounded()), systemImage: "thermometer")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
             }
             Spacer()
-            Text(String(format: "%.0f W", load.rounded()))
-                .font(.body.weight(.semibold))
-                .foregroundStyle(.secondary)
         }
         .padding(.vertical, 2)
     }

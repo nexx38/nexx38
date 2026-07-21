@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct KuehllastScanApp: App {
+struct LastScanApp: App {
     @StateObject private var store = RoomStore()
 
     var body: some Scene {

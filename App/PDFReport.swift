@@ -2,8 +2,68 @@ import Foundation
 import UIKit
 import KuehllastCore
 
-/// Erzeugt einen einfachen PDF-Bericht der Kühllastberechnung (A4).
+/// Erzeugt einfache PDF-Berichte für Kühl- und Heizlastberechnungen (A4).
 enum PDFReport {
+
+    static func generate(room: Room, heatingResult: HeatingLoadResult) -> URL {
+        let pageWidth: CGFloat = 595   // A4 @ 72 dpi
+        let pageHeight: CGFloat = 842
+        let margin: CGFloat = 48
+        let bounds = CGRect(x: 0, y: 0, width: pageWidth, height: pageHeight)
+        let accent = UIColor(red: 0.9, green: 0.4, blue: 0.1, alpha: 1)
+
+        let renderer = UIGraphicsPDFRenderer(bounds: bounds)
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("Heizlast-\(safe(room.name)).pdf")
+
+        try? renderer.writePDF(to: url) { ctx in
+            ctx.beginPage()
+            var y: CGFloat = margin
+
+            y = draw("Heizlastberechnung", at: CGPoint(x: margin, y: y),
+                     font: .systemFont(ofSize: 24, weight: .semibold), color: accent)
+            y = draw(room.name, at: CGPoint(x: margin, y: y + 4),
+                     font: .systemFont(ofSize: 16, weight: .regular), color: .darkGray)
+            y += 16
+
+            let climate = HeatingClimate.named(room.heating?.climateName ?? "Berlin")
+            y = row("Standort", climate.name, y: y, margin: margin, width: pageWidth)
+            y = row("Auslegung außen / innen",
+                    String(format: "%.0f °C / %.0f °C",
+                           climate.designOutdoorTemperature, room.heating?.indoorTemperature ?? 20),
+                    y: y, margin: margin, width: pageWidth)
+            y = row("Fläche / Höhe",
+                    String(format: "%.2f m² / %.2f m", room.floorArea, room.height),
+                    y: y, margin: margin, width: pageWidth)
+            y = row("Wärmebrückenzuschlag",
+                    String(format: "%.1f %%", room.heating?.thermalBridgePercent ?? 5),
+                    y: y, margin: margin, width: pageWidth)
+            y += 12
+
+            y = draw("Aufschlüsselung", at: CGPoint(x: margin, y: y),
+                     font: .systemFont(ofSize: 15, weight: .semibold), color: .black)
+            y += 6
+            let posten: [(String, Double)] = [
+                ("Transmission (Außenbauteile)", heatingResult.transmission),
+                ("Wärmebrückenzuschlag", heatingResult.thermalBridges),
+                ("Lüftung", heatingResult.ventilation)
+            ]
+            for (name, value) in posten {
+                y = row(name, String(format: "%.0f W", value.rounded()),
+                        y: y, margin: margin, width: pageWidth)
+            }
+            y += 4
+            y = row("Gesamtheizlast", String(format: "%.0f W", heatingResult.total.rounded()),
+                    y: y, margin: margin, width: pageWidth, bold: true, color: accent)
+            y = row("Spezifisch", String(format: "%.0f W/m²", heatingResult.specific(for: room.floorArea)),
+                    y: y, margin: margin, width: pageWidth)
+
+            let footer = "Vereinfachtes Verfahren nach DIN EN 12831. Kein prüffähiger Nachweis."
+            _ = draw(footer, at: CGPoint(x: margin, y: pageHeight - margin - 12),
+                     font: .systemFont(ofSize: 9, weight: .regular), color: .gray)
+        }
+        return url
+    }
 
     static func generate(room: Room,
                          result: CoolingLoadResult,

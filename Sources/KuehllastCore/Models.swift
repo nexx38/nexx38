@@ -187,6 +187,10 @@ public struct Room: Codable, Identifiable, Hashable, Sendable {
     /// Klimastandort für Außentemperatur und Einstrahlung.
     public var climateRegionID: String
     public var scannedAt: Date?
+    /// Winterliche Heizlast-Parameter (Decke/Boden, θ_i, Klima, WB, Lüftung).
+    /// Optional: fehlt bei reinen Kühllast-Räumen und alten Dateien – die
+    /// Heizlast greift dann auf HeatingParameters()-Vorgaben zurück.
+    public var heating: HeatingParameters?
 
     public var volume: Double { floorArea * height }
 
@@ -197,7 +201,8 @@ public struct Room: Codable, Identifiable, Hashable, Sendable {
                 indoorTemperature: Double = 26,
                 airChangeRate: Double = 0.5,
                 climateRegionID: String = ClimateRegion.default.id,
-                scannedAt: Date? = nil) {
+                scannedAt: Date? = nil,
+                heating: HeatingParameters? = nil) {
         self.id = id
         self.name = name
         self.floorArea = floorArea
@@ -210,5 +215,6 @@ public struct Room: Codable, Identifiable, Hashable, Sendable {
         self.airChangeRate = airChangeRate
         self.climateRegionID = climateRegionID
         self.scannedAt = scannedAt
+        self.heating = heating
     }
 }

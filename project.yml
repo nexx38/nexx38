@@ -1,4 +1,4 @@
-name: KuehllastScan
+name: LastScan
 options:
   bundleIdPrefix: de.shk-innovation
   deploymentTarget:
@@ -7,7 +7,7 @@ packages:
   KuehllastCore:
     path: .
 targets:
-  KuehllastScan:
+  LastScan:
     type: application
     platform: iOS
     sources:
@@ -17,7 +17,7 @@ targets:
     info:
       path: App/Info.plist
       properties:
-        CFBundleDisplayName: Kühllast
+        CFBundleDisplayName: LastScan
         LSRequiresIPhoneOS: true
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
@@ -32,10 +32,10 @@ targets:
         GENERATE_INFOPLIST_FILE: NO
         TARGETED_DEVICE_FAMILY: "1"
 schemes:
-  KuehllastScan:
+  LastScan:
     build:
       targets:
-        KuehllastScan: all
+        LastScan: all
     run:
       config: Debug
     archive:

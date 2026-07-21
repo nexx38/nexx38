@@ -10,6 +10,9 @@ struct RoomEditView: View {
     private var result: CoolingLoadResult {
         CoolingLoadCalculator(region: region).calculate(room)
     }
+    private var heatingResult: HeatingLoadResult {
+        HeatingLoadCalculator().calculate(room)
+    }
 
     var body: some View {
         Form {
@@ -89,6 +92,79 @@ struct RoomEditView: View {
                                unit: "1/h", step: 0.1, range: 0...5)
             }
 
+            Section("Heizlast-Parameter (Winter)") {
+                Picker("Standort", selection: Binding(
+                    get: { room.heating?.climateName ?? "Berlin" },
+                    set: { value in
+                        if room.heating == nil { room.heating = HeatingParameters() }
+                        room.heating?.climateName = value
+                    }
+                )) {
+                    ForEach(HeatingClimate.all, id: \.name) { climate in
+                        Text(climate.name).tag(climate.name)
+                    }
+                }
+                LabeledStepper(label: "Raumtemp.", value: Binding(
+                    get: { room.heating?.indoorTemperature ?? 20 },
+                    set: { value in
+                        if room.heating == nil { room.heating = HeatingParameters() }
+                        room.heating?.indoorTemperature = value
+                    }
+                ), unit: "°C", step: 1, range: 15...25)
+                LabeledStepper(label: "Wärmebrücken", value: Binding(
+                    get: { room.heating?.thermalBridgePercent ?? 5 },
+                    set: { value in
+                        if room.heating == nil { room.heating = HeatingParameters() }
+                        room.heating?.thermalBridgePercent = value
+                    }
+                ), unit: "%", step: 0.5, range: 0...20)
+                LabeledStepper(label: "Wärmerückgew.", value: Binding(
+                    get: { room.heating?.heatRecoveryPercent ?? 0 },
+                    set: { value in
+                        if room.heating == nil { room.heating = HeatingParameters() }
+                        room.heating?.heatRecoveryPercent = value
+                    }
+                ), unit: "%", step: 5, range: 0...95)
+                Group {
+                    Text("Decke").font(.caption).foregroundStyle(.secondary)
+                    HStack(spacing: 12) {
+                        CompactField(label: "U", value: Binding(
+                            get: { room.heating?.ceilingUValue ?? 0 },
+                            set: { value in
+                                if room.heating == nil { room.heating = HeatingParameters() }
+                                room.heating?.ceilingUValue = value > 0 ? value : nil
+                            }
+                        ), unit: "W/(m²K)")
+                        CompactField(label: "T°", value: Binding(
+                            get: { room.heating?.ceilingAdjacentTemp ?? 10 },
+                            set: { value in
+                                if room.heating == nil { room.heating = HeatingParameters() }
+                                room.heating?.ceilingAdjacentTemp = value
+                            }
+                        ), unit: "°C")
+                    }
+                }
+                Group {
+                    Text("Boden").font(.caption).foregroundStyle(.secondary)
+                    HStack(spacing: 12) {
+                        CompactField(label: "U", value: Binding(
+                            get: { room.heating?.floorUValue ?? 0 },
+                            set: { value in
+                                if room.heating == nil { room.heating = HeatingParameters() }
+                                room.heating?.floorUValue = value > 0 ? value : nil
+                            }
+                        ), unit: "W/(m²K)")
+                        CompactField(label: "T°", value: Binding(
+                            get: { room.heating?.floorAdjacentTemp ?? 10 },
+                            set: { value in
+                                if room.heating == nil { room.heating = HeatingParameters() }
+                                room.heating?.floorAdjacentTemp = value
+                            }
+                        ), unit: "°C")
+                    }
+                }
+            }
+
             Section {
                 NavigationLink {
                     ResultView(room: room)
@@ -99,6 +175,17 @@ struct RoomEditView: View {
                         Text(String(format: "%.0f W", result.total.rounded()))
                             .font(.body.weight(.semibold))
                             .foregroundStyle(Color(red: 0.33, green: 0.29, blue: 0.72))
+                    }
+                }
+                NavigationLink {
+                    HeatingResultView(room: room)
+                } label: {
+                    HStack {
+                        Text("Heizlast")
+                        Spacer()
+                        Text(String(format: "%.0f W", heatingResult.total.rounded()))
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(Color(red: 0.9, green: 0.4, blue: 0.1))
                     }
                 }
             }

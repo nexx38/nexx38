@@ -37,12 +37,12 @@ jobs:
         run: |
           set -eo pipefail
           xcodebuild \
-            -project KuehllastScan.xcodeproj \
-            -scheme KuehllastScan \
+            -project LastScan.xcodeproj \
+            -scheme LastScan \
             -configuration Release \
             -sdk iphoneos \
             -destination 'generic/platform=iOS' \
-            -archivePath "$PWD/build/KuehllastScan.xcarchive" \
+            -archivePath "$PWD/build/LastScan.xcarchive" \
             archive \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
@@ -52,18 +52,18 @@ jobs:
         run: |
           set -eo pipefail
           echo "Archiv-Inhalt:"
-          ls -R build/KuehllastScan.xcarchive/Products || { echo "Kein Products-Ordner – Archive-Schritt hat nichts gebaut."; exit 1; }
-          APP=$(find build/KuehllastScan.xcarchive/Products/Applications -maxdepth 1 -name '*.app' | head -1)
+          ls -R build/LastScan.xcarchive/Products || { echo "Kein Products-Ordner – Archive-Schritt hat nichts gebaut."; exit 1; }
+          APP=$(find build/LastScan.xcarchive/Products/Applications -maxdepth 1 -name '*.app' | head -1)
           if [ -z "$APP" ]; then echo "Keine .app gefunden."; exit 1; fi
           echo "Gefundene App: $APP"
           rm -rf out && mkdir -p out/Payload
           cp -R "$APP" out/Payload/
-          ( cd out && zip -qr KuehllastScan.ipa Payload && rm -rf Payload )
+          ( cd out && zip -qr LastScan.ipa Payload && rm -rf Payload )
           ls -lh out/
 
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: KuehllastScan-unsigned-ipa
-          path: out/KuehllastScan.ipa
+          name: LastScan-unsigned-ipa
+          path: out/LastScan.ipa
           if-no-files-found: error

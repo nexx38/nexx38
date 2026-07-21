@@ -19,7 +19,7 @@ struct RoomListView: View {
                     roomList
                 }
             }
-            .navigationTitle("Kühllast")
+            .navigationTitle("LastScan")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {

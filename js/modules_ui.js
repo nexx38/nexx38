@@ -327,11 +327,24 @@ const Modules = {
     QuoteModule.state.items = this._quoteItems;
     const vat = parseFloat(document.getElementById('qVat')?.value || 19);
     QuoteModule.state.vatPct = vat;
+    QuoteModule.state.includeKfw     = document.getElementById('qKfw')?.checked       ?? true;
+    QuoteModule.state.kfwSpeedBonus  = document.getElementById('qKfwSpeed')?.checked  ?? true;
+    QuoteModule.state.kfwIncomeBonus = document.getElementById('qKfwIncome')?.checked ?? false;
     const t = QuoteModule.calcTotals();
+
+    let kfwRows = '';
+    if (QuoteModule.state.includeKfw) {
+      const kfw = QuoteModule.calcKfw(t.gross);
+      kfwRows = `
+        <div class="quote-total-row" style="color:#217a3c;"><span>KfW-Zuschuss (${kfw.rate} %, BEG EM)</span><span>−${fmtEuro(kfw.grant)}</span></div>
+        <div class="quote-total-row" style="color:#217a3c;font-weight:700;"><span>Eigenanteil nach Förderung</span><span>ca. ${fmtEuro(kfw.own)}</span></div>`;
+    }
+
     document.getElementById('quoteTotals').innerHTML = `
       <div class="quote-total-row"><span>Nettobetrag</span><span>${fmtEuro(t.net)}</span></div>
       <div class="quote-total-row"><span>MwSt. ${vat}%</span><span>${fmtEuro(t.vat)}</span></div>
       <div class="quote-total-row gross"><span>Gesamtbetrag</span><span>${fmtEuro(t.gross)}</span></div>
+      ${kfwRows}
     `;
   },
 
@@ -371,7 +384,9 @@ const Modules = {
     s.quoteDate      = document.getElementById('qDate')?.value       || '';
     s.validUntil     = document.getElementById('qValidUntil')?.value || '';
     s.notes          = document.getElementById('qNotes')?.value      || '';
-    s.includeKfw     = document.getElementById('qKfw')?.checked      ?? true;
+    s.includeKfw     = document.getElementById('qKfw')?.checked       ?? true;
+    s.kfwSpeedBonus  = document.getElementById('qKfwSpeed')?.checked  ?? true;
+    s.kfwIncomeBonus = document.getElementById('qKfwIncome')?.checked ?? false;
     s.items          = this._quoteItems;
     s.vatPct         = parseFloat(document.getElementById('qVat')?.value || 19);
 

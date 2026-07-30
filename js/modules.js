@@ -279,18 +279,6 @@ const QuoteModule = {
     notes: '',
     vatPct: 19,
     includeKfw: true,
-    kfwSpeedBonus: true,    // 20 % Geschwindigkeitsbonus (Austausch Gas/Öl)
-    kfwIncomeBonus: false,  // 30 % Einkommensbonus (< 40.000 € z.v.E.)
-  },
-
-  // BEG EM (KfW 458): 30 % Grund + 20 % Speed + 30 % Einkommen, Deckel 70 %.
-  // Förderfähige Kosten: max. 30.000 € (erste Wohneinheit).
-  calcKfw(gross) {
-    const s = this.state;
-    const rate = Math.min(70, 30 + (s.kfwSpeedBonus ? 20 : 0) + (s.kfwIncomeBonus ? 30 : 0));
-    const eligible = Math.min(gross, 30000);
-    const grant = eligible * rate / 100;
-    return { rate, eligible, grant, own: gross - grant };
   },
 
   newItem(desc = '', qty = 1, unit = 'Stk.', price = 0) {
@@ -317,23 +305,12 @@ const QuoteModule = {
         <td style="text-align:right"><strong>${fmtEuro(i.qty * i.price)}</strong></td>
       </tr>`).join('');
 
-    const kfw = this.calcKfw(t.gross);
     const kfwBlock = s.includeKfw ? `
-      <div class="kfw-box">
-        <h3>Attraktive Staatliche KfW-Förderung (BEG EM)</h3>
-        <p>Für den Austausch Ihrer alten Heizung gegen eine moderne Wärmepumpe stehen Ihnen bis zu
-        <strong>70 % Förderung</strong> zu:</p>
-        <ul>
-          <li><strong>30 % Grundförderung</strong> für alle selbstnutzenden Immobilieneigentümer</li>
-          <li><strong>20 % Geschwindigkeitsbonus</strong> bei zügigem Austausch alter Gas-/Ölheizungen${s.kfwSpeedBonus ? '' : ' <em>(hier nicht angesetzt)</em>'}</li>
-          <li><strong>30 % Einkommensbonus</strong> (haushaltsbezogen unter 40.000 € zu versteuerndes Einkommen)${s.kfwIncomeBonus ? '' : ' <em>(hier nicht angesetzt)</em>'}</li>
-        </ul>
-        <p class="kfw-calc-title">Rechenbeispiel bei ${kfw.rate} % KfW-Förderung:</p>
-        <p class="kfw-calc">Brutto-Angebotsbetrag: ${fmtEuro(t.gross)} — KfW-Zuschuss: ${fmtEuro(kfw.grant)}
-        — <strong>Eigenanteil nach Förderung: ca. ${fmtEuro(kfw.own)}</strong></p>
-        <p class="kfw-note">Förderfähige Kosten max. 30.000 € (erste Wohneinheit). Grundlage: Heizlastberechnung
-        nach DIN EN 12831 sowie hydraulischer Abgleich liegen vor. Antragstellung vor Auftragsvergabe;
-        alle Angaben ohne Gewähr, maßgeblich sind die jeweils gültigen KfW-/BAFA-Richtlinien.</p>
+      <div class="quote-section">
+        <h3>Fördermittel-Hinweis (BEG / KfW)</h3>
+        <p>Für den Einbau dieser Wärmepumpe können Bundesförderung für effiziente Gebäude (BEG) nach BAFA/KfW beantragt werden.
+        Grundlage: Hydraulischer Abgleich nach Methode B sowie Heizlastberechnung nach DIN EN 12831 liegen vor.
+        Förderquote bis zu 70 % der förderfähigen Kosten möglich (Basis-35 % + Effizienzbonus + ggf. Einkommensbonus).</p>
       </div>` : '';
 
     return `<!DOCTYPE html>
@@ -364,15 +341,6 @@ const QuoteModule = {
   .total-row.gross{font-size:16px;font-weight:700;color:#0057B8;border-top:2px solid #0057B8;padding-top:8px;margin-top:4px}
   .quote-section{margin-top:20px;padding:12px;background:#e8f2ff;border-left:4px solid #0057B8;border-radius:0 6px 6px 0}
   .quote-section p{font-size:11px;color:#444;line-height:1.6;margin-top:6px}
-  .kfw-box{margin-top:20px;padding:14px 16px;background:#f0faf2;border:1px solid #c3e6cd;border-left:4px solid #2e9e4f;border-radius:0 6px 6px 0}
-  .kfw-box h3{color:#217a3c;font-size:13px;margin-bottom:6px}
-  .kfw-box p{font-size:11px;color:#245c35;line-height:1.6}
-  .kfw-box ul{margin:6px 0 10px 18px;font-size:11px;color:#245c35;line-height:1.7}
-  .kfw-box em{color:#6c757d;font-style:italic;font-weight:400}
-  .kfw-calc-title{font-weight:700;margin-top:4px}
-  .kfw-calc{font-size:11.5px}
-  .kfw-calc strong{font-size:12px}
-  .kfw-note{font-size:9.5px;color:#6c757d !important;margin-top:8px}
   .project-badges{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
   .badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:10px;font-weight:700;background:#e8f2ff;color:#0057B8;border:1px solid rgba(0,87,184,.2)}
   .footer{margin-top:32px;padding-top:12px;border-top:1px solid #dee2e6;font-size:10px;color:#6c757d;text-align:center}
@@ -415,7 +383,7 @@ const QuoteModule = {
 <div class="project-badges">
   <span class="badge">Heizlastberechnung DIN EN 12831</span>
   <span class="badge">Hydraulischer Abgleich Methode B</span>
-  ${s.includeKfw ? `<span class="badge" style="background:#e6f6ea;color:#217a3c;border-color:rgba(33,122,60,.25)">${kfw.rate} % KfW-Förderung (BEG EM)</span>` : ''}
+  ${s.includeKfw ? '<span class="badge">BEG-Förderung möglich</span>' : ''}
 </div>
 
 <h2>Positionen</h2>

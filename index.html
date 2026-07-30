@@ -491,8 +491,16 @@
                 </select>
               </div>
               <div class="toggle-row">
-                <span class="toggle-label">KfW/BEG Förderhinweis einfügen</span>
-                <input type="checkbox" id="qKfw" checked>
+                <span class="toggle-label">KfW/BEG-Förderblock einfügen</span>
+                <input type="checkbox" id="qKfw" checked onchange="Modules._renderQuoteTotals()">
+              </div>
+              <div class="toggle-row">
+                <span class="toggle-label">+ 20 % Geschwindigkeitsbonus (Austausch Gas/Öl)</span>
+                <input type="checkbox" id="qKfwSpeed" checked onchange="Modules._renderQuoteTotals()">
+              </div>
+              <div class="toggle-row">
+                <span class="toggle-label">+ 30 % Einkommensbonus (unter 40.000 € z.v.E.)</span>
+                <input type="checkbox" id="qKfwIncome" onchange="Modules._renderQuoteTotals()">
               </div>
             </div>
           </div>

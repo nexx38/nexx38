@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HandwerkDocs – Angebote in Rekordzeit</title>
+<style>
+  :root {
+    --blue: #2456e6;
+    --blue-dark: #1a41ad;
+    --bg: #f4f6fb;
+    --card: #ffffff;
+    --text: #1c2333;
+    --muted: #6b7280;
+    --border: #e3e7f0;
+    --green: #16a34a;
+    --amber: #d97706;
+    --radius: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+  header {
+    background: var(--card);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  header .logo {
+    width: 34px; height: 34px;
+    background: var(--blue);
+    border-radius: 9px;
+    display: grid; place-items: center;
+    color: #fff; font-weight: 700; font-size: 18px;
+  }
+  header h1 { font-size: 18px; }
+  header .claim { color: var(--muted); font-size: 13px; margin-left: 4px; }
+  main {
+    display: grid;
+    grid-template-columns: 330px 1fr;
+    gap: 20px;
+    padding: 20px 24px;
+    max-width: 1280px;
+    margin: 0 auto;
+  }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px;
+  }
+  .card h2 {
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: var(--muted);
+    margin-bottom: 12px;
+  }
+  .sidebar { display: flex; flex-direction: column; gap: 20px; }
+
+  /* Diktat */
+  #dictationText {
+    width: 100%;
+    min-height: 90px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px;
+    font: inherit;
+    resize: vertical;
+  }
+  .btn {
+    border: none;
+    border-radius: 8px;
+    padding: 10px 16px;
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+    background: var(--blue);
+    color: #fff;
+    transition: background .15s;
+  }
+  .btn:hover { background: var(--blue-dark); }
+  .btn.secondary { background: #eef1f8; color: var(--text); }
+  .btn.secondary:hover { background: #e2e7f2; }
+  .btn.green { background: var(--green); }
+  .btn:disabled { opacity: .45; cursor: not-allowed; }
+  .btn-row { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+  #micBtn.recording { background: #dc2626; animation: pulse 1.2s infinite; }
+  @keyframes pulse { 50% { opacity: .65; } }
+  .hint { font-size: 12px; color: var(--muted); margin-top: 8px; line-height: 1.5; }
+
+  /* Stammdaten & Projekte */
+  .list-item {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 10px;
+    margin-bottom: 8px;
+    font-size: 13px;
+    background: #fafbfe;
+  }
+  .list-item .name { font-weight: 600; }
+  .list-item .meta { color: var(--muted); font-size: 12px; }
+  details summary {
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 13px;
+    padding: 6px 0;
+  }
+  .drag-pos {
+    border: 1px dashed #b9c4e2;
+    border-radius: 7px;
+    padding: 6px 9px;
+    margin: 6px 0;
+    font-size: 12.5px;
+    background: #fff;
+    cursor: grab;
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .drag-pos:active { cursor: grabbing; }
+  .drag-pos .price { color: var(--muted); white-space: nowrap; }
+
+  /* Dokument */
+  .doc-tabs { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+  .doc-tab {
+    padding: 7px 14px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--card);
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .doc-tab.active { background: var(--blue); color: #fff; border-color: var(--blue); }
+  .doc-tab .badge { font-size: 11px; margin-left: 6px; opacity: .8; }
+
+  .doc-paper {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--card);
+    padding: 28px 32px;
+    min-height: 480px;
+  }
+  .doc-head { display: flex; justify-content: space-between; margin-bottom: 22px; gap: 16px; flex-wrap: wrap; }
+  .doc-head .firm { font-weight: 700; color: var(--blue); }
+  .doc-head .addr { font-size: 13px; color: var(--muted); line-height: 1.5; }
+  .doc-title { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+  .doc-sub { color: var(--muted); font-size: 13px; margin-bottom: 18px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { padding: 9px 8px; text-align: left; border-bottom: 1px solid var(--border); }
+  th { font-size: 12px; text-transform: uppercase; letter-spacing: .03em; color: var(--muted); }
+  td.num, th.num { text-align: right; white-space: nowrap; }
+  td input.qty {
+    width: 58px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 4px 6px;
+    font: inherit;
+    text-align: right;
+  }
+  tr.pos-row td:first-child { color: var(--muted); }
+  .del-pos {
+    border: none; background: none; cursor: pointer;
+    color: var(--muted); font-size: 15px; padding: 2px 6px;
+  }
+  .del-pos:hover { color: #dc2626; }
+  tfoot td { font-weight: 600; border-bottom: none; }
+  tfoot tr.total td { font-size: 16px; border-top: 2px solid var(--text); }
+
+  #dropzone {
+    margin-top: 14px;
+    border: 2px dashed var(--border);
+    border-radius: 8px;
+    padding: 14px;
+    text-align: center;
+    color: var(--muted);
+    font-size: 13px;
+    transition: all .15s;
+  }
+  #dropzone.over { border-color: var(--blue); background: #eef3ff; color: var(--blue); }
+
+  .doc-actions { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; align-items: center; }
+  .status-pill {
+    font-size: 12px; font-weight: 600;
+    padding: 4px 10px; border-radius: 999px;
+  }
+  .status-pill.entwurf { background: #fef3c7; color: var(--amber); }
+  .status-pill.versendet { background: #dcfce7; color: var(--green); }
+  .empty {
+    text-align: center;
+    color: var(--muted);
+    padding: 60px 20px;
+    font-size: 14px;
+    line-height: 1.7;
+  }
+  #toast {
+    position: fixed;
+    bottom: 24px; left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: var(--text);
+    color: #fff;
+    padding: 12px 20px;
+    border-radius: 10px;
+    font-size: 14px;
+    opacity: 0;
+    transition: all .25s;
+    z-index: 50;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">H</div>
+  <h1>HandwerkDocs</h1>
+  <span class="claim">Angebote, Aufträge &amp; Rechnungen in Rekordzeit</span>
+</header>
+
+<main>
+  <aside class="sidebar">
+
+    <section class="card">
+      <h2>Angebot diktieren</h2>
+      <textarea id="dictationText" placeholder="z. B.: Angebot für Familie Weber: Bad sanieren, 12 Quadratmeter Fliesen verlegen, neue Dusche einbauen, Anfahrt"></textarea>
+      <div class="btn-row">
+        <button class="btn" id="micBtn">🎤 Diktieren</button>
+        <button class="btn green" id="parseBtn">⚡ Angebot erstellen</button>
+      </div>
+      <p class="hint">Sprich oder tippe frei – Kunde, Leistungen und Mengen werden
+      automatisch erkannt und mit deinen Stammdaten-Preisen zum fertigen Angebot.</p>
+    </section>
+
+    <section class="card">
+      <h2>Vergangene Projekte</h2>
+      <p class="hint" style="margin:0 0 8px">Positionen per Drag-and-drop ins Dokument ziehen.</p>
+      <div id="pastProjects"></div>
+    </section>
+
+    <section class="card">
+      <h2>Stammdaten</h2>
+      <details open>
+        <summary>Leistungskatalog (<span id="catCount"></span>)</summary>
+        <div id="catalogList"></div>
+      </details>
+      <details>
+        <summary>Kunden (<span id="custCount"></span>)</summary>
+        <div id="customerList"></div>
+      </details>
+    </section>
+
+  </aside>
+
+  <section>
+    <div class="doc-tabs" id="docTabs"></div>
+    <div id="docArea"></div>
+  </section>
+</main>
+
+<div id="toast"></div>
+
+<script>
+"use strict";
+
+/* ---------- Stammdaten ---------- */
+
+const catalog = [
+  { key: "fliesen",  name: "Fliesen liefern & verlegen",        unit: "m²",    price: 89.00,  words: ["fliese", "fliesen"] },
+  { key: "dusche",   name: "Dusche demontieren & neu einbauen", unit: "Stk.",  price: 1450.00, words: ["dusche"] },
+  { key: "wanne",    name: "Badewanne einbauen",                unit: "Stk.",  price: 1180.00, words: ["badewanne", "wanne"] },
+  { key: "wc",       name: "WC austauschen",                    unit: "Stk.",  price: 420.00, words: ["wc", "toilette"] },
+  { key: "waschb",   name: "Waschbecken montieren",             unit: "Stk.",  price: 310.00, words: ["waschbecken", "waschtisch"] },
+  { key: "maler",    name: "Wände spachteln & streichen",       unit: "m²",    price: 14.50,  words: ["streichen", "malern", "spachteln", "wände"] },
+  { key: "elektro",  name: "Elektroinstallation (Feuchtraum)",  unit: "Std.",  price: 78.00,  words: ["elektro", "steckdose", "leitung"] },
+  { key: "sanitaer", name: "Sanitärinstallation",               unit: "Std.",  price: 82.00,  words: ["sanitär", "rohr", "wasseranschluss", "abfluss"] },
+  { key: "abriss",   name: "Demontage & Entsorgung Altbestand", unit: "psch.", price: 480.00, words: ["abriss", "demontage", "entsorgung", "sanieren", "sanierung"] },
+  { key: "anfahrt",  name: "An- und Abfahrt",                   unit: "psch.", price: 65.00,  words: ["anfahrt", "fahrt", "anfahrtskosten"] },
+];
+
+const customers = [
+  { name: "Familie Weber",   street: "Lindenweg 14",     city: "22299 Hamburg",  words: ["weber"] },
+  { name: "Familie Krüger",  street: "Amselstraße 3",    city: "22081 Hamburg",  words: ["krüger", "krueger"] },
+  { name: "Bäckerei Petersen", street: "Marktplatz 1",   city: "25335 Elmshorn", words: ["petersen", "bäckerei"] },
+  { name: "Hausverwaltung Nord GmbH", street: "Kanalstraße 88", city: "23552 Lübeck", words: ["hausverwaltung", "nord"] },
+];
+
+const pastProjects = [
+  {
+    title: "Badsanierung Krüger (2025)",
+    positions: [
+      { name: "Fliesen liefern & verlegen", unit: "m²", price: 89.00, qty: 18 },
+      { name: "Dusche demontieren & neu einbauen", unit: "Stk.", price: 1450.00, qty: 1 },
+      { name: "Sanitärinstallation", unit: "Std.", price: 82.00, qty: 12 },
+    ],
+  },
+  {
+    title: "Gäste-WC Petersen (2026)",
+    positions: [
+      { name: "WC austauschen", unit: "Stk.", price: 420.00, qty: 1 },
+      { name: "Waschbecken montieren", unit: "Stk.", price: 310.00, qty: 1 },
+      { name: "Wände spachteln & streichen", unit: "m²", price: 14.50, qty: 22 },
+    ],
+  },
+  {
+    title: "Wohnungsübergabe Hausverwaltung Nord (2026)",
+    positions: [
+      { name: "Wände spachteln & streichen", unit: "m²", price: 14.50, qty: 140 },
+      { name: "Elektroinstallation (Feuchtraum)", unit: "Std.", price: 78.00, qty: 6 },
+      { name: "An- und Abfahrt", unit: "psch.", price: 65.00, qty: 2 },
+    ],
+  },
+];
+
+/* ---------- Zustand ---------- */
+
+// documents: [{type:'angebot'|'auftrag'|'rechnung', nr, customer, positions:[{name,unit,price,qty}], status}]
+let documents = [];
+let activeDoc = -1;
+let docCounter = { angebot: 2041, auftrag: 1130, rechnung: 3287 };
+
+const typeLabel = { angebot: "Angebot", auftrag: "Auftragsbestätigung", rechnung: "Rechnung" };
+const typePrefix = { angebot: "AN", auftrag: "AB", rechnung: "RE" };
+
+const eur = n => n.toLocaleString("de-DE", { style: "currency", currency: "EUR" });
+
+/* ---------- Diktat-Parser ---------- */
+
+const numberWords = {
+  "eine": 1, "einen": 1, "ein": 1, "zwei": 2, "drei": 3, "vier": 4, "fünf": 5,
+  "sechs": 6, "sieben": 7, "acht": 8, "neun": 9, "zehn": 10, "zwölf": 12, "zwanzig": 20,
+};
+
+function parseQuantity(segment) {
+  const m = segment.match(/(\d+(?:[.,]\d+)?)/);
+  if (m) return parseFloat(m[1].replace(",", "."));
+  for (const [word, val] of Object.entries(numberWords)) {
+    if (new RegExp(`\\b${word}\\b`, "i").test(segment)) return val;
+  }
+  return 1;
+}
+
+function findCustomer(text) {
+  const lower = text.toLowerCase();
+  for (const c of customers) {
+    if (c.words.some(w => lower.includes(w))) return c;
+  }
+  // "für <Name>:" – unbekannten Kunden übernehmen
+  const m = text.match(/für\s+([^:,.]+)/i);
+  if (m) return { name: m[1].trim(), street: "", city: "" };
+  return { name: "Neuer Kunde", street: "", city: "" };
+}
+
+function parseDictation(text) {
+  const customer = findCustomer(text);
+  // Kundenteil abtrennen, Rest in Leistungssegmente teilen
+  const body = text.replace(/^.*?:/, "");
+  const segments = body.split(/,| und /i).map(s => s.trim()).filter(Boolean);
+
+  const positions = [];
+  const seen = new Set();
+  for (const seg of segments) {
+    const lower = seg.toLowerCase();
+    const item = catalog.find(c => c.words.some(w => lower.includes(w)));
+    if (item && !seen.has(item.key)) {
+      seen.add(item.key);
+      positions.push({ name: item.name, unit: item.unit, price: item.price, qty: parseQuantity(seg) });
+    } else if (!item && seg.length > 3) {
+      positions.push({ name: seg.charAt(0).toUpperCase() + seg.slice(1), unit: "psch.", price: 0, qty: 1 });
+    }
+  }
+  return { customer, positions };
+}
+
+/* ---------- Dokumente ---------- */
+
+function createDocument(type, customer, positions, sourceNr) {
+  docCounter[type]++;
+  documents.push({
+    type,
+    nr: `${typePrefix[type]}-${docCounter[type]}`,
+    customer,
+    positions: positions.map(p => ({ ...p })),
+    status: "entwurf",
+    sourceNr: sourceNr || null,
+    date: new Date().toLocaleDateString("de-DE"),
+  });
+  activeDoc = documents.length - 1;
+  render();
+}
+
+function totals(doc) {
+  const net = doc.positions.reduce((s, p) => s + p.price * p.qty, 0);
+  const vat = net * 0.19;
+  return { net, vat, gross: net + vat };
+}
+
+/* ---------- Rendering ---------- */
+
+function render() {
+  renderTabs();
+  renderDoc();
+}
+
+function renderTabs() {
+  const tabs = document.getElementById("docTabs");
+  tabs.innerHTML = "";
+  documents.forEach((d, i) => {
+    const b = document.createElement("button");
+    b.className = "doc-tab" + (i === activeDoc ? " active" : "");
+    b.innerHTML = `${typeLabel[d.type]} ${d.nr}<span class="badge">${d.status === "versendet" ? "✓" : "Entwurf"}</span>`;
+    b.onclick = () => { activeDoc = i; render(); };
+    tabs.appendChild(b);
+  });
+}
+
+function renderDoc() {
+  const area = document.getElementById("docArea");
+  if (activeDoc < 0) {
+    area.innerHTML = `<div class="card empty">
+      <strong>Noch kein Dokument.</strong><br>
+      Diktiere links dein Angebot – es wird sofort erstellt.<br>
+      Oder zieh Positionen aus einem vergangenen Projekt hierher.</div>`;
+    return;
+  }
+  const doc = documents[activeDoc];
+  const t = totals(doc);
+  const sent = doc.status === "versendet";
+
+  const rows = doc.positions.map((p, i) => `
+    <tr class="pos-row">
+      <td>${i + 1}</td>
+      <td>${p.name}${p.price === 0 ? ' <span style="color:var(--amber);font-size:11px">(Preis prüfen)</span>' : ""}</td>
+      <td class="num"><input class="qty" type="number" min="0" step="0.5" value="${p.qty}"
+          ${sent ? "disabled" : ""} onchange="updateQty(${i}, this.value)"> ${p.unit}</td>
+      <td class="num">${eur(p.price)}</td>
+      <td class="num">${eur(p.price * p.qty)}</td>
+      <td>${sent ? "" : `<button class="del-pos" title="Position entfernen" onclick="removePos(${i})">✕</button>`}</td>
+    </tr>`).join("");
+
+  let actions = `<span class="status-pill ${doc.status}">${sent ? "Versendet ✓" : "Entwurf"}</span>`;
+  if (doc.type === "angebot") {
+    if (!sent) actions += `<button class="btn green" onclick="sendDoc()">→ Angebot an Kunden senden</button>`;
+    else actions += `<button class="btn" onclick="deriveDoc('auftrag')">Auftragsbestätigung erstellen</button>
+                     <button class="btn secondary" onclick="deriveDoc('rechnung')">Rechnung erstellen</button>`;
+  } else if (!sent) {
+    actions += `<button class="btn green" onclick="sendDoc()">→ ${typeLabel[doc.type]} senden</button>`;
+  } else if (doc.type === "auftrag") {
+    actions += `<button class="btn" onclick="deriveDoc('rechnung')">Rechnung erstellen</button>`;
+  }
+
+  area.innerHTML = `
+    <div class="doc-paper">
+      <div class="doc-head">
+        <div>
+          <div class="firm">Mustermann Haustechnik GmbH</div>
+          <div class="addr">Handwerkerstraße 7 · 22765 Hamburg</div>
+        </div>
+        <div class="addr" style="text-align:right">
+          <strong>${doc.customer.name}</strong><br>
+          ${doc.customer.street || ""}<br>${doc.customer.city || ""}
+        </div>
+      </div>
+      <div class="doc-title">${typeLabel[doc.type]} ${doc.nr}</div>
+      <div class="doc-sub">Datum: ${doc.date}${doc.sourceNr ? ` · basiert auf ${doc.sourceNr}` : ""}</div>
+      <table>
+        <thead><tr><th>Pos.</th><th>Leistung</th><th class="num">Menge</th><th class="num">Einzelpreis</th><th class="num">Gesamt</th><th></th></tr></thead>
+        <tbody>${rows || `<tr><td colspan="6" style="color:var(--muted)">Keine Positionen – zieh welche aus einem vergangenen Projekt hierher.</td></tr>`}</tbody>
+        <tfoot>
+          <tr><td colspan="4">Nettosumme</td><td class="num">${eur(t.net)}</td><td></td></tr>
+          <tr><td colspan="4">zzgl. 19 % MwSt.</td><td class="num">${eur(t.vat)}</td><td></td></tr>
+          <tr class="total"><td colspan="4">Gesamtbetrag</td><td class="num">${eur(t.gross)}</td><td></td></tr>
+        </tfoot>
+      </table>
+      ${sent ? "" : `<div id="dropzone">⬇ Positionen aus vergangenen Projekten hier ablegen</div>`}
+    </div>
+    <div class="doc-actions">${actions}</div>`;
+
+  const dz = document.getElementById("dropzone");
+  if (dz) {
+    dz.addEventListener("dragover", e => { e.preventDefault(); dz.classList.add("over"); });
+    dz.addEventListener("dragleave", () => dz.classList.remove("over"));
+    dz.addEventListener("drop", e => {
+      e.preventDefault();
+      dz.classList.remove("over");
+      try {
+        const pos = JSON.parse(e.dataTransfer.getData("application/json"));
+        documents[activeDoc].positions.push(pos);
+        render();
+        toast(`Position „${pos.name}" übernommen`);
+      } catch { /* ignorieren */ }
+    });
+  }
+}
+
+function renderSidebar() {
+  const cat = document.getElementById("catalogList");
+  cat.innerHTML = catalog.map(c =>
+    `<div class="list-item"><span class="name">${c.name}</span><br>
+     <span class="meta">${eur(c.price)} / ${c.unit}</span></div>`).join("");
+  document.getElementById("catCount").textContent = catalog.length;
+
+  const cust = document.getElementById("customerList");
+  cust.innerHTML = customers.map(c =>
+    `<div class="list-item"><span class="name">${c.name}</span><br>
+     <span class="meta">${c.street}, ${c.city}</span></div>`).join("");
+  document.getElementById("custCount").textContent = customers.length;
+
+  const pp = document.getElementById("pastProjects");
+  pp.innerHTML = pastProjects.map((proj, pi) => `
+    <details ${pi === 0 ? "open" : ""}>
+      <summary>${proj.title}</summary>
+      ${proj.positions.map((pos, i) => `
+        <div class="drag-pos" draggable="true" data-p="${pi}" data-i="${i}">
+          <span>${pos.name} (${pos.qty} ${pos.unit})</span>
+          <span class="price">${eur(pos.price * pos.qty)}</span>
+        </div>`).join("")}
+    </details>`).join("");
+
+  pp.querySelectorAll(".drag-pos").forEach(el => {
+    el.addEventListener("dragstart", e => {
+      const pos = pastProjects[+el.dataset.p].positions[+el.dataset.i];
+      e.dataTransfer.setData("application/json", JSON.stringify(pos));
+    });
+  });
+}
+
+/* ---------- Aktionen (global für inline-Handler) ---------- */
+
+window.updateQty = (i, v) => {
+  documents[activeDoc].positions[i].qty = Math.max(0, parseFloat(v) || 0);
+  render();
+};
+window.removePos = i => {
+  documents[activeDoc].positions.splice(i, 1);
+  render();
+};
+window.sendDoc = () => {
+  const doc = documents[activeDoc];
+  doc.status = "versendet";
+  render();
+  toast(`→ ${typeLabel[doc.type]} ${doc.nr} an ${doc.customer.name} versendet`);
+};
+window.deriveDoc = type => {
+  const src = documents[activeDoc];
+  createDocument(type, src.customer, src.positions, src.nr);
+  toast(`${typeLabel[type]} aus ${src.nr} erstellt`);
+};
+
+function toast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove("show"), 2600);
+}
+
+/* ---------- Diktat (Web Speech API + Fallback) ---------- */
+
+const micBtn = document.getElementById("micBtn");
+const parseBtn = document.getElementById("parseBtn");
+const textarea = document.getElementById("dictationText");
+
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognition = null;
+if (SR) {
+  recognition = new SR();
+  recognition.lang = "de-DE";
+  recognition.interimResults = true;
+  recognition.continuous = true;
+  let finalText = "";
+  recognition.onresult = e => {
+    let interim = "";
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      if (e.results[i].isFinal) finalText += e.results[i][0].transcript;
+      else interim += e.results[i][0].transcript;
+    }
+    textarea.value = finalText + interim;
+  };
+  recognition.onend = () => {
+    micBtn.classList.remove("recording");
+    micBtn.textContent = "🎤 Diktieren";
+    if (textarea.value.trim()) buildFromText();
+  };
+  micBtn.addEventListener("click", () => {
+    if (micBtn.classList.contains("recording")) {
+      recognition.stop();
+    } else {
+      finalText = textarea.value ? textarea.value + " " : "";
+      recognition.start();
+      micBtn.classList.add("recording");
+      micBtn.textContent = "⏹ Stopp – Angebot erstellen";
+    }
+  });
+} else {
+  micBtn.addEventListener("click", () =>
+    toast("Spracherkennung wird von diesem Browser nicht unterstützt – tippe dein Angebot einfach ein."));
+}
+
+function buildFromText() {
+  const text = textarea.value.trim();
+  if (!text) { toast("Bitte erst diktieren oder eintippen."); return; }
+  const { customer, positions } = parseDictation(text);
+  if (!positions.length) { toast("Keine Leistungen erkannt – bitte konkreter beschreiben."); return; }
+  createDocument("angebot", customer, positions);
+  toast(`⚡ Angebot für ${customer.name} erstellt – ${positions.length} Positionen`);
+}
+parseBtn.addEventListener("click", buildFromText);
+
+/* ---------- Start ---------- */
+renderSidebar();
+render();
+</script>
+</body>
+</html>

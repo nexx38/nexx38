@@ -38,12 +38,15 @@ enum RoomPlanConverter {
 
         let height = medianHeight(of: captured.walls)
         let floorArea = orientedFloorArea(from: captured.walls)
+        // RoomPlan liefert die volle Wandfläche inkl. Öffnungen → Fenster/Türen
+        // abziehen, sonst zählt die Öffnungsfläche doppelt (Wand-U + Öffnungs-U).
+        let netWalls = WallAreaNormalizer.deductingOpenings(walls: walls, doors: doors, windows: windows)
 
         return Room(
             name: name,
             floorArea: floorArea,
             height: height,
-            walls: walls,
+            walls: netWalls,
             doors: doors,
             windows: windows,
             scannedAt: Date()

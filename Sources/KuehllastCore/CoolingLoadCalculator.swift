@@ -75,7 +75,7 @@ public struct CoolingLoadCalculator {
         //    Verglaste Türen führen nach außen und zählen daher immer mit.
         let wallTrans = room.walls
             .filter { $0.isExternal }
-            .reduce(0.0) { $0 + $1.uValue * $1.area * deltaT }
+            .reduce(0.0) { $0 + $1.uValue * $1.netArea * deltaT }
         let doorTrans = room.doors
             .filter { $0.isExternal || $0.isGlazed }
             .reduce(0.0) { $0 + $1.uValue * $1.area * deltaT }

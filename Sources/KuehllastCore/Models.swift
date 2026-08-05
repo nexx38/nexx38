@@ -26,22 +26,31 @@ public struct Wall: Codable, Hashable, Identifiable, Sendable {
     public var orientation: Orientation?
     /// U-Wert der Wand in W/(m²·K). Default: gedämmte Außenwand.
     public var uValue: Double
+    /// Fläche der Fenster-/Türöffnungen, die in dieser Wand liegen und für die
+    /// Transmission abgezogen werden müssen. 0 = manuell erfasste (bereits opake)
+    /// Wand – so wie in der Referenz-Berechnung. Nur Scan/Import setzen das (> 0),
+    /// weil RoomPlan die volle Wandfläche inkl. Öffnungen liefert.
+    public var openingDeductionArea: Double
 
+    /// Brutto-Wandfläche (Breite × Höhe) – für Anzeige und Export.
     public var area: Double { width * height }
+    /// Netto-opake Wandfläche für die Transmission: Brutto minus Öffnungen (≥ 0).
+    public var netArea: Double { max(0, width * height - openingDeductionArea) }
 
     public init(id: UUID = UUID(), width: Double, height: Double,
                 isExternal: Bool = true, orientation: Orientation? = nil,
-                uValue: Double = 0.28) {
+                uValue: Double = 0.28, openingDeductionArea: Double = 0) {
         self.id = id
         self.width = width
         self.height = height
         self.isExternal = isExternal
         self.orientation = orientation
         self.uValue = uValue
+        self.openingDeductionArea = openingDeductionArea
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, width, height, isExternal, orientation, uValue
+        case id, width, height, isExternal, orientation, uValue, openingDeductionArea
     }
 
     public init(from decoder: Decoder) throws {
@@ -52,6 +61,7 @@ public struct Wall: Codable, Hashable, Identifiable, Sendable {
         self.isExternal = (try? c.decode(Bool.self, forKey: .isExternal)) ?? true
         self.orientation = try? c.decode(Orientation.self, forKey: .orientation)
         self.uValue = (try? c.decode(Double.self, forKey: .uValue)) ?? 0.28
+        self.openingDeductionArea = (try? c.decode(Double.self, forKey: .openingDeductionArea)) ?? 0
     }
 }
 

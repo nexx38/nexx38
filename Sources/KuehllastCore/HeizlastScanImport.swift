@@ -66,11 +66,15 @@ public enum HeizlastScanImport {
             scannedDate = iso.date(from: s)
         }
 
+        // Import liefert Brutto-Wandflächen (inkl. Öffnungen) → Öffnungen abziehen,
+        // damit Fenster/Türen nicht doppelt in die Transmission eingehen.
+        let netWalls = WallAreaNormalizer.deductingOpenings(walls: walls, doors: doors, windows: windows)
+
         return Room(
             name: raw.name ?? "Raum",
             floorArea: floorArea,
             height: height,
-            walls: walls,
+            walls: netWalls,
             doors: doors,
             windows: windows,
             climateRegionID: climateRegionID,

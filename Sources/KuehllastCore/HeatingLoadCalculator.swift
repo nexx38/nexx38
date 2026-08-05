@@ -99,9 +99,9 @@ public struct HeatingLoadCalculator {
         }
 
         var transmission = 0.0
-        // Außenwände (nur außenliegende)
+        // Außenwände (nur außenliegende) – Netto-Fläche, Öffnungen sind abgezogen.
         for wall in room.walls where wall.isExternal {
-            transmission += loss(area: wall.area, u: wall.uValue, adjacent: nil)
+            transmission += loss(area: wall.netArea, u: wall.uValue, adjacent: nil)
         }
         // Fenster (führen immer nach außen)
         for window in room.windows {

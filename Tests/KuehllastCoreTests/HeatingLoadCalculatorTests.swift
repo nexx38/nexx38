@@ -76,6 +76,25 @@ final class HeatingLoadCalculatorTests: XCTestCase {
         XCTAssertEqual(r.specific(for: room.floorArea), 66, accuracy: 1)
     }
 
+    // MARK: - Scan-Öffnungen nicht doppelt zählen (Netto-Wandfläche)
+
+    func testScannedWallOpeningsAreNotDoubleCounted() {
+        // Ein Scan liefert BRUTTO: 10 m² Außenwand, in der ein 2 m² Fenster sitzt.
+        // Ohne Netto-Korrektur zählte die Fensterfläche doppelt (Wand-U + Fenster-U).
+        let grossWall = Wall(width: 5, height: 2, isExternal: true, uValue: 1.0) // 10 m² brutto
+        let window = Window(width: 2, height: 1, orientation: .sued, uValue: 1.0) // 2 m²
+        let netWalls = WallAreaNormalizer.deductingOpenings(walls: [grossWall], doors: [], windows: [window])
+
+        XCTAssertEqual(netWalls[0].netArea, 8, accuracy: 0.001)  // 10 − 2 m²
+
+        let room = Room(floorArea: 20, height: 2.5, walls: netWalls, windows: [window],
+                        heating: HeatingParameters(indoorTemperature: 20, climateName: "Berlin",
+                                                   thermalBridgePercent: 0, airChangeRate: 0))
+        let r = calc.calculate(room)
+        // Korrekt: Wand (10−2)·1.0·34 + Fenster 2·1.0·34 = 272 + 68 = 340 W (nicht 408).
+        XCTAssertEqual(r.transmission, 340, accuracy: 0.5)
+    }
+
     // MARK: - Robustheit
 
     func testRoomWithoutHeatingParamsUsesDefaults() {

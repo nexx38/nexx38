@@ -27,6 +27,12 @@ public enum HeizlastScanImport {
             let height: Double
             let orientation: String?
             let gValue: Double?
+            // Von KuehllastScan-/Web-Viewer-Exporten geschrieben; HeizlastScan-
+            // Altdateien haben diese Schlüssel nicht (→ nil, Heuristik greift).
+            let external: Bool?
+            let glazed: Bool?
+            let shading: Double?
+            let uValue: Double?
         }
         let name: String?
         let floorArea: Double?
@@ -47,17 +53,34 @@ public enum HeizlastScanImport {
             throw ImportError(message: "Im Scan fehlen Fläche oder Höhe.")
         }
 
-        let walls = (raw.walls ?? []).map {
-            Wall(width: $0.width, height: $0.height,
-                 orientation: $0.orientation.flatMap(Orientation.init(rawValue:)))
+        let walls = (raw.walls ?? []).map { w in
+            Wall(width: w.width, height: w.height,
+                 isExternal: w.external ?? true,
+                 orientation: w.orientation.flatMap(Orientation.init(rawValue:)),
+                 uValue: w.uValue ?? 0.28)
         }
-        let doors = (raw.doors ?? []).map {
-            Door(width: $0.width, height: $0.height)
+        let doors = (raw.doors ?? []).map { d -> Door in
+            // Explizite Flags (unser eigenes Exportformat) haben Vorrang.
+            // Altdateien ohne Flags: breite „Türen" sind fast immer Schiebe-
+            // fenster/Terrassentüren → verglast + außen (gleiche Heuristik
+            // wie beim Live-Scan in RoomPlanConverter, sonst rechnet derselbe
+            // Raum je nach Weg unterschiedlich).
+            let likelyGlazed = d.width >= 1.5
+            let isGlazed = d.glazed ?? likelyGlazed
+            return Door(width: d.width, height: d.height,
+                        isExternal: d.external ?? isGlazed,
+                        uValue: d.uValue ?? (isGlazed ? 1.1 : 1.8),
+                        isGlazed: isGlazed,
+                        orientation: d.orientation.flatMap(Orientation.init(rawValue:)) ?? .sued,
+                        gValue: d.gValue ?? 0.6,
+                        shading: d.shading ?? 1.0)
         }
         let windows = (raw.windows ?? []).map { w in
             Window(width: w.width, height: w.height,
                    orientation: w.orientation.flatMap(Orientation.init(rawValue:)) ?? .sued,
-                   gValue: w.gValue ?? 0.6)
+                   gValue: w.gValue ?? 0.6,
+                   shading: w.shading ?? 1.0,
+                   uValue: w.uValue ?? 1.1)
         }
 
         var scannedDate: Date?

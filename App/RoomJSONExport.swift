@@ -3,17 +3,24 @@ import KuehllastCore
 
 /// JSON-Repräsentation eines Raums zum Teilen und Ansehen (z. B. am PC).
 /// Bewusst flach und lesbar gehalten – enthält alle Eingaben plus das Ergebnis.
+/// Schlüsselnamen bleiben kompatibel zu Web-Viewer und HeizlastProfi-Import
+/// („app": "KuehllastScan" nicht umbenennen!); neue Schlüssel nur additiv.
 struct RoomJSONExport: Codable {
     struct Wall: Codable {
         let width: Double
         let height: Double
         let external: Bool
+        let uValue: Double
     }
     struct Door: Codable {
         let width: Double
         let height: Double
         let glazed: Bool
+        let external: Bool
         let orientation: String?
+        let gValue: Double?
+        let shading: Double?
+        let uValue: Double
     }
     struct Window: Codable {
         let width: Double
@@ -21,6 +28,7 @@ struct RoomJSONExport: Codable {
         let orientation: String
         let gValue: Double
         let shading: Double
+        let uValue: Double
     }
 
     let app: String
@@ -31,10 +39,12 @@ struct RoomJSONExport: Codable {
     let height: Double
     let indoorTemperature: Double
     let climateRegion: String
+    let constructionEra: String?
     let walls: [Wall]
     let doors: [Door]
     let windows: [Window]
     let coolingLoadWatt: Double
+    let heatingLoadWatt: Double
     let recommendedDeviceKW: Double
 
     static func make(from room: Room) -> RoomJSONExport {
@@ -42,6 +52,7 @@ struct RoomJSONExport: Codable {
         let calc = CoolingLoadCalculator(region: region)
         let result = calc.calculate(room)
         let recommendation = calc.recommendDevice(for: result.total)
+        let heating = HeatingLoadCalculator().calculate(room)
         let iso = ISO8601DateFormatter()
 
         return RoomJSONExport(
@@ -53,18 +64,27 @@ struct RoomJSONExport: Codable {
             height: round2(room.height),
             indoorTemperature: room.indoorTemperature,
             climateRegion: region.name,
-            walls: room.walls.map { Wall(width: round2($0.width), height: round2($0.height), external: $0.isExternal) },
+            constructionEra: room.constructionEra,
+            walls: room.walls.map {
+                Wall(width: round2($0.width), height: round2($0.height),
+                     external: $0.isExternal, uValue: $0.uValue)
+            },
             doors: room.doors.map {
                 Door(width: round2($0.width), height: round2($0.height),
                      glazed: $0.isGlazed,
-                     orientation: $0.isGlazed ? $0.orientation.rawValue : nil)
+                     external: $0.isExternal,
+                     orientation: $0.isGlazed ? $0.orientation.rawValue : nil,
+                     gValue: $0.isGlazed ? $0.gValue : nil,
+                     shading: $0.isGlazed ? $0.shading : nil,
+                     uValue: $0.uValue)
             },
             windows: room.windows.map {
                 Window(width: round2($0.width), height: round2($0.height),
                        orientation: $0.orientation.rawValue,
-                       gValue: $0.gValue, shading: $0.shading)
+                       gValue: $0.gValue, shading: $0.shading, uValue: $0.uValue)
             },
             coolingLoadWatt: result.total.rounded(),
+            heatingLoadWatt: heating.total.rounded(),
             recommendedDeviceKW: recommendation.ratedPowerKW
         )
     }

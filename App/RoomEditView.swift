@@ -1,9 +1,10 @@
 import SwiftUI
 import KuehllastCore
 
-/// Bearbeitet einen Raum: Fenster + Ausrichtung, innere Lasten, Klimastandort.
-/// Zeigt am Ende das Ergebnis und den Weg zum PDF-Bericht.
+/// Bearbeitet einen Raum: Baujahr, Fenster + Ausrichtung, innere Lasten,
+/// Klimastandort. Zeigt am Ende das Ergebnis und den Weg zum PDF-Bericht.
 struct RoomEditView: View {
+    @EnvironmentObject var store: RoomStore
     @Binding var room: Room
 
     private var region: ClimateRegion { ClimateRegion.region(id: room.climateRegionID) }
@@ -20,6 +21,55 @@ struct RoomEditView: View {
                 TextField("Name", text: $room.name)
                 LabeledStepper(label: "Fläche", value: $room.floorArea, unit: "m²", step: 0.5, range: 1...500)
                 LabeledStepper(label: "Höhe", value: $room.height, unit: "m", step: 0.05, range: 1.8...6)
+            }
+
+            Section {
+                Picker("Baujahr-Klasse", selection: Binding(
+                    get: { room.constructionEra ?? "" },
+                    set: { raw in
+                        if raw.isEmpty {
+                            room.constructionEra = nil
+                        } else if let era = BuildingEra(rawValue: raw) {
+                            room = era.applied(to: room)
+                        }
+                    }
+                )) {
+                    Text("keine Vorgabe").tag("")
+                    ForEach(BuildingEra.allCases, id: \.rawValue) { era in
+                        Text(era.label).tag(era.rawValue)
+                    }
+                }
+            } header: {
+                Text("Gebäude")
+            } footer: {
+                Text("Setzt typische U-Werte für Wände, Fenster und Türen der Epoche (überschreibt vorhandene Werte). Die Annahme wird im PDF-Bericht ausgewiesen und ist vom Fachbetrieb zu prüfen.")
+            }
+
+            if let photos = room.photoFilenames, !photos.isEmpty {
+                Section("Fotos vom Scan") {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(photos, id: \.self) { name in
+                                if let image = UIImage(contentsOfFile: store.photoURL(named: name).path) {
+                                    Image(uiImage: image)
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(width: 92, height: 92)
+                                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                                        .contextMenu {
+                                            Button(role: .destructive) {
+                                                store.removePhotoFile(named: name)
+                                                room.photoFilenames?.removeAll { $0 == name }
+                                            } label: {
+                                                Label("Foto löschen", systemImage: "trash")
+                                            }
+                                        }
+                                }
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
             }
 
             Section("Klimastandort") {
@@ -68,16 +118,17 @@ struct RoomEditView: View {
             } header: {
                 Text("Türen")
             } footer: {
-                Text("Große Schiebefenster erkennt der Scan oft als Tür. Als 'verglast' markiert zählen sie wie ein Fenster (Sonneneintrag).")
+                Text("Große Schiebefenster erkennt der Scan oft als Tür. Als 'verglast' markiert zählen sie wie ein Fenster (Sonneneintrag). Massive Haustüren als 'führt nach außen' markieren, damit sie in die Heizlast eingehen.")
             }
 
-            Section("Außenwände") {
+            Section {
                 ForEach($room.walls) { $wall in
-                    Toggle(isOn: $wall.isExternal) {
-                        Text(String(format: "Wand %.2f × %.2f m", wall.width, wall.height))
-                            .font(.subheadline)
-                    }
+                    WallEditor(wall: $wall)
                 }
+            } header: {
+                Text("Wände")
+            } footer: {
+                Text("Nur Außenwände tragen Transmissionslast. Der U-Wert bestimmt den Verlust – bei Altbau deutlich höher (Baujahr-Klasse setzt Vorgaben).")
             }
 
             Section("Innere Lasten") {
@@ -254,7 +305,10 @@ private struct DoorEditor: View {
             HStack(spacing: 12) {
                 CompactField(label: "B", value: $door.width, unit: "m")
                 CompactField(label: "H", value: $door.height, unit: "m")
+                CompactField(label: "U", value: $door.uValue, unit: "")
             }
+            Toggle("Führt nach außen", isOn: $door.isExternal)
+                .font(.subheadline)
             Toggle("Verglast (zählt wie Fenster)", isOn: $door.isGlazed)
                 .font(.subheadline)
             if door.isGlazed {
@@ -280,6 +334,26 @@ private struct DoorEditor: View {
             }
         }
         .padding(.vertical, 4)
+    }
+}
+
+private struct WallEditor: View {
+    @Binding var wall: Wall
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Toggle(isOn: $wall.isExternal) {
+                Text(String(format: "Wand %.2f × %.2f m", wall.width, wall.height))
+                    .font(.subheadline)
+            }
+            if wall.isExternal {
+                HStack(spacing: 12) {
+                    CompactField(label: "U", value: $wall.uValue, unit: "W/(m²K)")
+                    Spacer()
+                }
+            }
+        }
+        .padding(.vertical, 2)
     }
 }
 

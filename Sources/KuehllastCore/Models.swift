@@ -201,6 +201,13 @@ public struct Room: Codable, Identifiable, Hashable, Sendable {
     /// Optional: fehlt bei reinen Kühllast-Räumen und alten Dateien – die
     /// Heizlast greift dann auf HeatingParameters()-Vorgaben zurück.
     public var heating: HeatingParameters?
+    /// Dateinamen der beim Scan aufgenommenen Fotos (liegen im Dokumente-
+    /// verzeichnis der App unter RoomPhotos/). Optional, damit alte
+    /// rooms.json-Dateien ohne dieses Feld weiter dekodieren.
+    public var photoFilenames: [String]?
+    /// Gewählte Baujahr-Klasse (BuildingEra.rawValue) – bestimmt die
+    /// U-Wert-Vorgaben und wird im PDF als Annahme ausgewiesen. Optional.
+    public var constructionEra: String?
 
     public var volume: Double { floorArea * height }
 
@@ -212,7 +219,9 @@ public struct Room: Codable, Identifiable, Hashable, Sendable {
                 airChangeRate: Double = 0.5,
                 climateRegionID: String = ClimateRegion.default.id,
                 scannedAt: Date? = nil,
-                heating: HeatingParameters? = nil) {
+                heating: HeatingParameters? = nil,
+                photoFilenames: [String]? = nil,
+                constructionEra: String? = nil) {
         self.id = id
         self.name = name
         self.floorArea = floorArea
@@ -226,5 +235,7 @@ public struct Room: Codable, Identifiable, Hashable, Sendable {
         self.climateRegionID = climateRegionID
         self.scannedAt = scannedAt
         self.heating = heating
+        self.photoFilenames = photoFilenames
+        self.constructionEra = constructionEra
     }
 }

@@ -53,7 +53,11 @@ struct RoomListView: View {
             .fullScreenCover(isPresented: $showScanner) {
                 RoomScanView()
             }
-            .alert("Import fehlgeschlagen", isPresented: .constant(importError != nil)) {
+            .alert("Import fehlgeschlagen",
+                   isPresented: Binding(
+                       get: { importError != nil },
+                       set: { if !$0 { importError = nil } }
+                   )) {
                 Button("OK") { importError = nil }
             } message: {
                 Text(importError ?? "")
@@ -63,6 +67,9 @@ struct RoomListView: View {
 
     private var roomList: some View {
         List {
+            if store.rooms.count >= 2 {
+                buildingSummary
+            }
             ForEach(store.rooms) { room in
                 NavigationLink(value: room.id) {
                     RoomRow(room: room)
@@ -73,8 +80,43 @@ struct RoomListView: View {
         .navigationDestination(for: UUID.self) { id in
             if let idx = store.rooms.firstIndex(where: { $0.id == id }) {
                 RoomEditView(room: $store.rooms[idx])
-                    .onDisappear { store.save() }
             }
+        }
+    }
+
+    /// Gebäude-Gesamtsumme über alle Räume – die Grundlage der
+    /// Multisplit-Auslegung (mehrere Räume, ein Außengerät).
+    private var buildingSummary: some View {
+        let cooling = store.rooms.reduce(0.0) { sum, room in
+            let region = ClimateRegion.region(id: room.climateRegionID)
+            return sum + CoolingLoadCalculator(region: region).calculate(room).total
+        }
+        let heating = store.rooms.reduce(0.0) { sum, room in
+            sum + HeatingLoadCalculator().calculate(room).total
+        }
+        let area = store.rooms.reduce(0.0) { $0 + $1.floorArea }
+
+        return Section {
+            VStack(alignment: .leading, spacing: 8) {
+                Text("Gebäude gesamt")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                HStack(spacing: 20) {
+                    Label(String(format: "%.1f kW Kühlung", cooling / 1000),
+                          systemImage: "air.conditioner.horizontal")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(accent)
+                    Label(String(format: "%.1f kW Heizung", heating / 1000),
+                          systemImage: "thermometer")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(Color(red: 0.9, green: 0.4, blue: 0.1))
+                }
+                Text(String(format: "%d Räume · %.0f m² · Multisplit-Außengerät ab %.1f kW",
+                            store.rooms.count, area, cooling / 1000))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.vertical, 4)
         }
     }
 

@@ -2,6 +2,7 @@ import SwiftUI
 import KuehllastCore
 
 struct ResultView: View {
+    @EnvironmentObject var store: RoomStore
     let room: Room
     @State private var pdfURL: URL?
 
@@ -10,6 +11,9 @@ struct ResultView: View {
     private var calc: CoolingLoadCalculator { CoolingLoadCalculator(region: region) }
     private var result: CoolingLoadResult { calc.calculate(room) }
     private var recommendation: DeviceRecommendation { calc.recommendDevice(for: result.total) }
+    private var plausibilityNote: String? {
+        Plausibility.coolingNote(specific: result.specific(for: room.floorArea))
+    }
 
     private var items: [(String, Double, Color)] {
         [
@@ -26,6 +30,9 @@ struct ResultView: View {
         ScrollView {
             VStack(spacing: 20) {
                 totalCard
+                if let note = plausibilityNote {
+                    PlausibilityCard(note: note)
+                }
                 breakdown
                 recommendationCard
                 disclaimer
@@ -36,10 +43,19 @@ struct ResultView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                ShareLink(item: makePDF()) {
-                    Image(systemName: "square.and.arrow.up")
+                if let pdfURL {
+                    ShareLink(item: pdfURL) {
+                        Image(systemName: "square.and.arrow.up")
+                    }
                 }
             }
+        }
+        .task {
+            // Einmal erzeugen statt bei jedem Render – mit Fotos wäre das teuer.
+            let photoURLs = (room.photoFilenames ?? []).map { store.photoURL(named: $0) }
+            pdfURL = PDFReport.generate(room: room, result: result,
+                                        recommendation: recommendation, region: region,
+                                        photoURLs: photoURLs)
         }
     }
 
@@ -110,11 +126,22 @@ struct ResultView: View {
             .foregroundStyle(.secondary)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
+}
 
-    private func makePDF() -> URL {
-        if let pdfURL { return pdfURL }
-        let url = PDFReport.generate(room: room, result: result,
-                                     recommendation: recommendation, region: region)
-        return url
+/// Gelbe Hinweis-Karte, wenn die spezifische Last außerhalb des üblichen
+/// Bereichs liegt (Plausibilitätsprüfung) – in beiden Ergebnis-Ansichten genutzt.
+struct PlausibilityCard: View {
+    let note: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+            Text(note)
+                .font(.footnote)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding()
+        .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
     }
 }

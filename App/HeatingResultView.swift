@@ -2,12 +2,16 @@ import SwiftUI
 import KuehllastCore
 
 struct HeatingResultView: View {
+    @EnvironmentObject var store: RoomStore
     let room: Room
     @State private var pdfURL: URL?
 
     private var accent: Color { Color(red: 0.9, green: 0.4, blue: 0.1) }
     private var calc: HeatingLoadCalculator { HeatingLoadCalculator() }
     private var result: HeatingLoadResult { calc.calculate(room) }
+    private var plausibilityNote: String? {
+        Plausibility.heatingNote(specific: result.specific(for: room.floorArea))
+    }
 
     private var items: [(String, Double, Color)] {
         [
@@ -21,6 +25,9 @@ struct HeatingResultView: View {
         ScrollView {
             VStack(spacing: 20) {
                 totalCard
+                if let note = plausibilityNote {
+                    PlausibilityCard(note: note)
+                }
                 breakdown
                 deltaTCard
                 disclaimer
@@ -31,10 +38,17 @@ struct HeatingResultView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                ShareLink(item: makePDF()) {
-                    Image(systemName: "square.and.arrow.up")
+                if let pdfURL {
+                    ShareLink(item: pdfURL) {
+                        Image(systemName: "square.and.arrow.up")
+                    }
                 }
             }
+        }
+        .task {
+            let photoURLs = (room.photoFilenames ?? []).map { store.photoURL(named: $0) }
+            pdfURL = PDFReport.generate(room: room, heatingResult: result,
+                                        photoURLs: photoURLs)
         }
     }
 
@@ -102,11 +116,5 @@ struct HeatingResultView: View {
             .font(.caption2)
             .foregroundStyle(.secondary)
             .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private func makePDF() -> URL {
-        if let pdfURL { return pdfURL }
-        let url = PDFReport.generate(room: room, heatingResult: result)
-        return url
     }
 }

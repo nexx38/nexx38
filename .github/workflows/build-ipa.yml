@@ -1,0 +1,16 @@
+name: Build unsigned IPA
+
+# Dispatch-Stub auf main: sorgt dafuer, dass der "Run workflow"-Knopf im
+# Actions-Tab erscheint. Beim Start mit Branch "kuehllastscan" laeuft die
+# vollstaendige Version dieser Datei aus jenem Branch (swift test + IPA-Build).
+# Hintergrund: Pushes von diesem Rechner loesen den push-Trigger nicht aus,
+# daher braucht es den manuellen Weg.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  hinweis:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Auf main gibt es nichts zu bauen - beim Start den Branch kuehllastscan waehlen."

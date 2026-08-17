@@ -15,6 +15,16 @@ struct RoomEditView: View {
         HeatingLoadCalculator().calculate(room)
     }
 
+    /// Warnhinweis: Scan-Vorgabe „alles Außenwand" wurde noch nicht korrigiert.
+    /// Ab 4 Wandstücken, alle außenliegend, und Wandfläche > 2× Grundfläche
+    /// ist das fast sicher ein unkorrigierter Scan (echte Räume mit lauter
+    /// Außenwänden sind frei stehende Einzelgebäude).
+    private var allWallsExternalWarning: Bool {
+        guard room.walls.count >= 4, room.walls.allSatisfy({ $0.isExternal }) else { return false }
+        let wallArea = room.walls.reduce(0.0) { $0 + $1.area }
+        return wallArea > room.floorArea * 2
+    }
+
     /// Binding auf die (optionale) Heizkörperliste – leer = Feld bleibt nil.
     private var radiatorsBinding: Binding<[Radiator]> {
         Binding(
@@ -141,6 +151,15 @@ struct RoomEditView: View {
             }
 
             Section {
+                if allWallsExternalWarning {
+                    HStack(alignment: .top, spacing: 8) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.orange)
+                        Text("Der Scan markiert ALLE Wände als Außenwand. Innenwände abwählen, sonst werden Heiz- und Kühllast deutlich überschätzt.")
+                            .font(.footnote)
+                    }
+                    .listRowBackground(Color.orange.opacity(0.12))
+                }
                 ForEach($room.walls) { $wall in
                     WallEditor(wall: $wall)
                 }
@@ -322,7 +341,10 @@ private struct WindowEditor: View {
             HStack(spacing: 12) {
                 CompactField(label: "B", value: $window.width, unit: "m")
                 CompactField(label: "H", value: $window.height, unit: "m")
+            }
+            HStack(spacing: 12) {
                 CompactField(label: "g", value: $window.gValue, unit: "")
+                CompactField(label: "U", value: $window.uValue, unit: "W/(m²K)")
             }
             HStack {
                 Text("Verschattung")

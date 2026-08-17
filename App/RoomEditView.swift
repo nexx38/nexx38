@@ -15,6 +15,25 @@ struct RoomEditView: View {
         HeatingLoadCalculator().calculate(room)
     }
 
+    /// Binding auf die (optionale) Heizkörperliste – leer = Feld bleibt nil.
+    private var radiatorsBinding: Binding<[Radiator]> {
+        Binding(
+            get: { room.radiators ?? [] },
+            set: { room.radiators = $0.isEmpty ? nil : $0 }
+        )
+    }
+
+    /// Heizkörper-Check des Raums bei den Gebäude-Vorlauftemperaturen.
+    private var radiatorCheck: RadiatorCheckResult? {
+        guard let radiators = room.radiators, !radiators.isEmpty else { return nil }
+        let roomTemp = room.heating?.indoorTemperature ?? 20
+        let capacity = radiators.reduce(0.0) {
+            $0 + $1.power(flow: store.building.flowTemp,
+                          ret: store.building.returnTemp, roomTemp: roomTemp)
+        }
+        return RadiatorCheckResult(capacity: capacity, demand: heatingResult.total)
+    }
+
     var body: some View {
         Form {
             Section("Raum") {
@@ -129,6 +148,36 @@ struct RoomEditView: View {
                 Text("Wände")
             } footer: {
                 Text("Nur Außenwände tragen Transmissionslast. Der U-Wert bestimmt den Verlust – bei Altbau deutlich höher (Baujahr-Klasse setzt Vorgaben).")
+            }
+
+            Section {
+                ForEach(radiatorsBinding) { $radiator in
+                    RadiatorEditor(radiator: $radiator,
+                                   flowTemp: store.building.flowTemp,
+                                   returnTemp: store.building.returnTemp,
+                                   roomTemp: room.heating?.indoorTemperature ?? 20)
+                }
+                .onDelete { radiatorsBinding.wrappedValue.remove(atOffsets: $0) }
+                Button {
+                    radiatorsBinding.wrappedValue.append(Radiator(type: .typ22, widthM: 1.0, heightM: 0.6))
+                } label: {
+                    Label("Heizkörper hinzufügen", systemImage: "plus")
+                }
+                if let check = radiatorCheck {
+                    HStack {
+                        Text("Deckung bei WP-Vorlauf")
+                        Spacer()
+                        Text(String(format: "%.0f %% – %@", check.coverage * 100, check.verdict.label))
+                            .foregroundStyle(check.verdict == .zuKlein ? .red :
+                                             check.verdict == .knapp ? .orange : .green)
+                            .font(.subheadline.weight(.medium))
+                    }
+                }
+            } header: {
+                Text("Heizkörper (Bestand)")
+            } footer: {
+                Text(String(format: "Prüft, ob die vorhandenen Heizkörper bei Wärmepumpen-Vorlauf %.0f/%.0f °C reichen. Temperaturen im Gebäude-Bildschirm einstellbar.",
+                            store.building.flowTemp, store.building.returnTemp))
             }
 
             Section("Innere Lasten") {
@@ -331,6 +380,41 @@ private struct DoorEditor: View {
                         .font(.caption.monospacedDigit())
                         .foregroundStyle(.secondary)
                 }
+            }
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+private struct RadiatorEditor: View {
+    @Binding var radiator: Radiator
+    let flowTemp: Double
+    let returnTemp: Double
+    let roomTemp: Double
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Picker("", selection: $radiator.type) {
+                    ForEach(RadiatorType.allCases, id: \.self) { t in
+                        Text(t.label).tag(t)
+                    }
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
+                Spacer()
+                Text(String(format: "%.0f W bei %.0f/%.0f",
+                            radiator.power(flow: flowTemp, ret: returnTemp, roomTemp: roomTemp),
+                            flowTemp, returnTemp))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            HStack(spacing: 12) {
+                CompactField(label: "B", value: $radiator.widthM, unit: "m")
+                CompactField(label: "H", value: $radiator.heightM, unit: "m")
+                Text(String(format: "Norm %.0f W", radiator.normPower))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
         .padding(.vertical, 4)

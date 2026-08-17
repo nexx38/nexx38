@@ -11,11 +11,21 @@ final class RoomStore: ObservableObject {
         didSet { if !isLoading { save() } }
     }
 
+    /// Gebäudeweite Anlagen-Einstellungen (WP, Klima, Abgleich).
+    @Published var building = BuildingSettings() {
+        didSet { if !isLoading { saveBuilding() } }
+    }
+
     private var isLoading = false
 
     private let fileURL: URL = {
         let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         return dir.appendingPathComponent("rooms.json")
+    }()
+
+    private let buildingFileURL: URL = {
+        let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        return dir.appendingPathComponent("building.json")
     }()
 
     /// Ablage der Scan-Fotos (Dateinamen stehen in Room.photoFilenames).
@@ -33,6 +43,10 @@ final class RoomStore: ObservableObject {
     func load() {
         isLoading = true
         defer { isLoading = false }
+        if let data = try? Data(contentsOf: buildingFileURL),
+           let decoded = try? JSONDecoder().decode(BuildingSettings.self, from: data) {
+            building = decoded
+        }
         guard let data = try? Data(contentsOf: fileURL),
               let decoded = try? JSONDecoder().decode([Room].self, from: data) else {
             return
@@ -43,6 +57,11 @@ final class RoomStore: ObservableObject {
     func save() {
         guard let data = try? JSONEncoder().encode(rooms) else { return }
         try? data.write(to: fileURL, options: .atomic)
+    }
+
+    func saveBuilding() {
+        guard let data = try? JSONEncoder().encode(building) else { return }
+        try? data.write(to: buildingFileURL, options: .atomic)
     }
 
     func add(_ room: Room) {

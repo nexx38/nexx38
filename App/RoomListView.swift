@@ -67,7 +67,7 @@ struct RoomListView: View {
 
     private var roomList: some View {
         List {
-            if store.rooms.count >= 2 {
+            if !store.rooms.isEmpty {
                 buildingSummary
             }
             ForEach(store.rooms) { room in
@@ -97,26 +97,30 @@ struct RoomListView: View {
         let area = store.rooms.reduce(0.0) { $0 + $1.floorArea }
 
         return Section {
-            VStack(alignment: .leading, spacing: 8) {
-                Text("Gebäude gesamt")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                HStack(spacing: 20) {
-                    Label(String(format: "%.1f kW Kühlung", cooling / 1000),
-                          systemImage: "air.conditioner.horizontal")
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(accent)
-                    Label(String(format: "%.1f kW Heizung", heating / 1000),
-                          systemImage: "thermometer")
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(Color(red: 0.9, green: 0.4, blue: 0.1))
+            NavigationLink {
+                BuildingView()
+            } label: {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Gebäude / Anlage")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    HStack(spacing: 20) {
+                        Label(String(format: "%.1f kW Kühlung", cooling / 1000),
+                              systemImage: "air.conditioner.horizontal")
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(accent)
+                        Label(String(format: "%.1f kW Heizung", heating / 1000),
+                              systemImage: "thermometer")
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(Color(red: 0.9, green: 0.4, blue: 0.1))
+                    }
+                    Text(String(format: "%d Räume · %.0f m² · WP-Auslegung, Multisplit, Heizkörper-Check →",
+                                store.rooms.count, area))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
-                Text(String(format: "%d Räume · %.0f m² · Multisplit-Außengerät ab %.1f kW",
-                            store.rooms.count, area, cooling / 1000))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                .padding(.vertical, 4)
             }
-            .padding(.vertical, 4)
         }
     }
 

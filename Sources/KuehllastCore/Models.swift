@@ -208,6 +208,9 @@ public struct Room: Codable, Identifiable, Hashable, Sendable {
     /// Gewählte Baujahr-Klasse (BuildingEra.rawValue) – bestimmt die
     /// U-Wert-Vorgaben und wird im PDF als Annahme ausgewiesen. Optional.
     public var constructionEra: String?
+    /// Vorhandene Heizkörper (Bestandsaufnahme) – für den WP-Tauglichkeits-
+    /// Check und den hydraulischen Abgleich. Optional für alte Dateien.
+    public var radiators: [Radiator]?
 
     public var volume: Double { floorArea * height }
 
@@ -221,7 +224,8 @@ public struct Room: Codable, Identifiable, Hashable, Sendable {
                 scannedAt: Date? = nil,
                 heating: HeatingParameters? = nil,
                 photoFilenames: [String]? = nil,
-                constructionEra: String? = nil) {
+                constructionEra: String? = nil,
+                radiators: [Radiator]? = nil) {
         self.id = id
         self.name = name
         self.floorArea = floorArea
@@ -237,5 +241,6 @@ public struct Room: Codable, Identifiable, Hashable, Sendable {
         self.heating = heating
         self.photoFilenames = photoFilenames
         self.constructionEra = constructionEra
+        self.radiators = radiators
     }
 }

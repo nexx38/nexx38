@@ -3,9 +3,16 @@ import KuehllastCore
 
 /// Bearbeitet einen Raum: Baujahr, Fenster + Ausrichtung, innere Lasten,
 /// Klimastandort. Zeigt am Ende das Ergebnis und den Weg zum PDF-Bericht.
+/// Ziel für den Vollbild-Foto-Viewer (Identifiable für fullScreenCover).
+private struct PhotoViewerTarget: Identifiable {
+    let index: Int
+    var id: Int { index }
+}
+
 struct RoomEditView: View {
     @EnvironmentObject var store: RoomStore
     @Binding var room: Room
+    @State private var viewerTarget: PhotoViewerTarget?
 
     private var region: ClimateRegion { ClimateRegion.region(id: room.climateRegionID) }
     private var result: CoolingLoadResult {
@@ -75,16 +82,19 @@ struct RoomEditView: View {
             }
 
             if let photos = room.photoFilenames, !photos.isEmpty {
-                Section("Fotos vom Scan") {
+                Section {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
-                            ForEach(photos, id: \.self) { name in
+                            ForEach(Array(photos.enumerated()), id: \.element) { index, name in
                                 if let image = UIImage(contentsOfFile: store.photoURL(named: name).path) {
                                     Image(uiImage: image)
                                         .resizable()
                                         .scaledToFill()
                                         .frame(width: 92, height: 92)
                                         .clipShape(RoundedRectangle(cornerRadius: 10))
+                                        .onTapGesture {
+                                            viewerTarget = PhotoViewerTarget(index: index)
+                                        }
                                         .contextMenu {
                                             Button(role: .destructive) {
                                                 store.removePhotoFile(named: name)
@@ -98,6 +108,10 @@ struct RoomEditView: View {
                         }
                         .padding(.vertical, 4)
                     }
+                } header: {
+                    Text("Fotos vom Scan")
+                } footer: {
+                    Text("Antippen zum Vergrößern, gedrückt halten zum Löschen.")
                 }
             }
 
@@ -317,6 +331,11 @@ struct RoomEditView: View {
                     Image(systemName: "square.and.arrow.up")
                 }
             }
+        }
+        .fullScreenCover(item: $viewerTarget) { target in
+            PhotoViewerView(photoNames: room.photoFilenames ?? [],
+                            startIndex: target.index,
+                            urlFor: { store.photoURL(named: $0) })
         }
     }
 }

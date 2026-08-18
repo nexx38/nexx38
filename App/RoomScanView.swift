@@ -93,6 +93,11 @@ struct RoomScanView: View {
                 var room = RoomPlanConverter.room(from: captured, name: name)
                 let names = model.capturedJPEGs.compactMap { store.savePhotoData($0) }
                 if !names.isEmpty { room.photoFilenames = names }
+                // 3D-Modell des Scans sichern (Apples parametrischer USDZ-Export).
+                let modelName = UUID().uuidString + ".usdz"
+                if (try? captured.export(to: store.modelURL(named: modelName))) != nil {
+                    room.modelFilename = modelName
+                }
                 store.add(room)
                 dismiss()
             }

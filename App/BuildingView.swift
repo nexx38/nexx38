@@ -147,6 +147,10 @@ struct BuildingView: View {
             pdfURL = BuildingPDFReport.generate(rooms: store.rooms, settings: store.building)
         }
         .onChange(of: store.building) { _, _ in
+            // Rücklauf muss unter dem Vorlauf bleiben (sonst Unsinnswerte).
+            if store.building.returnTemp >= store.building.flowTemp {
+                store.building.returnTemp = max(25, store.building.flowTemp - 10)
+            }
             pdfURL = BuildingPDFReport.generate(rooms: store.rooms, settings: store.building)
         }
     }

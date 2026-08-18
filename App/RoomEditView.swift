@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import KuehllastCore
 
 /// Bearbeitet einen Raum: Baujahr, Fenster + Ausrichtung, innere Lasten,
@@ -184,6 +185,12 @@ struct RoomEditView: View {
                 ForEach($room.walls) { $wall in
                     WallEditor(wall: $wall)
                 }
+                .onDelete { room.walls.remove(atOffsets: $0) }
+                Button {
+                    room.walls.append(Wall(width: 4.0, height: room.height, isExternal: true))
+                } label: {
+                    Label("Wand hinzufügen", systemImage: "plus")
+                }
             } header: {
                 Text("Wände")
             } footer: {
@@ -338,6 +345,14 @@ struct RoomEditView: View {
                     Image(systemName: "square.and.arrow.up")
                 }
             }
+            // Die Dezimal-Tastatur hat keinen eigenen Schließen-Knopf.
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Fertig") {
+                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder),
+                                                    to: nil, from: nil, for: nil)
+                }
+            }
         }
         .fullScreenCover(item: $viewerTarget) { target in
             PhotoViewerView(photoNames: room.photoFilenames ?? [],
@@ -480,8 +495,9 @@ private struct WallEditor: View {
             }
             if wall.isExternal {
                 HStack(spacing: 12) {
-                    CompactField(label: "U", value: $wall.uValue, unit: "W/(m²K)")
-                    Spacer()
+                    CompactField(label: "B", value: $wall.width, unit: "m")
+                    CompactField(label: "H", value: $wall.height, unit: "m")
+                    CompactField(label: "U", value: $wall.uValue, unit: "")
                 }
             }
         }

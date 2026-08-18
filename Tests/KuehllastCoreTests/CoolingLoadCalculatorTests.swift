@@ -91,6 +91,24 @@ final class CoolingLoadCalculatorTests: XCTestCase {
         XCTAssertEqual(result.ventilation, 51, accuracy: 0.01)
     }
 
+    func testSunlitRoofAddsCoolingLoad() {
+        // Dachgeschoss: Decke gegen außen (U = 0,25), 20 m², innen 26 °C,
+        // außen 32 °C + 15 K Sonnen-Zuschlag → ΔT 21 K → 20·0,25·21 = 105 W.
+        let attic = Room(floorArea: 20, height: 2.5,
+                         internalLoads: InternalLoads(persons: 0, equipmentWatt: 0, lightingWattPerSqm: 0),
+                         indoorTemperature: 26, airChangeRate: 0,
+                         heating: HeatingParameters(ceilingUValue: 0.25, ceilingAdjacentTemp: nil))
+        let result = CoolingLoadCalculator(region: region).calculate(attic)
+        XCTAssertEqual(result.roof, 105, accuracy: 0.01)
+
+        // Decke gegen beheizten/temperierten Raum darüber → kein Dach-Posten.
+        let middle = Room(floorArea: 20, height: 2.5,
+                          internalLoads: InternalLoads(persons: 0, equipmentWatt: 0, lightingWattPerSqm: 0),
+                          indoorTemperature: 26, airChangeRate: 0,
+                          heating: HeatingParameters(ceilingUValue: 0.25, ceilingAdjacentTemp: 20))
+        XCTAssertEqual(CoolingLoadCalculator(region: region).calculate(middle).roof, 0, accuracy: 0.001)
+    }
+
     // MARK: - Geräteempfehlung
 
     func testDeviceRecommendationPicksSmallestFittingClass() {

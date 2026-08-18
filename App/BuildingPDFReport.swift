@@ -41,7 +41,10 @@ enum BuildingPDFReport {
 
             y = draw("Gebäudebericht", at: CGPoint(x: margin, y: y),
                      font: .systemFont(ofSize: 24, weight: .semibold), color: .black)
-            y = draw("Heizlast (DIN EN 12831) und Kühllast (VDI 2078, Kurzverfahren)",
+            let dateFormatter = DateFormatter()
+            dateFormatter.dateFormat = "dd.MM.yyyy"
+            y = draw("Heizlast (DIN EN 12831) und Kühllast (VDI 2078, Kurzverfahren) · erstellt am "
+                     + dateFormatter.string(from: Date()),
                      at: CGPoint(x: margin, y: y + 2),
                      font: .systemFont(ofSize: 12, weight: .regular), color: .darkGray)
             y += 14

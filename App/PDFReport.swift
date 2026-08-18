@@ -31,6 +31,7 @@ enum PDFReport {
             y += 16
 
             let climate = HeatingClimate.named(room.heating?.climateName ?? "Berlin")
+            y = row("Erstellt am", dateString(), y: y)
             y = row("Standort", climate.name, y: y)
             y = row("Auslegung außen / innen",
                     String(format: "%.0f °C / %.0f °C",
@@ -42,7 +43,8 @@ enum PDFReport {
             y = row("Wärmebrückenzuschlag",
                     String(format: "%.1f %%", room.heating?.thermalBridgePercent ?? 5),
                     y: y)
-            y += 12
+            y = componentsBlock(for: room, y: y)
+            y += 10
 
             y = draw("Aufschlüsselung", at: CGPoint(x: margin, y: y),
                      font: .systemFont(ofSize: 15, weight: .semibold), color: .black)
@@ -96,6 +98,7 @@ enum PDFReport {
                      font: .systemFont(ofSize: 16, weight: .regular), color: .darkGray)
             y += 16
 
+            y = row("Erstellt am", dateString(), y: y)
             y = row("Standort", region.name, y: y)
             y = row("Auslegung außen / innen",
                     String(format: "%.0f °C / %.0f °C",
@@ -104,19 +107,25 @@ enum PDFReport {
             y = row("Fläche / Höhe",
                     String(format: "%.2f m² / %.2f m", room.floorArea, room.height),
                     y: y)
-            y += 12
+            y = componentsBlock(for: room, y: y)
+            y += 10
 
             y = draw("Aufschlüsselung", at: CGPoint(x: margin, y: y),
                      font: .systemFont(ofSize: 15, weight: .semibold), color: .black)
             y += 6
-            let posten: [(String, Double)] = [
+            var posten: [(String, Double)] = [
                 ("Solare Last (Fenster)", result.solar),
-                ("Transmission (Außenbauteile)", result.transmission),
+                ("Transmission (Außenbauteile)", result.transmission)
+            ]
+            if result.roof > 0 {
+                posten.append(("Dach (besonnt)", result.roof))
+            }
+            posten.append(contentsOf: [
                 ("Personen", result.persons),
                 ("Geräte", result.equipment),
                 ("Beleuchtung", result.lighting),
                 ("Lüftung", result.ventilation)
-            ]
+            ])
             for (name, value) in posten {
                 y = row(name, String(format: "%.0f W", value.rounded()), y: y)
             }
@@ -167,6 +176,28 @@ enum PDFReport {
                      font: .systemFont(ofSize: 10, weight: .regular), color: .gray)
         }
         return y
+    }
+
+    /// Kompakte Bauteil-Übersicht (eine Zeile) für die Raum-Berichte.
+    private static func componentsBlock(for room: Room, y startY: CGFloat) -> CGFloat {
+        let externalWallNet = room.walls.filter { $0.isExternal }.reduce(0.0) { $0 + $1.netArea }
+        let windowArea = room.windows.reduce(0.0) { $0 + $1.area }
+        let glazedDoors = room.doors.filter { $0.isGlazed }
+        var text = String(format: "Bauteile: Außenwand netto %.1f m² · %d Fenster %.1f m²",
+                          externalWallNet, room.windows.count, windowArea)
+        if !glazedDoors.isEmpty {
+            let area = glazedDoors.reduce(0.0) { $0 + $1.area }
+            text += String(format: " · %d verglaste Tür(en) %.1f m²", glazedDoors.count, area)
+        }
+        return drawWrapped(text, at: CGPoint(x: margin, y: startY + 2),
+                           width: pageWidth - 2 * margin,
+                           font: .systemFont(ofSize: 10, weight: .regular), color: .darkGray)
+    }
+
+    private static func dateString() -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "dd.MM.yyyy"
+        return formatter.string(from: Date())
     }
 
     /// Annahmen-Block, wenn eine Baujahr-Klasse die U-Werte vorgegeben hat.

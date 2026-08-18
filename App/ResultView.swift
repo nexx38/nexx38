@@ -16,14 +16,20 @@ struct ResultView: View {
     }
 
     private var items: [(String, Double, Color)] {
-        [
+        var list: [(String, Double, Color)] = [
             ("Solar (Fenster)", result.solar, accent),
-            ("Transmission", result.transmission, .blue),
+            ("Transmission", result.transmission, .blue)
+        ]
+        if result.roof > 0 {
+            list.append(("Dach (besonnt)", result.roof, .red))
+        }
+        list.append(contentsOf: [
             ("Personen", result.persons, .orange),
             ("Geräte", result.equipment, .teal),
             ("Beleuchtung", result.lighting, .yellow),
             ("Lüftung", result.ventilation, .gray)
-        ]
+        ])
+        return list
     }
 
     var body: some View {

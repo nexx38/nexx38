@@ -4,6 +4,8 @@ import Foundation
 public struct CoolingLoadResult: Codable, Hashable, Sendable {
     public var solar: Double
     public var transmission: Double
+    /// Wärmeeintrag über ein besonntes Dach / die oberste Geschossdecke.
+    public var roof: Double
     public var persons: Double
     public var equipment: Double
     public var lighting: Double
@@ -14,7 +16,7 @@ public struct CoolingLoadResult: Codable, Hashable, Sendable {
 
     /// Gesamte Kühllast des Raums in Watt.
     public var total: Double {
-        solar + transmission + persons + equipment + lighting + ventilation
+        solar + transmission + roof + persons + equipment + lighting + ventilation
     }
 
     /// Gesamtlast auf die Raumfläche bezogen (W/m²) – Plausibilitätskennzahl.
@@ -48,6 +50,11 @@ public struct CoolingLoadCalculator {
 
     /// Spezifische Wärmekapazität der Luft × Dichte ≈ 0,34 Wh/(m³·K).
     public static let airHeatCapacity = 0.34
+
+    /// Zuschlag auf die Außentemperatur für besonnte Dächer/oberste Decken (K).
+    /// Dachflächen liegen am Auslegungstag deutlich über der Lufttemperatur
+    /// (äquivalente Temperatur); 15 K ist ein üblicher Kurzverfahren-Ansatz.
+    public static let roofSunSurchargeK = 15.0
 
     public var region: ClimateRegion
 
@@ -83,6 +90,19 @@ public struct CoolingLoadCalculator {
             .reduce(0.0) { $0 + $1.uValue * $1.area * deltaT }
         let transmission = wallTrans + doorTrans + windowTrans
 
+        // 2b) Besonntes Dach / oberste Geschossdecke: nutzt die Heizlast-Angabe
+        //     „Decke gegen außen" (ceilingUValue gesetzt, keine Nachbartemperatur).
+        //     ΔT mit Sonnen-Zuschlag, weil die Dachfläche heißer ist als die Luft.
+        //     Boden gegen kühlen Keller entlastet im Sommer – wird bewusst
+        //     weggelassen (konservativ).
+        var roof = 0.0
+        if let heating = room.heating, let uCeiling = heating.ceilingUValue,
+           heating.ceilingAdjacentTemp == nil {
+            let dtRoof = max(0, region.designOutdoorTemperature + Self.roofSunSurchargeK
+                                - room.indoorTemperature)
+            roof = room.floorArea * uCeiling * dtRoof
+        }
+
         // 3) Innere Lasten
         let persons = Double(room.internalLoads.persons) * room.internalLoads.wattPerPerson
         let equipment = room.internalLoads.equipmentWatt
@@ -95,6 +115,7 @@ public struct CoolingLoadCalculator {
         return CoolingLoadResult(
             solar: solar,
             transmission: transmission,
+            roof: roof,
             persons: persons,
             equipment: equipment,
             lighting: lighting,

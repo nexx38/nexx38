@@ -499,6 +499,17 @@ private struct WallEditor: View {
                     CompactField(label: "H", value: $wall.height, unit: "m")
                     CompactField(label: "U", value: $wall.uValue, unit: "")
                 }
+                HStack {
+                    Text("grenzt an").font(.caption).foregroundStyle(.secondary)
+                    Spacer()
+                    Picker("", selection: $wall.adjacentTemp) {
+                        Text("Außenluft").tag(Double?.none)
+                        Text("Erdreich (10 °C)").tag(Double?.some(10))
+                        Text("Unbeheizt (12 °C)").tag(Double?.some(12))
+                    }
+                    .pickerStyle(.menu)
+                    .labelsHidden()
+                }
             }
         }
         .padding(.vertical, 2)

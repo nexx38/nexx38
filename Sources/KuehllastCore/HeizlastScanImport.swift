@@ -33,6 +33,7 @@ public enum HeizlastScanImport {
             let glazed: Bool?
             let shading: Double?
             let uValue: Double?
+            let adjacentTemp: Double?
         }
         let name: String?
         let floorArea: Double?
@@ -57,7 +58,8 @@ public enum HeizlastScanImport {
             Wall(width: w.width, height: w.height,
                  isExternal: w.external ?? true,
                  orientation: w.orientation.flatMap(Orientation.init(rawValue:)),
-                 uValue: w.uValue ?? 0.28)
+                 uValue: w.uValue ?? 0.28,
+                 adjacentTemp: w.adjacentTemp)
         }
         let doors = (raw.doors ?? []).map { d -> Door in
             // Explizite Flags (unser eigenes Exportformat) haben Vorrang.

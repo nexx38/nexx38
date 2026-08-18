@@ -51,6 +51,11 @@ public struct Wall: Codable, Hashable, Identifiable, Sendable {
     public var openingDeductionArea: Double
     /// Grundriss-Lage der Wand (nur bei gescannten Wänden vorhanden).
     public var position: WallPosition?
+    /// Temperatur hinter der Wand, wenn sie NICHT an Außenluft grenzt:
+    /// Erdreich ≈ 10 °C (Kellerwand), unbeheizter Raum ≈ 12 °C. nil = Außenluft.
+    /// Wirkt nur bei isExternal-Wänden; Heizlast rechnet dann gegen diese
+    /// Temperatur, Kühllast setzt solche Wände neutral (kein Sommer-Eintrag).
+    public var adjacentTemp: Double?
 
     /// Brutto-Wandfläche (Breite × Höhe) – für Anzeige und Export.
     public var area: Double { width * height }
@@ -60,7 +65,7 @@ public struct Wall: Codable, Hashable, Identifiable, Sendable {
     public init(id: UUID = UUID(), width: Double, height: Double,
                 isExternal: Bool = true, orientation: Orientation? = nil,
                 uValue: Double = 0.28, openingDeductionArea: Double = 0,
-                position: WallPosition? = nil) {
+                position: WallPosition? = nil, adjacentTemp: Double? = nil) {
         self.id = id
         self.width = width
         self.height = height
@@ -69,10 +74,11 @@ public struct Wall: Codable, Hashable, Identifiable, Sendable {
         self.uValue = uValue
         self.openingDeductionArea = openingDeductionArea
         self.position = position
+        self.adjacentTemp = adjacentTemp
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, width, height, isExternal, orientation, uValue, openingDeductionArea, position
+        case id, width, height, isExternal, orientation, uValue, openingDeductionArea, position, adjacentTemp
     }
 
     public init(from decoder: Decoder) throws {
@@ -85,6 +91,7 @@ public struct Wall: Codable, Hashable, Identifiable, Sendable {
         self.uValue = (try? c.decode(Double.self, forKey: .uValue)) ?? 0.28
         self.openingDeductionArea = (try? c.decode(Double.self, forKey: .openingDeductionArea)) ?? 0
         self.position = try? c.decode(WallPosition.self, forKey: .position)
+        self.adjacentTemp = try? c.decode(Double.self, forKey: .adjacentTemp)
     }
 }
 

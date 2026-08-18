@@ -80,8 +80,11 @@ public struct CoolingLoadCalculator {
 
         // 2) Transmission über Außenwände, Außen-/verglaste Türen und Fenster (U · A · ΔT).
         //    Verglaste Türen führen nach außen und zählen daher immer mit.
+        // Wände gegen Erdreich/unbeheizte Räume (adjacentTemp gesetzt) tragen
+        // im Sommer keine Last – das Erdreich ist kühler als der Raum
+        // (die Entlastung wird konservativ weggelassen).
         let wallTrans = room.walls
-            .filter { $0.isExternal }
+            .filter { $0.isExternal && $0.adjacentTemp == nil }
             .reduce(0.0) { $0 + $1.uValue * $1.netArea * deltaT }
         let doorTrans = room.doors
             .filter { $0.isExternal || $0.isGlazed }

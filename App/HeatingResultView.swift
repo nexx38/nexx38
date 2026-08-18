@@ -47,8 +47,9 @@ struct HeatingResultView: View {
         }
         .task {
             let photoURLs = (room.photoFilenames ?? []).map { store.photoURL(named: $0) }
+            let project = store.projects.first { $0.id == room.projectID }
             pdfURL = PDFReport.generate(room: room, heatingResult: result,
-                                        photoURLs: photoURLs)
+                                        photoURLs: photoURLs, project: project)
         }
     }
 

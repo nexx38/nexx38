@@ -12,10 +12,10 @@ struct BuildingView: View {
     private var acAccent: Color { Color(red: 0.33, green: 0.29, blue: 0.72) }
 
     private var heatingTotal: Double {
-        store.rooms.reduce(0.0) { $0 + HeatingLoadCalculator().calculate($1).total }
+        store.currentRooms.reduce(0.0) { $0 + HeatingLoadCalculator().calculate($1).total }
     }
     private var coolingLoads: [(name: String, coolingLoadW: Double)] {
-        store.rooms.map { room in
+        store.currentRooms.map { room in
             let region = ClimateRegion.region(id: room.climateRegionID)
             return (room.name, CoolingLoadCalculator(region: region).calculate(room).total)
         }
@@ -144,14 +144,16 @@ struct BuildingView: View {
             }
         }
         .task {
-            pdfURL = BuildingPDFReport.generate(rooms: store.rooms, settings: store.building)
+            pdfURL = BuildingPDFReport.generate(rooms: store.currentRooms, settings: store.building,
+                                                project: store.currentProject)
         }
         .onChange(of: store.building) { _, _ in
             // Rücklauf muss unter dem Vorlauf bleiben (sonst Unsinnswerte).
             if store.building.returnTemp >= store.building.flowTemp {
                 store.building.returnTemp = max(25, store.building.flowTemp - 10)
             }
-            pdfURL = BuildingPDFReport.generate(rooms: store.rooms, settings: store.building)
+            pdfURL = BuildingPDFReport.generate(rooms: store.currentRooms, settings: store.building,
+                                                project: store.currentProject)
         }
     }
 
@@ -164,7 +166,7 @@ struct BuildingView: View {
     }
 
     private var roomsWithRadiators: [RadiatorRoomEntry] {
-        store.rooms.compactMap { room in
+        store.currentRooms.compactMap { room in
             guard let radiators = room.radiators, !radiators.isEmpty else { return nil }
             let roomTemp = room.heating?.indoorTemperature ?? 20
             let demand = HeatingLoadCalculator().calculate(room).total

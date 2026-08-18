@@ -12,7 +12,7 @@ enum PDFReport {
     private static let margin: CGFloat = 48
 
     static func generate(room: Room, heatingResult: HeatingLoadResult,
-                         photoURLs: [URL] = []) -> URL {
+                         photoURLs: [URL] = [], project: Project? = nil) -> URL {
         let bounds = CGRect(x: 0, y: 0, width: pageWidth, height: pageHeight)
         let accent = UIColor(red: 0.9, green: 0.4, blue: 0.1, alpha: 1)
 
@@ -31,6 +31,7 @@ enum PDFReport {
             y += 16
 
             let climate = HeatingClimate.named(room.heating?.climateName ?? "Berlin")
+            y = projectRows(project, y: y)
             y = row("Erstellt am", dateString(), y: y)
             y = row("Standort", climate.name, y: y)
             y = row("Auslegung außen / innen",
@@ -80,7 +81,7 @@ enum PDFReport {
                          result: CoolingLoadResult,
                          recommendation: DeviceRecommendation,
                          region: ClimateRegion,
-                         photoURLs: [URL] = []) -> URL {
+                         photoURLs: [URL] = [], project: Project? = nil) -> URL {
         let bounds = CGRect(x: 0, y: 0, width: pageWidth, height: pageHeight)
         let accent = UIColor(red: 0.33, green: 0.29, blue: 0.72, alpha: 1)
 
@@ -98,6 +99,7 @@ enum PDFReport {
                      font: .systemFont(ofSize: 16, weight: .regular), color: .darkGray)
             y += 16
 
+            y = projectRows(project, y: y)
             y = row("Erstellt am", dateString(), y: y)
             y = row("Standort", region.name, y: y)
             y = row("Auslegung außen / innen",
@@ -192,6 +194,19 @@ enum PDFReport {
         return drawWrapped(text, at: CGPoint(x: margin, y: startY + 2),
                            width: pageWidth - 2 * margin,
                            font: .systemFont(ofSize: 10, weight: .regular), color: .darkGray)
+    }
+
+    /// Projekt-/Kundenzeilen im Berichtskopf (nur wenn vorhanden).
+    private static func projectRows(_ project: Project?, y startY: CGFloat) -> CGFloat {
+        guard let project else { return startY }
+        var y = row("Projekt", project.name, y: startY)
+        if !project.customerName.isEmpty {
+            y = row("Kunde", project.customerName, y: y)
+        }
+        if !project.address.isEmpty {
+            y = row("Adresse", project.address, y: y)
+        }
+        return y
     }
 
     private static func dateString() -> String {

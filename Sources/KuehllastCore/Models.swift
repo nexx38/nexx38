@@ -234,6 +234,9 @@ public struct Room: Codable, Identifiable, Hashable, Sendable {
     /// Vorhandene Heizkörper (Bestandsaufnahme) – für den WP-Tauglichkeits-
     /// Check und den hydraulischen Abgleich. Optional für alte Dateien.
     public var radiators: [Radiator]?
+    /// Zugehöriges Projekt (Kunde/Objekt). Optional: alte Dateien ohne
+    /// Projekt werden beim Laden dem Standard-Projekt zugeordnet.
+    public var projectID: UUID?
 
     public var volume: Double { floorArea * height }
 
@@ -248,7 +251,8 @@ public struct Room: Codable, Identifiable, Hashable, Sendable {
                 heating: HeatingParameters? = nil,
                 photoFilenames: [String]? = nil,
                 constructionEra: String? = nil,
-                radiators: [Radiator]? = nil) {
+                radiators: [Radiator]? = nil,
+                projectID: UUID? = nil) {
         self.id = id
         self.name = name
         self.floorArea = floorArea
@@ -265,5 +269,6 @@ public struct Room: Codable, Identifiable, Hashable, Sendable {
         self.photoFilenames = photoFilenames
         self.constructionEra = constructionEra
         self.radiators = radiators
+        self.projectID = projectID
     }
 }

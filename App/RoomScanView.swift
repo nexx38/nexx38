@@ -88,7 +88,7 @@ struct RoomScanView: View {
             model.onFinished = { captured in
                 // Eindeutiger Name, damit Mehrfach-Scans unterscheidbar bleiben.
                 let base = "Gescannter Raum"
-                let existing = store.rooms.filter { $0.name.hasPrefix(base) }.count
+                let existing = store.currentRooms.filter { $0.name.hasPrefix(base) }.count
                 let name = existing == 0 ? base : "\(base) \(existing + 1)"
                 var room = RoomPlanConverter.room(from: captured, name: name)
                 let names = model.capturedJPEGs.compactMap { store.savePhotoData($0) }

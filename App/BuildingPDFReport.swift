@@ -10,7 +10,8 @@ enum BuildingPDFReport {
     private static let pageHeight: CGFloat = 842
     private static let margin: CGFloat = 48
 
-    static func generate(rooms: [Room], settings: BuildingSettings) -> URL {
+    static func generate(rooms: [Room], settings: BuildingSettings,
+                         project: Project? = nil) -> URL {
         let bounds = CGRect(x: 0, y: 0, width: pageWidth, height: pageHeight)
         let wpAccent = UIColor(red: 0.9, green: 0.4, blue: 0.1, alpha: 1)
         let acAccent = UIColor(red: 0.33, green: 0.29, blue: 0.72, alpha: 1)
@@ -47,6 +48,14 @@ enum BuildingPDFReport {
                      + dateFormatter.string(from: Date()),
                      at: CGPoint(x: margin, y: y + 2),
                      font: .systemFont(ofSize: 12, weight: .regular), color: .darkGray)
+            if let project {
+                var headerParts: [String] = [project.name]
+                if !project.customerName.isEmpty { headerParts.append(project.customerName) }
+                if !project.address.isEmpty { headerParts.append(project.address) }
+                y = draw(headerParts.joined(separator: " · "),
+                         at: CGPoint(x: margin, y: y + 2),
+                         font: .systemFont(ofSize: 12, weight: .medium), color: .black)
+            }
             y += 14
 
             // Raumtabelle
@@ -85,7 +94,14 @@ enum BuildingPDFReport {
                     String(format: "%.1f kW", heatPump.requiredKW), y: y)
             y = row("Empfehlung", String(format: "%.0f-kW-Wärmepumpe", heatPump.suggestedKW),
                     y: y, bold: true, color: wpAccent)
-            y += 12
+            y = drawWrapped("Förderhinweis: Für die Heizungsförderung (KfW, BEG EM) sind eine raumweise "
+                            + "Heizlastberechnung und der hydraulische Abgleich (Verfahren B) Teil des "
+                            + "Nachweises. Dieser Bericht bereitet beides vor - Antragstellung über den "
+                            + "Fachbetrieb.",
+                            at: CGPoint(x: margin, y: y + 2),
+                            width: pageWidth - 2 * margin,
+                            font: .systemFont(ofSize: 10, weight: .regular), color: .darkGray)
+            y += 10
 
             // Multisplit
             if y > pageHeight - 180 { ctx.beginPage(); y = margin }
@@ -162,6 +178,21 @@ enum BuildingPDFReport {
     }
 
     // MARK: - Zeichen-Helfer
+
+    /// Zeichnet mehrzeiligen Text im Breitenrahmen, gibt y unter dem Text zurück.
+    private static func drawWrapped(_ text: String, at point: CGPoint, width: CGFloat,
+                                    font: UIFont, color: UIColor) -> CGFloat {
+        let attrs: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: color]
+        let bounding = (text as NSString).boundingRect(
+            with: CGSize(width: width, height: .greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading],
+            attributes: attrs, context: nil)
+        (text as NSString).draw(
+            with: CGRect(x: point.x, y: point.y, width: width, height: ceil(bounding.height)),
+            options: [.usesLineFragmentOrigin, .usesFontLeading],
+            attributes: attrs, context: nil)
+        return point.y + ceil(bounding.height) + 2
+    }
 
     @discardableResult
     private static func draw(_ text: String, at point: CGPoint,

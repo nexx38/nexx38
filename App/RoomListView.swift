@@ -7,20 +7,27 @@ struct RoomListView: View {
     @State private var showImporter = false
     @State private var showScanner = false
     @State private var importError: String?
+    @State private var showNewProjectAlert = false
+    @State private var newProjectName = ""
+    @State private var editingProject: Project?
+    @State private var showDeleteProjectConfirm = false
 
     private var accent: Color { Color(red: 0.33, green: 0.29, blue: 0.72) }
 
     var body: some View {
         NavigationStack {
             Group {
-                if store.rooms.isEmpty {
+                if store.currentRooms.isEmpty {
                     emptyState
                 } else {
                     roomList
                 }
             }
-            .navigationTitle("LastScan")
+            .navigationTitle(store.currentProject?.name ?? "LastScan")
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    projectMenu
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
                         if RoomScanAvailability.isSupported {
@@ -53,6 +60,9 @@ struct RoomListView: View {
             .fullScreenCover(isPresented: $showScanner) {
                 RoomScanView()
             }
+            .sheet(item: $editingProject) { project in
+                ProjectEditView(project: project)
+            }
             .alert("Import fehlgeschlagen",
                    isPresented: Binding(
                        get: { importError != nil },
@@ -62,20 +72,78 @@ struct RoomListView: View {
             } message: {
                 Text(importError ?? "")
             }
+            .alert("Neues Projekt", isPresented: $showNewProjectAlert) {
+                TextField("Name (z. B. EFH Müller)", text: $newProjectName)
+                Button("Anlegen") {
+                    store.addProject(named: newProjectName)
+                    newProjectName = ""
+                }
+                Button("Abbrechen", role: .cancel) { newProjectName = "" }
+            } message: {
+                Text("Jedes Projekt hat eigene Räume und eigene Anlagen-Einstellungen.")
+            }
+            .confirmationDialog("Projekt und alle seine Räume löschen?",
+                                isPresented: $showDeleteProjectConfirm,
+                                titleVisibility: .visible) {
+                Button("Endgültig löschen", role: .destructive) {
+                    if let id = store.currentProjectID {
+                        store.deleteProject(id: id)
+                    }
+                }
+                Button("Abbrechen", role: .cancel) {}
+            }
+        }
+    }
+
+    /// Projekt-Umschalter: Kunde/Objekt wählen, anlegen, bearbeiten, löschen.
+    private var projectMenu: some View {
+        Menu {
+            ForEach(store.projects) { project in
+                Button {
+                    store.currentProjectID = project.id
+                } label: {
+                    if project.id == store.currentProjectID {
+                        Label(project.name, systemImage: "checkmark")
+                    } else {
+                        Text(project.name)
+                    }
+                }
+            }
+            Divider()
+            Button {
+                showNewProjectAlert = true
+            } label: {
+                Label("Neues Projekt", systemImage: "plus")
+            }
+            Button {
+                editingProject = store.currentProject
+            } label: {
+                Label("Projekt bearbeiten", systemImage: "pencil")
+            }
+            if store.projects.count > 1 {
+                Button(role: .destructive) {
+                    showDeleteProjectConfirm = true
+                } label: {
+                    Label("Projekt löschen", systemImage: "trash")
+                }
+            }
+        } label: {
+            Image(systemName: "folder")
         }
     }
 
     private var roomList: some View {
         List {
-            if !store.rooms.isEmpty {
-                buildingSummary
-            }
-            ForEach(store.rooms) { room in
+            buildingSummary
+            ForEach(store.currentRooms) { room in
                 NavigationLink(value: room.id) {
                     RoomRow(room: room)
                 }
             }
-            .onDelete { store.delete(at: $0) }
+            .onDelete { offsets in
+                let ids = offsets.map { store.currentRooms[$0].id }
+                store.deleteRooms(ids: ids)
+            }
         }
         .navigationDestination(for: UUID.self) { id in
             if let idx = store.rooms.firstIndex(where: { $0.id == id }) {
@@ -84,17 +152,18 @@ struct RoomListView: View {
         }
     }
 
-    /// Gebäude-Gesamtsumme über alle Räume – die Grundlage der
-    /// Multisplit-Auslegung (mehrere Räume, ein Außengerät).
+    /// Gebäude-Gesamtsumme des aktiven Projekts – Einstieg in die
+    /// Anlagen-Auslegung (WP, Multisplit, Heizkörper, Abgleich).
     private var buildingSummary: some View {
-        let cooling = store.rooms.reduce(0.0) { sum, room in
+        let rooms = store.currentRooms
+        let cooling = rooms.reduce(0.0) { sum, room in
             let region = ClimateRegion.region(id: room.climateRegionID)
             return sum + CoolingLoadCalculator(region: region).calculate(room).total
         }
-        let heating = store.rooms.reduce(0.0) { sum, room in
+        let heating = rooms.reduce(0.0) { sum, room in
             sum + HeatingLoadCalculator().calculate(room).total
         }
-        let area = store.rooms.reduce(0.0) { $0 + $1.floorArea }
+        let area = rooms.reduce(0.0) { $0 + $1.floorArea }
 
         return Section {
             NavigationLink {
@@ -115,7 +184,7 @@ struct RoomListView: View {
                             .foregroundStyle(Color(red: 0.9, green: 0.4, blue: 0.1))
                     }
                     Text(String(format: "%d Räume · %.0f m² · WP-Auslegung, Multisplit, Heizkörper-Check →",
-                                store.rooms.count, area))
+                                rooms.count, area))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -129,7 +198,7 @@ struct RoomListView: View {
             Image(systemName: "wind.snow")
                 .font(.system(size: 52))
                 .foregroundStyle(accent)
-            Text("Noch keine Räume")
+            Text("Noch keine Räume in diesem Projekt")
                 .font(.title3.weight(.medium))
             Text(RoomScanAvailability.isSupported
                  ? "Scanne einen Raum mit der Kamera oder lege ihn von Hand an."

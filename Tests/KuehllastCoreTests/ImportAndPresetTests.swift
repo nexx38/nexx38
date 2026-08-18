@@ -162,11 +162,15 @@ final class ImportAndPresetTests: XCTestCase {
             with: JSONEncoder().encode(room)) as! [String: Any]
         dict.removeValue(forKey: "photoFilenames")
         dict.removeValue(forKey: "constructionEra")
+        dict.removeValue(forKey: "radiators")
+        dict.removeValue(forKey: "projectID")
         let data = try JSONSerialization.data(withJSONObject: dict)
 
         let decoded = try JSONDecoder().decode(Room.self, from: data)
         XCTAssertNil(decoded.photoFilenames)
         XCTAssertNil(decoded.constructionEra)
+        XCTAssertNil(decoded.radiators)
+        XCTAssertNil(decoded.projectID)
         XCTAssertEqual(decoded.floorArea, 20, accuracy: 0.001)
     }
 }

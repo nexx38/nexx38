@@ -59,9 +59,10 @@ struct ResultView: View {
         .task {
             // Einmal erzeugen statt bei jedem Render – mit Fotos wäre das teuer.
             let photoURLs = (room.photoFilenames ?? []).map { store.photoURL(named: $0) }
+            let project = store.projects.first { $0.id == room.projectID }
             pdfURL = PDFReport.generate(room: room, result: result,
                                         recommendation: recommendation, region: region,
-                                        photoURLs: photoURLs)
+                                        photoURLs: photoURLs, project: project)
         }
     }
 

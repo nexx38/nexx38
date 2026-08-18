@@ -91,6 +91,17 @@ final class CoolingLoadCalculatorTests: XCTestCase {
         XCTAssertEqual(result.ventilation, 51, accuracy: 0.01)
     }
 
+    func testGroundContactWallHasNoCoolingLoad() {
+        // Kellerwand (Erdreich 10 °C): im Sommer keine Last (neutral, konservativ).
+        let ground = Wall(width: 5, height: 2, isExternal: true, uValue: 1.4,
+                          adjacentTemp: 10)
+        let room = Room(floorArea: 20, height: 2.5, walls: [ground],
+                        internalLoads: InternalLoads(persons: 0, equipmentWatt: 0, lightingWattPerSqm: 0),
+                        indoorTemperature: 26, airChangeRate: 0)
+        let result = CoolingLoadCalculator(region: region).calculate(room)
+        XCTAssertEqual(result.transmission, 0, accuracy: 0.001)
+    }
+
     func testSunlitRoofAddsCoolingLoad() {
         // Dachgeschoss: Decke gegen außen (U = 0,25), 20 m², innen 26 °C,
         // außen 32 °C + 15 K Sonnen-Zuschlag → ΔT 21 K → 20·0,25·21 = 105 W.

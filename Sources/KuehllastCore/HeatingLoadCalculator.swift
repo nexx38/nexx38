@@ -100,8 +100,10 @@ public struct HeatingLoadCalculator {
 
         var transmission = 0.0
         // Außenwände (nur außenliegende) – Netto-Fläche, Öffnungen sind abgezogen.
+        // Kellerwände gegen Erdreich / unbeheizte Räume rechnen gegen deren
+        // Temperatur statt gegen die Außenluft (adjacentTemp, z. B. 10 °C).
         for wall in room.walls where wall.isExternal {
-            transmission += loss(area: wall.netArea, u: wall.uValue, adjacent: nil)
+            transmission += loss(area: wall.netArea, u: wall.uValue, adjacent: wall.adjacentTemp)
         }
         // Fenster (führen immer nach außen)
         for window in room.windows {

@@ -11,6 +11,7 @@ struct RoomJSONExport: Codable {
         let height: Double
         let external: Bool
         let uValue: Double
+        let adjacentTemp: Double?
     }
     struct Door: Codable {
         let width: Double
@@ -67,7 +68,8 @@ struct RoomJSONExport: Codable {
             constructionEra: room.constructionEra,
             walls: room.walls.map {
                 Wall(width: round2($0.width), height: round2($0.height),
-                     external: $0.isExternal, uValue: $0.uValue)
+                     external: $0.isExternal, uValue: $0.uValue,
+                     adjacentTemp: $0.adjacentTemp)
             },
             doors: room.doors.map {
                 Door(width: round2($0.width), height: round2($0.height),

@@ -30,6 +30,18 @@ final class HeatingLoadCalculatorTests: XCTestCase {
         XCTAssertEqual(r.transmission, 200, accuracy: 0.01)
     }
 
+    func testGroundContactWallUsesAdjacentTemp() {
+        // Kellerwand 10 m², U = 1.4, Erdreich 10 °C, θ_i = 20 → ΔT = 10 (nicht 34!)
+        // 10 · 1.4 · 10 = 140 W statt 476 W gegen Außenluft.
+        let ground = Wall(width: 5, height: 2, isExternal: true, uValue: 1.4,
+                          adjacentTemp: 10)
+        let room = Room(floorArea: 20, height: 2.5, walls: [ground],
+                        heating: HeatingParameters(indoorTemperature: 20, climateName: "Berlin",
+                                                   thermalBridgePercent: 0, airChangeRate: 0))
+        let r = calc.calculate(room)
+        XCTAssertEqual(r.transmission, 140, accuracy: 0.01)
+    }
+
     func testVentilationLoad() {
         // n = 0.5/h, V = 20·2.5 = 50 m³, ΔT = 34 → 0.34·0.5·50·34 = 289 W
         let room = Room(floorArea: 20, height: 2.5,

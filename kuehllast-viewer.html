@@ -1,0 +1,529 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KühllastScan – Viewer</title>
+<style>
+  :root {
+    --accent: #544ab7;
+    --bg: #f6f5f2;
+    --card: #ffffff;
+    --border: #e2e0da;
+    --text: #1c1c1a;
+    --muted: #6b6a64;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    margin: 0;
+    padding: 24px;
+  }
+  h1 { font-size: 20px; font-weight: 600; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
+  .layout { display: grid; grid-template-columns: 1fr 320px; gap: 20px; max-width: 1100px; margin: 0 auto; }
+  @media (max-width: 800px) { .layout { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 18px;
+    margin-bottom: 16px;
+  }
+  .card h2 { font-size: 14px; font-weight: 600; margin: 0 0 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; }
+  .dropzone {
+    border: 2px dashed var(--border);
+    border-radius: 12px;
+    padding: 40px 20px;
+    text-align: center;
+    color: var(--muted);
+    cursor: pointer;
+    margin-bottom: 16px;
+  }
+  .dropzone.drag { border-color: var(--accent); background: #f0eefb; }
+  input[type=file] { display: none; }
+  .row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+  .row label { font-size: 13px; color: var(--muted); min-width: 90px; }
+  input[type=text], input[type=number], select {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 14px;
+    background: #fff;
+    color: var(--text);
+  }
+  input[type=number] { width: 80px; }
+  input[type=text] { flex: 1; min-width: 140px; }
+  select { min-width: 110px; }
+  .item {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px;
+    margin-bottom: 10px;
+    background: #fafaf8;
+  }
+  .item-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .item-head strong { font-size: 13px; }
+  .badge { font-size: 11px; padding: 2px 8px; border-radius: 20px; background: #eee; color: var(--muted); }
+  .badge.glazed { background: #fde8c8; color: #7a4a06; }
+  .badge.ext { background: #e6f1fb; color: #0c447c; }
+  button {
+    border: 1px solid var(--border);
+    background: #fff;
+    border-radius: 8px;
+    padding: 7px 14px;
+    font-size: 13px;
+    cursor: pointer;
+    color: var(--text);
+  }
+  button:hover { background: #f2f2ef; }
+  button.danger { color: #a32d2d; border-color: #f0c8c8; }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button.primary:hover { opacity: 0.9; }
+  .toolbar { display: flex; gap: 8px; margin-bottom: 12px; }
+  .result-card { background: #f0eefb; border: none; }
+  .result-total { font-size: 34px; font-weight: 600; color: var(--accent); line-height: 1; margin: 4px 0 12px; }
+  .breakdown-row { display: flex; justify-content: space-between; font-size: 13px; padding: 4px 0; border-bottom: 1px solid #e4e0f5; }
+  .breakdown-row:last-child { border-bottom: none; }
+  .device { display: flex; align-items: center; gap: 10px; margin-top: 12px; padding-top: 12px; border-top: 1px solid #e4e0f5; font-size: 14px; }
+  .empty { text-align: center; color: var(--muted); padding: 60px 20px; }
+</style>
+</head>
+<body>
+
+<h1>KühllastScan – Viewer</h1>
+<div class="sub">JSON-Export aus der App öffnen, Werte anpassen, Kühllast live neu berechnen. Läuft komplett lokal im Browser – nichts wird hochgeladen.</div>
+
+<div id="app"></div>
+
+<script>
+// ---------------------------------------------------------------------
+// Konstanten (Spiegel der Swift-Berechnung in KuehllastCore)
+// ---------------------------------------------------------------------
+const ORIENTATIONS = [
+  { id: "nord", label: "Nord" },
+  { id: "ost", label: "Ost" },
+  { id: "sued", label: "Süd" },
+  { id: "west", label: "West" },
+  { id: "horizontal", label: "Dachfläche" },
+];
+
+function standardIrradiance(scale) {
+  return { nord: 110*scale, ost: 490*scale, sued: 370*scale, west: 490*scale, horizontal: 700*scale };
+}
+
+const CLIMATE_REGIONS = [
+  { id: "de-west-rheinland", name: "Rheinland / Niederrhein", tempOut: 32, irr: standardIrradiance(1.0) },
+  { id: "de-nord-kueste", name: "Norddeutschland / Küste", tempOut: 30, irr: standardIrradiance(0.95) },
+  { id: "de-mitte", name: "Mitteldeutschland", tempOut: 32, irr: standardIrradiance(1.0) },
+  { id: "de-sued-oberrhein", name: "Oberrhein / Südwest", tempOut: 34, irr: standardIrradiance(1.05) },
+  { id: "de-sued-alpen", name: "Süddeutschland / Alpenvorland", tempOut: 32, irr: standardIrradiance(1.0) },
+];
+
+const DEVICE_CLASSES_KW = [2.0, 2.5, 3.5, 5.0, 7.0];
+
+function findRegion(id) {
+  return CLIMATE_REGIONS.find(r => r.id === id) || CLIMATE_REGIONS[0];
+}
+
+function orientationLabel(id) {
+  return (ORIENTATIONS.find(o => o.id === id) || ORIENTATIONS[2]).label;
+}
+
+// ---------------------------------------------------------------------
+// Zustand
+// ---------------------------------------------------------------------
+let room = null; // normalisiertes internes Modell
+
+function normalizeFromImport(json) {
+  return {
+    name: json.name || "Raum",
+    floorArea: json.floorArea ?? 20,
+    height: json.height ?? 2.5,
+    indoorTemperature: json.indoorTemperature ?? 26,
+    climateRegionID: CLIMATE_REGIONS.some(r => r.name === json.climateRegion)
+      ? CLIMATE_REGIONS.find(r => r.name === json.climateRegion).id
+      : "de-west-rheinland",
+    airChangeRate: 0.5,
+    internalLoads: { persons: 2, wattPerPerson: 100, equipmentWatt: 200, lightingWattPerSqm: 8 },
+    walls: (json.walls || []).map(w => ({
+      width: w.width, height: w.height,
+      isExternal: w.external !== undefined ? w.external : true,
+      uValue: 0.28,
+    })),
+    doors: (json.doors || []).map(d => ({
+      width: d.width, height: d.height,
+      isExternal: d.glazed || d.external || false,
+      isGlazed: d.glazed || false,
+      orientation: d.orientation || "sued",
+      gValue: 0.6, shading: 1.0,
+      uValue: d.glazed ? 1.1 : 1.8,
+    })),
+    windows: (json.windows || []).map(w => ({
+      width: w.width, height: w.height,
+      orientation: w.orientation || "sued",
+      gValue: w.gValue ?? 0.6,
+      shading: w.shading ?? 1.0,
+      uValue: 1.1,
+    })),
+  };
+}
+
+function blankRoom() {
+  return {
+    name: "Neuer Raum", floorArea: 20, height: 2.5, indoorTemperature: 26,
+    climateRegionID: "de-west-rheinland", airChangeRate: 0.5,
+    internalLoads: { persons: 2, wattPerPerson: 100, equipmentWatt: 200, lightingWattPerSqm: 8 },
+    walls: [], doors: [], windows: [],
+  };
+}
+
+// ---------------------------------------------------------------------
+// Berechnung – 1:1 Spiegel von CoolingLoadCalculator.swift
+// ---------------------------------------------------------------------
+function calculate(room) {
+  const region = findRegion(room.climateRegionID);
+  const deltaT = Math.max(0, region.tempOut - room.indoorTemperature);
+  const area = w => w.width * w.height;
+
+  const windowSolar = room.windows.reduce((s, w) => s + area(w) * w.gValue * (region.irr[w.orientation]||0) * w.shading, 0);
+  const doorSolar = room.doors.filter(d => d.isGlazed)
+    .reduce((s, d) => s + area(d) * d.gValue * (region.irr[d.orientation]||0) * d.shading, 0);
+  const solar = windowSolar + doorSolar;
+
+  const wallTrans = room.walls.filter(w => w.isExternal).reduce((s, w) => s + w.uValue * area(w) * deltaT, 0);
+  const doorTrans = room.doors.filter(d => d.isExternal || d.isGlazed).reduce((s, d) => s + d.uValue * area(d) * deltaT, 0);
+  const windowTrans = room.windows.reduce((s, w) => s + w.uValue * area(w) * deltaT, 0);
+  const transmission = wallTrans + doorTrans + windowTrans;
+
+  const persons = room.internalLoads.persons * room.internalLoads.wattPerPerson;
+  const equipment = room.internalLoads.equipmentWatt;
+  const lighting = room.internalLoads.lightingWattPerSqm * room.floorArea;
+
+  const volume = room.floorArea * room.height;
+  const ventilation = 0.34 * room.airChangeRate * volume * deltaT;
+
+  const total = solar + transmission + persons + equipment + lighting + ventilation;
+  return { solar, transmission, persons, equipment, lighting, ventilation, total };
+}
+
+function recommendDevice(loadWatt) {
+  const kw = loadWatt / 1000;
+  const fit = DEVICE_CLASSES_KW.slice().sort((a,b)=>a-b).find(c => c >= kw);
+  if (fit) return { kw: fit, util: kw / fit };
+  const largest = Math.max(...DEVICE_CLASSES_KW);
+  const needed = Math.ceil(kw / largest) * largest;
+  return { kw: needed, util: kw / needed };
+}
+
+// ---------------------------------------------------------------------
+// Rendering
+// ---------------------------------------------------------------------
+const app = document.getElementById("app");
+
+function render() {
+  if (!room) {
+    app.innerHTML = `
+      <div class="card">
+        <div id="dropzone" class="dropzone">
+          <div style="font-size:15px; margin-bottom:6px;">JSON-Datei hierher ziehen</div>
+          <div style="font-size:13px;">oder klicken zum Auswählen</div>
+          <input type="file" id="fileInput" accept="application/json">
+        </div>
+        <div style="text-align:center;">
+          <button class="primary" id="newRoomBtn">Oder: leeren Raum anlegen</button>
+        </div>
+      </div>`;
+    wireDropzone();
+    document.getElementById("newRoomBtn").onclick = () => { room = blankRoom(); render(); };
+    return;
+  }
+
+  const result = calculate(room);
+  const rec = recommendDevice(result.total);
+
+  app.innerHTML = `
+    <div class="toolbar">
+      <button id="closeBtn">← Andere Datei öffnen</button>
+      <button class="primary" id="downloadBtn">JSON herunterladen</button>
+    </div>
+    <div class="layout">
+      <div>
+        <div class="card">
+          <h2>Raum</h2>
+          <div class="row"><label>Name</label><input type="text" id="f-name" value="${escapeAttr(room.name)}"></div>
+          <div class="row"><label>Fläche (m²)</label><input type="number" id="f-area" step="0.1" value="${room.floorArea}"></div>
+          <div class="row"><label>Höhe (m)</label><input type="number" id="f-height" step="0.01" value="${room.height}"></div>
+        </div>
+
+        <div class="card">
+          <h2>Klimastandort</h2>
+          <div class="row"><label>Region</label>
+            <select id="f-region">
+              ${CLIMATE_REGIONS.map(r => `<option value="${r.id}" ${r.id===room.climateRegionID?'selected':''}>${r.name}</option>`).join("")}
+            </select>
+          </div>
+          <div class="row"><label>Raumtemp. (°C)</label><input type="number" id="f-indoor" step="1" value="${room.indoorTemperature}"></div>
+        </div>
+
+        <div class="card">
+          <h2>Fenster</h2>
+          <div id="windowList"></div>
+          <button id="addWindow">+ Fenster hinzufügen</button>
+        </div>
+
+        <div class="card">
+          <h2>Türen</h2>
+          <div id="doorList"></div>
+          <button id="addDoor">+ Tür / Schiebefenster hinzufügen</button>
+        </div>
+
+        <div class="card">
+          <h2>Wände</h2>
+          <div id="wallList"></div>
+        </div>
+
+        <div class="card">
+          <h2>Innere Lasten</h2>
+          <div class="row"><label>Personen</label><input type="number" id="f-persons" value="${room.internalLoads.persons}"></div>
+          <div class="row"><label>Geräte (W)</label><input type="number" id="f-equip" value="${room.internalLoads.equipmentWatt}"></div>
+          <div class="row"><label>Licht (W/m²)</label><input type="number" id="f-light" value="${room.internalLoads.lightingWattPerSqm}"></div>
+          <div class="row"><label>Luftwechsel (1/h)</label><input type="number" step="0.1" id="f-ach" value="${room.airChangeRate}"></div>
+        </div>
+      </div>
+
+      <div>
+        <div class="card result-card" style="position: sticky; top: 20px;">
+          <h2>Kühllast (VDI 2078)</h2>
+          <div class="result-total">${Math.round(result.total)} W</div>
+          <div class="breakdown-row"><span>Solar</span><span>${Math.round(result.solar)} W</span></div>
+          <div class="breakdown-row"><span>Transmission</span><span>${Math.round(result.transmission)} W</span></div>
+          <div class="breakdown-row"><span>Personen</span><span>${Math.round(result.persons)} W</span></div>
+          <div class="breakdown-row"><span>Geräte</span><span>${Math.round(result.equipment)} W</span></div>
+          <div class="breakdown-row"><span>Beleuchtung</span><span>${Math.round(result.lighting)} W</span></div>
+          <div class="breakdown-row"><span>Lüftung</span><span>${Math.round(result.ventilation)} W</span></div>
+          <div class="device">
+            <strong>${rec.kw.toFixed(1)} kW</strong> Split-Klimagerät
+            <span class="badge">${Math.round(rec.util*100)}% Auslastung</span>
+          </div>
+        </div>
+      </div>
+    </div>`;
+
+  renderList("windowList", room.windows, windowItemHTML);
+  renderList("doorList", room.doors, doorItemHTML);
+  renderList("wallList", room.walls, wallItemHTML);
+
+  wireFieldEvents();
+}
+
+function escapeAttr(s) { return String(s).replace(/"/g, "&quot;"); }
+
+function renderList(containerId, arr, itemFn) {
+  const el = document.getElementById(containerId);
+  if (arr.length === 0) { el.innerHTML = `<div style="color:var(--muted); font-size:13px;">Keine Einträge.</div>`; return; }
+  el.innerHTML = arr.map((item, i) => itemFn(item, i)).join("");
+}
+
+function windowItemHTML(w, i) {
+  return `
+  <div class="item" data-kind="window" data-i="${i}">
+    <div class="item-head">
+      <strong>${(w.width*w.height).toFixed(2)} m²</strong>
+      <button class="danger removeBtn">Entfernen</button>
+    </div>
+    <div class="row">
+      <label>Breite (m)</label><input type="number" step="0.01" class="w-width" value="${w.width}">
+      <label>Höhe (m)</label><input type="number" step="0.01" class="w-height" value="${w.height}">
+    </div>
+    <div class="row">
+      <label>Ausrichtung</label>
+      <select class="w-orientation">${ORIENTATIONS.map(o=>`<option value="${o.id}" ${o.id===w.orientation?'selected':''}>${o.label}</option>`).join("")}</select>
+      <label>g-Wert</label><input type="number" step="0.05" class="w-gvalue" value="${w.gValue}">
+    </div>
+    <div class="row">
+      <label>Verschattung</label><input type="range" min="0.2" max="1" step="0.05" class="w-shading" value="${w.shading}" style="flex:1;">
+      <span>${Math.round(w.shading*100)}%</span>
+    </div>
+  </div>`;
+}
+
+function doorItemHTML(d, i) {
+  return `
+  <div class="item" data-kind="door" data-i="${i}">
+    <div class="item-head">
+      <strong>${(d.width*d.height).toFixed(2)} m²</strong>
+      <span>
+        <span class="badge ${d.isGlazed?'glazed':''}">${d.isGlazed?'verglast':'massiv'}</span>
+        <button class="danger removeBtn">Entfernen</button>
+      </span>
+    </div>
+    <div class="row">
+      <label>Breite (m)</label><input type="number" step="0.01" class="d-width" value="${d.width}">
+      <label>Höhe (m)</label><input type="number" step="0.01" class="d-height" value="${d.height}">
+    </div>
+    <div class="row">
+      <label>Verglast</label><input type="checkbox" class="d-glazed" ${d.isGlazed?'checked':''}>
+    </div>
+    ${d.isGlazed ? `
+    <div class="row">
+      <label>Ausrichtung</label>
+      <select class="d-orientation">${ORIENTATIONS.map(o=>`<option value="${o.id}" ${o.id===d.orientation?'selected':''}>${o.label}</option>`).join("")}</select>
+      <label>g-Wert</label><input type="number" step="0.05" class="d-gvalue" value="${d.gValue}">
+    </div>
+    <div class="row">
+      <label>Verschattung</label><input type="range" min="0.2" max="1" step="0.05" class="d-shading" value="${d.shading}" style="flex:1;">
+      <span>${Math.round(d.shading*100)}%</span>
+    </div>` : ``}
+  </div>`;
+}
+
+function wallItemHTML(w, i) {
+  return `
+  <div class="item" data-kind="wall" data-i="${i}">
+    <div class="item-head">
+      <strong>${w.width.toFixed(2)} × ${w.height.toFixed(2)} m</strong>
+      <span class="badge ${w.isExternal?'ext':''}">${w.isExternal?'außen':'innen'}</span>
+    </div>
+    <div class="row">
+      <label>Außenwand</label><input type="checkbox" class="wl-external" ${w.isExternal?'checked':''}>
+      <label>U-Wert</label><input type="number" step="0.01" class="wl-uvalue" value="${w.uValue}">
+    </div>
+  </div>`;
+}
+
+// ---------------------------------------------------------------------
+// Events
+// ---------------------------------------------------------------------
+function wireDropzone() {
+  const zone = document.getElementById("dropzone");
+  const input = document.getElementById("fileInput");
+  zone.onclick = () => input.click();
+  input.onchange = e => handleFile(e.target.files[0]);
+  zone.ondragover = e => { e.preventDefault(); zone.classList.add("drag"); };
+  zone.ondragleave = () => zone.classList.remove("drag");
+  zone.ondrop = e => {
+    e.preventDefault(); zone.classList.remove("drag");
+    if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+  };
+}
+
+function handleFile(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const json = JSON.parse(reader.result);
+      room = normalizeFromImport(json);
+      render();
+    } catch (e) {
+      alert("Die Datei konnte nicht gelesen werden: " + e.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
+function wireFieldEvents() {
+  document.getElementById("closeBtn").onclick = () => { room = null; render(); };
+  document.getElementById("downloadBtn").onclick = downloadJSON;
+
+  const bind = (id, key, parse) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.oninput = () => { room[key] = parse ? parse(el.value) : el.value; render(); };
+  };
+  bind("f-name", "name");
+  bind("f-area", "floorArea", parseFloat);
+  bind("f-height", "height", parseFloat);
+  bind("f-region", "climateRegionID");
+  bind("f-indoor", "indoorTemperature", parseFloat);
+  bind("f-persons", null, null); // handled below (nested)
+  document.getElementById("f-persons").oninput = e => { room.internalLoads.persons = parseInt(e.target.value)||0; render(); };
+  document.getElementById("f-equip").oninput = e => { room.internalLoads.equipmentWatt = parseFloat(e.target.value)||0; render(); };
+  document.getElementById("f-light").oninput = e => { room.internalLoads.lightingWattPerSqm = parseFloat(e.target.value)||0; render(); };
+  document.getElementById("f-ach").oninput = e => { room.airChangeRate = parseFloat(e.target.value)||0; render(); };
+
+  document.getElementById("addWindow").onclick = () => {
+    room.windows.push({ width: 1.2, height: 1.4, orientation: "sued", gValue: 0.6, shading: 1.0, uValue: 1.1 });
+    render();
+  };
+  document.getElementById("addDoor").onclick = () => {
+    room.doors.push({ width: 2.4, height: 2.2, isExternal: true, isGlazed: true, orientation: "sued", gValue: 0.6, shading: 1.0, uValue: 1.1 });
+    render();
+  };
+
+  wireItemEvents("window", room.windows, {
+    "w-width": (o,v)=>o.width=parseFloat(v), "w-height": (o,v)=>o.height=parseFloat(v),
+    "w-orientation": (o,v)=>o.orientation=v, "w-gvalue": (o,v)=>o.gValue=parseFloat(v),
+    "w-shading": (o,v)=>o.shading=parseFloat(v),
+  });
+  wireItemEvents("door", room.doors, {
+    "d-width": (o,v)=>o.width=parseFloat(v), "d-height": (o,v)=>o.height=parseFloat(v),
+    "d-glazed": (o,v,el)=>{ o.isGlazed=el.checked; o.isExternal = o.isExternal || el.checked; },
+    "d-orientation": (o,v)=>o.orientation=v, "d-gvalue": (o,v)=>o.gValue=parseFloat(v),
+    "d-shading": (o,v)=>o.shading=parseFloat(v),
+  });
+  wireItemEvents("wall", room.walls, {
+    "wl-external": (o,v,el)=>o.isExternal=el.checked, "wl-uvalue": (o,v)=>o.uValue=parseFloat(v),
+  });
+
+  document.querySelectorAll('[data-kind] .removeBtn').forEach(btn => {
+    btn.onclick = () => {
+      const item = btn.closest('[data-kind]');
+      const kind = item.dataset.kind, i = parseInt(item.dataset.i);
+      const arr = kind === "window" ? room.windows : kind === "door" ? room.doors : room.walls;
+      arr.splice(i, 1);
+      render();
+    };
+  });
+}
+
+function wireItemEvents(kind, arr, fieldMap) {
+  document.querySelectorAll(`[data-kind="${kind}"]`).forEach(item => {
+    const i = parseInt(item.dataset.i);
+    const obj = arr[i];
+    Object.keys(fieldMap).forEach(cls => {
+      const el = item.querySelector("." + cls);
+      if (!el) return;
+      const evt = el.type === "checkbox" ? "change" : "input";
+      el.addEventListener(evt, () => { fieldMap[cls](obj, el.value, el); render(); });
+    });
+  });
+}
+
+function downloadJSON() {
+  const result = calculate(room);
+  const rec = recommendDevice(result.total);
+  const region = findRegion(room.climateRegionID);
+  const out = {
+    app: "KuehllastScan",
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    name: room.name,
+    floorArea: round2(room.floorArea),
+    height: round2(room.height),
+    indoorTemperature: room.indoorTemperature,
+    climateRegion: region.name,
+    walls: room.walls.map(w => ({ width: round2(w.width), height: round2(w.height), external: w.isExternal })),
+    doors: room.doors.map(d => ({ width: round2(d.width), height: round2(d.height), glazed: d.isGlazed, orientation: d.isGlazed ? d.orientation : null })),
+    windows: room.windows.map(w => ({ width: round2(w.width), height: round2(w.height), orientation: w.orientation, gValue: w.gValue, shading: w.shading })),
+    coolingLoadWatt: Math.round(result.total),
+    recommendedDeviceKW: rec.kw,
+  };
+  const blob = new Blob([JSON.stringify(out, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `KuehllastScan-${room.name.replace(/[^a-zA-Z0-9]+/g,"-")}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function round2(v) { return Math.round(v * 100) / 100; }
+
+render();
+</script>
+</body>
+</html>

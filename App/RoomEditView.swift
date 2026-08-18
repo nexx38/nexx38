@@ -82,15 +82,26 @@ struct RoomEditView: View {
                 Text("Setzt typische U-Werte für Wände, Fenster und Türen der Epoche (überschreibt vorhandene Werte). Die Annahme wird im PDF-Bericht ausgewiesen und ist vom Fachbetrieb zu prüfen.")
             }
 
-            if let modelName = room.modelFilename {
+            if room.walls.contains(where: { $0.position != nil }) || room.modelFilename != nil {
                 Section {
-                    NavigationLink {
-                        ModelViewerScreen(url: store.modelURL(named: modelName))
-                    } label: {
-                        Label("3D-Modell ansehen", systemImage: "cube.transparent")
+                    if room.walls.contains(where: { $0.position != nil }) {
+                        NavigationLink {
+                            Room3DScreen(room: $room)
+                        } label: {
+                            Label("3D-Ansicht (farbig, Wände antippbar)", systemImage: "cube.fill")
+                        }
                     }
+                    if let modelName = room.modelFilename {
+                        NavigationLink {
+                            ModelViewerScreen(url: store.modelURL(named: modelName))
+                        } label: {
+                            Label("Foto-Modell (AR)", systemImage: "arkit")
+                        }
+                    }
+                } header: {
+                    Text("3D")
                 } footer: {
-                    Text("Drehen und zoomen mit den Fingern; der AR-Knopf stellt das Modell in den echten Raum.")
+                    Text("Farbige Ansicht: Wand antippen schaltet außen/innen um. Foto-Modell: Apples Original-Scan, über den AR-Knopf in den echten Raum stellbar.")
                 }
             }
 

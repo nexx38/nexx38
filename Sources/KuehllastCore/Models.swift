@@ -130,8 +130,11 @@ public struct Door: Codable, Hashable, Identifiable, Sendable {
         self.shading = shading
     }
 
+    /// Grundriss-Lage der Tür (nur bei Scans, für die 3D-Ansicht).
+    public var position: WallPosition?
+
     private enum CodingKeys: String, CodingKey {
-        case id, width, height, isExternal, uValue, isGlazed, orientation, gValue, shading
+        case id, width, height, isExternal, uValue, isGlazed, orientation, gValue, shading, position
     }
 
     public init(from decoder: Decoder) throws {
@@ -145,6 +148,7 @@ public struct Door: Codable, Hashable, Identifiable, Sendable {
         self.orientation = (try? c.decode(Orientation.self, forKey: .orientation)) ?? .sued
         self.gValue = (try? c.decode(Double.self, forKey: .gValue)) ?? 0.6
         self.shading = (try? c.decode(Double.self, forKey: .shading)) ?? 1.0
+        self.position = try? c.decode(WallPosition.self, forKey: .position)
     }
 }
 
@@ -175,8 +179,13 @@ public struct Window: Codable, Hashable, Identifiable, Sendable {
         self.uValue = uValue
     }
 
+    /// Grundriss-Lage des Fensters (nur bei Scans, für die 3D-Ansicht).
+    public var position: WallPosition?
+    /// Brüstungshöhe über dem Boden in m (nur bei Scans, für die 3D-Ansicht).
+    public var sillHeight: Double?
+
     private enum CodingKeys: String, CodingKey {
-        case id, width, height, orientation, gValue, shading, uValue
+        case id, width, height, orientation, gValue, shading, uValue, position, sillHeight
     }
 
     public init(from decoder: Decoder) throws {
@@ -188,6 +197,8 @@ public struct Window: Codable, Hashable, Identifiable, Sendable {
         self.gValue = (try? c.decode(Double.self, forKey: .gValue)) ?? 0.6
         self.shading = (try? c.decode(Double.self, forKey: .shading)) ?? 1.0
         self.uValue = (try? c.decode(Double.self, forKey: .uValue)) ?? 1.1
+        self.position = try? c.decode(WallPosition.self, forKey: .position)
+        self.sillHeight = try? c.decode(Double.self, forKey: .sillHeight)
     }
 }
 

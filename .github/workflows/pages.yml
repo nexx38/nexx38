@@ -19,15 +19,17 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          # Copy app.html before switching branch
+          # Copy app.html + Kuehllast-Viewer before switching branch
           cp app.html /tmp/app.html
+          cp kuehllast-viewer.html /tmp/kuehllast-viewer.html
           # Create redirect index.html
           echo '<meta http-equiv="refresh" content="0; url=app.html">' > /tmp/index.html
           # Switch to orphan branch
           git checkout --orphan gh-pages-tmp
           git rm -rf . --quiet
           cp /tmp/app.html app.html
+          cp /tmp/kuehllast-viewer.html kuehllast-viewer.html
           cp /tmp/index.html index.html
-          git add app.html index.html
+          git add app.html kuehllast-viewer.html index.html
           git commit -m "Deploy app.html [skip ci]"
           git push origin HEAD:gh-pages --force

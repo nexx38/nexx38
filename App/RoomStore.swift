@@ -72,6 +72,14 @@ final class RoomStore: ObservableObject {
         return dir
     }()
 
+    /// Ablage der 3D-Modelle (USDZ aus dem Scan, Room.modelFilename).
+    private let modelsDirectory: URL = {
+        let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("RoomModels", isDirectory: true)
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }()
+
     init() {
         load()
     }
@@ -143,6 +151,7 @@ final class RoomStore: ObservableObject {
         guard projects.count > 1 else { return }
         for room in rooms where room.projectID == id {
             (room.photoFilenames ?? []).forEach(removePhotoFile)
+            room.modelFilename.map(removeModelFile)
         }
         rooms.removeAll { $0.projectID == id }
         projects.removeAll { $0.id == id }
@@ -168,6 +177,7 @@ final class RoomStore: ObservableObject {
     func deleteRooms(ids: [UUID]) {
         for room in rooms where ids.contains(room.id) {
             (room.photoFilenames ?? []).forEach(removePhotoFile)
+            room.modelFilename.map(removeModelFile)
         }
         rooms.removeAll { ids.contains($0.id) }
     }
@@ -192,6 +202,16 @@ final class RoomStore: ObservableObject {
 
     func removePhotoFile(named name: String) {
         try? FileManager.default.removeItem(at: photoURL(named: name))
+    }
+
+    // MARK: - 3D-Modelle
+
+    func modelURL(named name: String) -> URL {
+        modelsDirectory.appendingPathComponent(name)
+    }
+
+    func removeModelFile(named name: String) {
+        try? FileManager.default.removeItem(at: modelURL(named: name))
     }
 
     /// Importiert einen HeizlastScan-JSON-Export als neuen Raum ins aktive Projekt.

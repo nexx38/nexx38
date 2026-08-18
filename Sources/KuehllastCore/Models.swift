@@ -237,6 +237,9 @@ public struct Room: Codable, Identifiable, Hashable, Sendable {
     /// Zugehöriges Projekt (Kunde/Objekt). Optional: alte Dateien ohne
     /// Projekt werden beim Laden dem Standard-Projekt zugeordnet.
     public var projectID: UUID?
+    /// Dateiname des 3D-Modells (USDZ aus dem RoomPlan-Scan) in der
+    /// Modell-Ablage der App. Optional; nur Scans liefern eins.
+    public var modelFilename: String?
 
     public var volume: Double { floorArea * height }
 
@@ -252,7 +255,8 @@ public struct Room: Codable, Identifiable, Hashable, Sendable {
                 photoFilenames: [String]? = nil,
                 constructionEra: String? = nil,
                 radiators: [Radiator]? = nil,
-                projectID: UUID? = nil) {
+                projectID: UUID? = nil,
+                modelFilename: String? = nil) {
         self.id = id
         self.name = name
         self.floorArea = floorArea
@@ -270,5 +274,6 @@ public struct Room: Codable, Identifiable, Hashable, Sendable {
         self.constructionEra = constructionEra
         self.radiators = radiators
         self.projectID = projectID
+        self.modelFilename = modelFilename
     }
 }

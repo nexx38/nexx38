@@ -82,6 +82,18 @@ struct RoomEditView: View {
                 Text("Setzt typische U-Werte für Wände, Fenster und Türen der Epoche (überschreibt vorhandene Werte). Die Annahme wird im PDF-Bericht ausgewiesen und ist vom Fachbetrieb zu prüfen.")
             }
 
+            if let modelName = room.modelFilename {
+                Section {
+                    NavigationLink {
+                        ModelViewerScreen(url: store.modelURL(named: modelName))
+                    } label: {
+                        Label("3D-Modell ansehen", systemImage: "cube.transparent")
+                    }
+                } footer: {
+                    Text("Drehen und zoomen mit den Fingern; der AR-Knopf stellt das Modell in den echten Raum.")
+                }
+            }
+
             if let photos = room.photoFilenames, !photos.isEmpty {
                 Section {
                     ScrollView(.horizontal, showsIndicators: false) {

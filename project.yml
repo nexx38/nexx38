@@ -17,7 +17,7 @@ targets:
     info:
       path: App/Info.plist
       properties:
-        CFBundleDisplayName: LastScan
+        CFBundleDisplayName: LastScan 3D
         LSRequiresIPhoneOS: true
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
@@ -27,6 +27,8 @@ targets:
           - arkit
     settings:
       base:
+        # Eigene Bundle-ID: LastScan 3D laeuft NEBEN dem stabilen LastScan.
+        PRODUCT_BUNDLE_IDENTIFIER: de.shk-innovation.LastScan3D
         MARKETING_VERSION: "1.0"
         CURRENT_PROJECT_VERSION: "1"
         GENERATE_INFOPLIST_FILE: NO

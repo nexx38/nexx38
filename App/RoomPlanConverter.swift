@@ -13,10 +13,18 @@ import KuehllastCore
 enum RoomPlanConverter {
 
     static func room(from captured: CapturedRoom, name: String = "Gescannter Raum") -> Room {
-        let walls = captured.walls.map { surface in
-            Wall(width: Double(surface.dimensions.x),
-                 height: Double(surface.dimensions.y),
-                 isExternal: true)
+        let walls = captured.walls.map { surface -> Wall in
+            // Grundriss-Lage mitspeichern: Wandmitte + Richtung der lokalen
+            // x-Achse aus der Transform → Endpunkte der Wandlinie von oben.
+            let t = surface.transform
+            let cx = Double(t.columns.3.x), cz = Double(t.columns.3.z)
+            let half = Double(surface.dimensions.x) / 2.0
+            let ax = Double(t.columns.0.x), az = Double(t.columns.0.z)
+            return Wall(width: Double(surface.dimensions.x),
+                        height: Double(surface.dimensions.y),
+                        isExternal: true,
+                        position: WallPosition(x1: cx - ax * half, z1: cz - az * half,
+                                               x2: cx + ax * half, z2: cz + az * half))
         }
 
         let doors = captured.doors.map { surface -> Door in

@@ -15,6 +15,24 @@ public enum Orientation: String, Codable, CaseIterable, Sendable {
     }
 }
 
+/// Lage einer gescannten Wand im Grundriss: die beiden Endpunkte der
+/// Wandlinie von oben betrachtet (Meter, Scan-Koordinatensystem — relativ,
+/// nicht genordet). Nur der LiDAR-Scan liefert das; manuell angelegte und
+/// importierte Alt-Wände haben keine Position.
+public struct WallPosition: Codable, Hashable, Sendable {
+    public var x1: Double
+    public var z1: Double
+    public var x2: Double
+    public var z2: Double
+
+    public init(x1: Double, z1: Double, x2: Double, z2: Double) {
+        self.x1 = x1
+        self.z1 = z1
+        self.x2 = x2
+        self.z2 = z2
+    }
+}
+
 /// Eine Wand aus dem Raumscan. `width` × `height` in Metern.
 public struct Wall: Codable, Hashable, Identifiable, Sendable {
     public var id = UUID()
@@ -31,6 +49,8 @@ public struct Wall: Codable, Hashable, Identifiable, Sendable {
     /// Wand – so wie in der Referenz-Berechnung. Nur Scan/Import setzen das (> 0),
     /// weil RoomPlan die volle Wandfläche inkl. Öffnungen liefert.
     public var openingDeductionArea: Double
+    /// Grundriss-Lage der Wand (nur bei gescannten Wänden vorhanden).
+    public var position: WallPosition?
 
     /// Brutto-Wandfläche (Breite × Höhe) – für Anzeige und Export.
     public var area: Double { width * height }
@@ -39,7 +59,8 @@ public struct Wall: Codable, Hashable, Identifiable, Sendable {
 
     public init(id: UUID = UUID(), width: Double, height: Double,
                 isExternal: Bool = true, orientation: Orientation? = nil,
-                uValue: Double = 0.28, openingDeductionArea: Double = 0) {
+                uValue: Double = 0.28, openingDeductionArea: Double = 0,
+                position: WallPosition? = nil) {
         self.id = id
         self.width = width
         self.height = height
@@ -47,10 +68,11 @@ public struct Wall: Codable, Hashable, Identifiable, Sendable {
         self.orientation = orientation
         self.uValue = uValue
         self.openingDeductionArea = openingDeductionArea
+        self.position = position
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, width, height, isExternal, orientation, uValue, openingDeductionArea
+        case id, width, height, isExternal, orientation, uValue, openingDeductionArea, position
     }
 
     public init(from decoder: Decoder) throws {
@@ -62,6 +84,7 @@ public struct Wall: Codable, Hashable, Identifiable, Sendable {
         self.orientation = try? c.decode(Orientation.self, forKey: .orientation)
         self.uValue = (try? c.decode(Double.self, forKey: .uValue)) ?? 0.28
         self.openingDeductionArea = (try? c.decode(Double.self, forKey: .openingDeductionArea)) ?? 0
+        self.position = try? c.decode(WallPosition.self, forKey: .position)
     }
 }
 

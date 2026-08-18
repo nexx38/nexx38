@@ -137,6 +137,21 @@ final class ImportAndPresetTests: XCTestCase {
         XCTAssertNotNil(Plausibility.heatingNote(specific: 300))
     }
 
+    // MARK: - Wand-Position (Grundriss)
+
+    func testWallPositionRoundTripAndLegacyDecode() throws {
+        let wall = Wall(width: 4, height: 2.5,
+                        position: WallPosition(x1: 0, z1: 0, x2: 4, z2: 0))
+        let decoded = try JSONDecoder().decode(Wall.self,
+                                               from: JSONEncoder().encode(wall))
+        XCTAssertEqual(decoded.position?.x2 ?? -1, 4, accuracy: 0.001)
+
+        // Alte Dateien ohne position-Feld dekodieren weiter (position = nil).
+        let legacy = try JSONDecoder().decode(
+            Wall.self, from: #"{"width":3,"height":2.5}"#.data(using: .utf8)!)
+        XCTAssertNil(legacy.position)
+    }
+
     // MARK: - Room-Dekodierung bleibt abwärtskompatibel
 
     func testRoomDecodesWithoutNewOptionalFields() throws {

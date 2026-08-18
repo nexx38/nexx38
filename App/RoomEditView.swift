@@ -165,6 +165,13 @@ struct RoomEditView: View {
             }
 
             Section {
+                if room.walls.contains(where: { $0.position != nil }) {
+                    NavigationLink {
+                        FloorPlanScreen(walls: $room.walls)
+                    } label: {
+                        Label("Im Grundriss zuordnen", systemImage: "square.split.bottomrightquarter")
+                    }
+                }
                 if allWallsExternalWarning {
                     HStack(alignment: .top, spacing: 8) {
                         Image(systemName: "exclamationmark.triangle.fill")

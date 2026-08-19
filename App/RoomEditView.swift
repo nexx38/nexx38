@@ -377,6 +377,12 @@ struct RoomEditView: View {
                 }
             }
         }
+        // Öffnungsabzüge folgen der Außen/Innen-Auswahl – egal ob sie in der
+        // Liste, im Grundriss oder in der 3D-Ansicht geändert wurde.
+        .onChange(of: room.walls.map(\.isExternal)) { _, _ in
+            room.walls = WallAreaNormalizer.redistributeIfScanned(
+                walls: room.walls, doors: room.doors, windows: room.windows)
+        }
         .fullScreenCover(item: $viewerTarget) { target in
             PhotoViewerView(photoNames: room.photoFilenames ?? [],
                             startIndex: target.index,

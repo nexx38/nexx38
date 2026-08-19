@@ -107,6 +107,45 @@ final class HeatingLoadCalculatorTests: XCTestCase {
         XCTAssertEqual(r.transmission, 340, accuracy: 0.5)
     }
 
+    func testOpeningDeductionFollowsExternalToggle() {
+        // Küchen-Feldtest 19.08.: Scan liefert 4 Außenwände, das Fenster wird
+        // anteilig auf alle verteilt. Nach dem Abwählen der Innenwände muss der
+        // GESAMTE Fensterabzug auf der verbliebenen Außenwand liegen – sonst
+        // rechnet sie mit zu großer Fläche.
+        let long1 = Wall(width: 3.18, height: 2.58, isExternal: true, uValue: 1.4)
+        let short = Wall(width: 2.45, height: 2.58, isExternal: true, uValue: 1.4)
+        let long2 = Wall(width: 3.18, height: 2.58, isExternal: true, uValue: 1.4)
+        let short2 = Wall(width: 2.45, height: 2.58, isExternal: true, uValue: 1.4)
+        let window = Window(width: 1.64, height: 1.40, orientation: .sued)
+
+        // Zustand direkt nach dem Scan: alles außen, Abzug verteilt.
+        var walls = WallAreaNormalizer.deductingOpenings(
+            walls: [long1, short, long2, short2], doors: [], windows: [window])
+        XCTAssertLessThan(walls[1].openingDeductionArea, 1.0, "anteilig verteilt")
+
+        // Nutzer wählt drei Wände ab → neu verteilen.
+        walls[0].isExternal = false
+        walls[2].isExternal = false
+        walls[3].isExternal = false
+        walls = WallAreaNormalizer.redistributeIfScanned(
+            walls: walls, doors: [], windows: [window])
+
+        XCTAssertEqual(walls[1].openingDeductionArea, window.area, accuracy: 0.001)
+        XCTAssertEqual(walls[1].netArea, 2.45 * 2.58 - window.area, accuracy: 0.001)
+        XCTAssertEqual(walls[0].openingDeductionArea, 0, accuracy: 0.001)
+    }
+
+    func testManualRoomKeepsNetWallAreas() {
+        // Manuell angelegter Raum (keine Scan-Position, kein Abzug): die
+        // Wandmaße sind bereits netto – redistributeIfScanned darf NICHTS tun.
+        let manual = Wall(width: 4, height: 2.5, isExternal: true, uValue: 1.0)
+        let window = Window(width: 2, height: 1)
+        let result = WallAreaNormalizer.redistributeIfScanned(
+            walls: [manual], doors: [], windows: [window])
+        XCTAssertEqual(result[0].openingDeductionArea, 0, accuracy: 0.001)
+        XCTAssertEqual(result[0].netArea, 10, accuracy: 0.001)
+    }
+
     // MARK: - Robustheit
 
     func testRoomWithoutHeatingParamsUsesDefaults() {

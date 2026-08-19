@@ -29,12 +29,33 @@ public enum WallAreaNormalizer {
         guard totalExternalGross > 0 else { return walls }
 
         return walls.map { wall in
-            guard wall.isExternal else { return wall }
             var w = wall
+            guard wall.isExternal else {
+                // Innenwände tragen keine Öffnungslast – Abzug zurücksetzen,
+                // damit er beim Umschalten nicht als Altlast hängen bleibt.
+                w.openingDeductionArea = 0
+                return w
+            }
             let share = wall.area / totalExternalGross
             // Nie mehr abziehen, als die Wand groß ist (netArea bleibt ≥ 0).
             w.openingDeductionArea = min(wall.area, openingArea * share)
             return w
         }
+    }
+
+    /// Verteilt die Öffnungsflächen NEU, nachdem sich außen/innen geändert hat.
+    ///
+    /// Nötig, weil die erste Verteilung beim Scan stattfindet – dort stehen noch
+    /// alle Wände auf „außen". Schaltet der Nutzer danach Innenwände ab (Grundriss,
+    /// 3D-Ansicht oder Liste), läge der Abzug weiter auf Wänden, die gar nicht mehr
+    /// rechnen: die verbleibende Außenwand wäre dann zu groß und die Last zu hoch.
+    ///
+    /// Wirkt nur auf Scan-/Import-Räume (erkennbar an einer vorhandenen
+    /// Grundriss-Position oder einem bereits gesetzten Abzug). Manuell angelegte
+    /// Räume bleiben unberührt – dort sind die Wandmaße bereits netto erfasst.
+    public static func redistributeIfScanned(walls: [Wall], doors: [Door], windows: [Window]) -> [Wall] {
+        let isScanned = walls.contains { $0.position != nil || $0.openingDeductionArea > 0 }
+        guard isScanned else { return walls }
+        return deductingOpenings(walls: walls, doors: doors, windows: windows)
     }
 }

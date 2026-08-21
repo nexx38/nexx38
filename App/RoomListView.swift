@@ -2,10 +2,21 @@ import SwiftUI
 import UniformTypeIdentifiers
 import KuehllastCore
 
+/// Welcher Scan-Ablauf soll im Vollbild laufen?
+/// Beide teilen sich bewusst EIN `fullScreenCover` – zwei Vollbild-Präsentationen
+/// an derselben Ansicht vertragen sich in SwiftUI nicht zuverlässig.
+private enum ScanTarget: String, Identifiable {
+    /// Bewährter Einzelraum-Scan (unverändert).
+    case einzel
+    /// Mehrere Räume in EINER Sitzung – erkennt Trennwände automatisch.
+    case mehrraum
+    var id: String { rawValue }
+}
+
 struct RoomListView: View {
     @EnvironmentObject var store: RoomStore
     @State private var showImporter = false
-    @State private var showScanner = false
+    @State private var scanTarget: ScanTarget?
     @State private var importError: String?
     @State private var showNewProjectAlert = false
     @State private var newProjectName = ""
@@ -32,9 +43,17 @@ struct RoomListView: View {
                     Menu {
                         if RoomScanAvailability.isSupported {
                             Button {
-                                showScanner = true
+                                scanTarget = .einzel
                             } label: {
                                 Label("Raum scannen", systemImage: "camera.viewfinder")
+                            }
+                            // Mehrere Räume ohne Unterbrechung: nur so liegen
+                            // alle Wände im selben Koordinatensystem und die
+                            // Trennwände lassen sich automatisch erkennen.
+                            Button {
+                                scanTarget = .mehrraum
+                            } label: {
+                                Label("Mehrere Räume scannen", systemImage: "square.stack.3d.up")
                             }
                         }
                         Button {
@@ -57,8 +76,11 @@ struct RoomListView: View {
                           allowsMultipleSelection: false) { result in
                 handleImport(result)
             }
-            .fullScreenCover(isPresented: $showScanner) {
-                RoomScanView()
+            .fullScreenCover(item: $scanTarget) { target in
+                switch target {
+                case .einzel:   RoomScanView()
+                case .mehrraum: MultiRoomScanView()
+                }
             }
             .sheet(item: $editingProject) { project in
                 ProjectEditView(project: project)
@@ -210,7 +232,7 @@ struct RoomListView: View {
 
             if RoomScanAvailability.isSupported {
                 Button {
-                    showScanner = true
+                    scanTarget = .einzel
                 } label: {
                     Label("Raum scannen", systemImage: "camera.viewfinder")
                 }

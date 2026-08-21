@@ -126,20 +126,31 @@ struct BuildingView: View {
                                 }
                                 Spacer()
                                 VStack(alignment: .trailing, spacing: 2) {
-                                    Text(item.preset.presetLabel)
+                                    let selection = valveSelection(flowKgPerH: item.preset.flowKgPerH)
+                                    Text(selection?.settingLabel ?? item.preset.presetLabel)
                                         .font(.subheadline.weight(.medium))
+                                        .foregroundStyle(selection?.isUsable == false ? .red : .primary)
                                     Text(String(format: "%.0f kg/h", item.preset.flowKgPerH))
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
+                                    if let hint = selection?.hint {
+                                        Text(hint)
+                                            .font(.caption2)
+                                            .foregroundStyle(.orange)
+                                            .multilineTextAlignment(.trailing)
+                                    }
                                 }
                             }
                         }
                     }
                 }
+                valvePicker
             } header: {
                 Text("Hydraulischer Abgleich (Verfahren B)")
             } footer: {
-                Text("Vereinfachtes Verfahren B: Raumlast anteilig je Heizkörper, generische Ventilstufen. Die Hersteller-Ventiltabelle bleibt maßgebend.")
+                Text(selectedValve.map {
+                    "Voreinstellwerte für \($0.displayName) – \($0.quality.label), Quelle: \($0.source). Regeldifferenz \(Int($0.controlDeviationK)) K."
+                } ?? "Ohne Ventilauswahl werden generische Stufen gezeigt. Wähle dein Fabrikat, dann stehen hier die Werte aus dem Herstellerdatenblatt.")
             }
         }
         .navigationTitle("Gebäude / Anlage")
@@ -172,6 +183,37 @@ struct BuildingView: View {
             }
             pdfURL = BuildingPDFReport.generate(rooms: store.currentRooms, settings: store.building,
                                                 project: store.currentProject)
+        }
+    }
+
+    // MARK: - Ventilauswahl
+
+    private var selectedValve: ValveModel? {
+        store.building.valveModelID.flatMap { ValveDatabase.model(id: $0) }
+    }
+
+    /// Voreinstellung für einen Volumenstrom – nur wenn ein Fabrikat gewählt ist.
+    private func valveSelection(flowKgPerH: Double) -> ValveSelectionResult? {
+        guard let model = selectedValve else { return nil }
+        let kv = ValveDatabase.kvNeeded(flowKgPerH: flowKgPerH)
+        return model.setting(forKv: kv)
+    }
+
+    /// Auswahlliste: nur Hersteller mit hinterlegten Modellen (Taconova führt
+    /// kein Heizkörperventil mit kv-Tabelle und taucht deshalb nicht auf).
+    private var valvePicker: some View {
+        Picker("Thermostatventil", selection: Binding(
+            get: { store.building.valveModelID ?? "" },
+            set: { store.building.valveModelID = $0.isEmpty ? nil : $0 }
+        )) {
+            Text("generische Stufen").tag("")
+            ForEach(ValveDatabase.populatedManufacturers, id: \.rawValue) { manufacturer in
+                Section(manufacturer.label) {
+                    ForEach(ValveDatabase.models(of: manufacturer), id: \.id) { model in
+                        Text("\(model.name), \(model.size.label)").tag(model.id)
+                    }
+                }
+            }
         }
     }
 

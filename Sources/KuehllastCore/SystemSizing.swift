@@ -25,12 +25,18 @@ public struct BuildingSettings: Codable, Hashable, Sendable {
     /// Zentrale Bauteilwerte des Gebäudes. Einmal gesetzt statt in jedem Raum
     /// einzeln – im Feldtest war das Nachtragen je Raum die lästigste Stelle.
     public var components: BuildingComponents
+    /// Gewähltes Thermostatventil (ValveModel.id) für den hydraulischen
+    /// Abgleich. Ein Betrieb verbaut im selben Objekt praktisch immer dasselbe
+    /// Fabrikat, deshalb gebäudeweit statt je Heizkörper. Leer = generische
+    /// Stufen wie bisher.
+    public var valveModelID: String?
 
     public init(dhwPersons: Int = 3, blockingHours: Double = 2,
                 flowTemp: Double = 55, returnTemp: Double = 45,
                 underfloorFlowTemp: Double = 40, underfloorReturnTemp: Double = 33,
                 spreadK: Double = 10, simultaneity: Double = 0.8,
-                components: BuildingComponents = BuildingComponents()) {
+                components: BuildingComponents = BuildingComponents(),
+                valveModelID: String? = nil) {
         self.dhwPersons = dhwPersons
         self.blockingHours = blockingHours
         self.flowTemp = flowTemp
@@ -40,12 +46,13 @@ public struct BuildingSettings: Codable, Hashable, Sendable {
         self.spreadK = spreadK
         self.simultaneity = simultaneity
         self.components = components
+        self.valveModelID = valveModelID
     }
 
     private enum CodingKeys: String, CodingKey {
         case dhwPersons, blockingHours, flowTemp, returnTemp
         case underfloorFlowTemp, underfloorReturnTemp
-        case spreadK, simultaneity, components
+        case spreadK, simultaneity, components, valveModelID
     }
 
     public init(from decoder: Decoder) throws {
@@ -59,6 +66,7 @@ public struct BuildingSettings: Codable, Hashable, Sendable {
         self.spreadK       = (try? c.decode(Double.self, forKey: .spreadK)) ?? 10
         self.simultaneity  = (try? c.decode(Double.self, forKey: .simultaneity)) ?? 0.8
         self.components    = (try? c.decode(BuildingComponents.self, forKey: .components)) ?? BuildingComponents()
+        self.valveModelID  = try? c.decode(String.self, forKey: .valveModelID)
     }
 }
 

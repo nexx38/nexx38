@@ -8,6 +8,7 @@ import KuehllastCore
 struct BuildingView: View {
     @EnvironmentObject var store: RoomStore
     @State private var pdfURL: URL?
+    @State private var vdzURL: URL?
 
     private var wpAccent: Color { Color(red: 0.9, green: 0.4, blue: 0.1) }
     private var acAccent: Color { Color(red: 0.33, green: 0.29, blue: 0.72) }
@@ -107,6 +108,7 @@ struct BuildingView: View {
 
             radiatorSection
             underfloorSection
+            fundingSection
 
             Section {
                 if roomsWithRadiators.isEmpty {
@@ -175,6 +177,8 @@ struct BuildingView: View {
         .task {
             pdfURL = BuildingPDFReport.generate(rooms: store.currentRooms, settings: store.building,
                                                 project: store.currentProject)
+            vdzURL = VdZPDFReport.generate(rooms: store.currentRooms, settings: store.building,
+                                           project: store.currentProject)
         }
         .onChange(of: store.building) { _, _ in
             // Rücklauf muss unter dem Vorlauf bleiben (sonst Unsinnswerte).
@@ -183,6 +187,68 @@ struct BuildingView: View {
             }
             pdfURL = BuildingPDFReport.generate(rooms: store.currentRooms, settings: store.building,
                                                 project: store.currentProject)
+            vdzURL = VdZPDFReport.generate(rooms: store.currentRooms, settings: store.building,
+                                           project: store.currentProject)
+        }
+    }
+
+    // MARK: - Förderunterlagen (VdZ / BEG)
+
+    private var vdzReport: VdZReport {
+        VdZReportBuilder.build(rooms: store.currentRooms, settings: store.building)
+    }
+
+    @ViewBuilder
+    private var fundingSection: some View {
+        Section {
+            Toggle("Ausdehnungsgefäß geprüft", isOn: $store.building.vdz.expansionVesselChecked)
+            ComponentField(label: "Fülldruck", value: $store.building.vdz.fillPressureBar, unit: "bar")
+            ComponentField(label: "Vordruck AG", value: $store.building.vdz.vesselPrePressureBar, unit: "bar")
+            ComponentField(label: "Enddruck AG", value: $store.building.vdz.vesselEndPressureBar, unit: "bar")
+            Toggle("Differenzdruckregler vorhanden", isOn: $store.building.vdz.differentialPressureController)
+            Toggle("Durchflussregler / Strangventil", isOn: $store.building.vdz.flowController)
+            ComponentField(label: "Erzeugerleistung eingestellt",
+                           value: $store.building.vdz.generatorSetPowerKW, unit: "kW")
+            TextField("Heizkurve / Regelung (z. B. Steigung 0,4)",
+                      text: $store.building.vdz.heatingCurveNote)
+            TextField("Bemerkungen", text: $store.building.vdz.remarks)
+
+            Group {
+                ComponentField(label: "Ungünstigster Strang",
+                               value: $store.building.pump.longestCircuitM, unit: "m")
+                ComponentField(label: "Druckverlust Erzeuger",
+                               value: $store.building.pump.generatorDpMbar, unit: "mbar")
+                ComponentField(label: "Restförderhöhe lt. Datenblatt",
+                               value: $store.building.pump.availableHeadM, unit: "m")
+            }
+
+            let report = vdzReport
+            ForEach(report.circuits) { circuit in
+                HStack {
+                    Text(circuit.kind.label)
+                    Spacer()
+                    Text(String(format: "%.0f l/h · %.1f m", circuit.totalFlowLPerH, circuit.pumpHeadM))
+                        .font(.subheadline.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+            }
+            ForEach(report.hints, id: \.self) { hint in
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "doc.badge.ellipsis").foregroundStyle(.orange)
+                    Text(hint).font(.footnote)
+                }
+                .listRowBackground(Color.orange.opacity(0.12))
+            }
+
+            if let vdzURL {
+                ShareLink(item: vdzURL) {
+                    Label("Abgleich-Unterlage teilen (PDF)", systemImage: "square.and.arrow.up")
+                }
+            }
+        } header: {
+            Text("Förderunterlagen – Hydraulischer Abgleich Verfahren B")
+        } footer: {
+            Text("Liefert die Werte fürs VdZ-Bestätigungsformular und die Anlage (raumweise Heizlast, Abgleichwerte je Heizfläche). Das VdZ-Formular selbst bleibt Pflicht und wird vom Fachbetrieb unterschrieben – die BzA entsteht im KfW-Portal.")
         }
     }
 

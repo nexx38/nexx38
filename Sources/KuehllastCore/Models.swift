@@ -252,9 +252,18 @@ public struct Room: Codable, Identifiable, Hashable, Sendable {
     /// Vorhandene Heizkörper (Bestandsaufnahme) – für den WP-Tauglichkeits-
     /// Check und den hydraulischen Abgleich. Optional für alte Dateien.
     public var radiators: [Radiator]?
+    /// Heizkreise der Fußbodenheizung in diesem Raum. Ein Raum kann beides
+    /// haben (Heizkörper + Fußboden), deshalb zwei getrennte Listen.
+    public var underfloorLoops: [UnderfloorLoop]?
     /// Zugehöriges Projekt (Kunde/Objekt). Optional: alte Dateien ohne
     /// Projekt werden beim Laden dem Standard-Projekt zugeordnet.
     public var projectID: UUID?
+    /// Geschoss: 0 = Erdgeschoss, 1 = 1. OG, −1 = Keller. Optional, damit
+    /// alte Dateien weiter laden; sortiert die Raumliste bei Mehrgeschossern.
+    public var storey: Int?
+    /// Nutzungsprofil (UsageProfile.rawValue) – setzt Norm-Innentemperatur und
+    /// die inneren Lasten der Kühllast nach Raumart. Optional.
+    public var usageProfile: String?
     /// Dateiname des 3D-Modells (USDZ aus dem RoomPlan-Scan) in der
     /// Modell-Ablage der App. Optional; nur Scans liefern eins.
     public var modelFilename: String?
@@ -274,7 +283,10 @@ public struct Room: Codable, Identifiable, Hashable, Sendable {
                 constructionEra: String? = nil,
                 radiators: [Radiator]? = nil,
                 projectID: UUID? = nil,
-                modelFilename: String? = nil) {
+                modelFilename: String? = nil,
+                storey: Int? = nil,
+                usageProfile: String? = nil,
+                underfloorLoops: [UnderfloorLoop]? = nil) {
         self.id = id
         self.name = name
         self.floorArea = floorArea
@@ -293,5 +305,8 @@ public struct Room: Codable, Identifiable, Hashable, Sendable {
         self.radiators = radiators
         self.projectID = projectID
         self.modelFilename = modelFilename
+        self.storey = storey
+        self.usageProfile = usageProfile
+        self.underfloorLoops = underfloorLoops
     }
 }

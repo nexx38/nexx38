@@ -8,28 +8,61 @@ public struct BuildingSettings: Codable, Hashable, Sendable {
     public var dhwPersons: Int
     /// EVU-Sperrzeit in h/Tag (typisch 2; 0 = keine Sperrzeit).
     public var blockingHours: Double
-    /// Geplante Vorlauftemperatur der Wärmepumpe in °C.
+    /// Geplante Vorlauftemperatur der HEIZKÖRPER in °C.
     public var flowTemp: Double
-    /// Geplante Rücklauftemperatur in °C.
+    /// Geplante Rücklauftemperatur der Heizkörper in °C.
     public var returnTemp: Double
+    /// Vorlauftemperatur der FUSSBODENHEIZUNG in °C – liegt in derselben
+    /// Anlage typisch 10 K unter dem Heizkörperkreis (autarc zeigt z. B.
+    /// 50 °C Heizkörper neben 40 °C Fußboden). Deshalb ein eigenes Paar.
+    public var underfloorFlowTemp: Double
+    /// Rücklauftemperatur der Fußbodenheizung in °C.
+    public var underfloorReturnTemp: Double
     /// Auslegungs-Spreizung für den hydraulischen Abgleich in K.
     public var spreadK: Double
     /// Gleichzeitigkeitsfaktor der Klima-Innengeräte (Multisplit, 0–1).
     public var simultaneity: Double
+    /// Zentrale Bauteilwerte des Gebäudes. Einmal gesetzt statt in jedem Raum
+    /// einzeln – im Feldtest war das Nachtragen je Raum die lästigste Stelle.
+    public var components: BuildingComponents
+    /// Gewähltes Thermostatventil (ValveModel.id) für den hydraulischen
+    /// Abgleich. Ein Betrieb verbaut im selben Objekt praktisch immer dasselbe
+    /// Fabrikat, deshalb gebäudeweit statt je Heizkörper. Leer = generische
+    /// Stufen wie bisher.
+    public var valveModelID: String?
+    /// Eingaben für das VdZ-Formular „Bestätigung des Hydraulischen
+    /// Abgleichs (Einzelmaßnahmen BEG)". Das sind Vor-Ort-Feststellungen,
+    /// die keine Software errechnen kann – sie müssen aber ins Formular.
+    public var vdz: VdZInputs
+    /// Eingaben für die überschlägige Pumpenauslegung.
+    public var pump: PumpSizingInput
 
     public init(dhwPersons: Int = 3, blockingHours: Double = 2,
                 flowTemp: Double = 55, returnTemp: Double = 45,
-                spreadK: Double = 10, simultaneity: Double = 0.8) {
+                underfloorFlowTemp: Double = 40, underfloorReturnTemp: Double = 33,
+                spreadK: Double = 10, simultaneity: Double = 0.8,
+                components: BuildingComponents = BuildingComponents(),
+                valveModelID: String? = nil,
+                vdz: VdZInputs = VdZInputs(),
+                pump: PumpSizingInput = PumpSizingInput()) {
         self.dhwPersons = dhwPersons
         self.blockingHours = blockingHours
         self.flowTemp = flowTemp
         self.returnTemp = returnTemp
+        self.underfloorFlowTemp = underfloorFlowTemp
+        self.underfloorReturnTemp = underfloorReturnTemp
         self.spreadK = spreadK
         self.simultaneity = simultaneity
+        self.components = components
+        self.valveModelID = valveModelID
+        self.vdz = vdz
+        self.pump = pump
     }
 
     private enum CodingKeys: String, CodingKey {
-        case dhwPersons, blockingHours, flowTemp, returnTemp, spreadK, simultaneity
+        case dhwPersons, blockingHours, flowTemp, returnTemp
+        case underfloorFlowTemp, underfloorReturnTemp
+        case spreadK, simultaneity, components, valveModelID, vdz, pump
     }
 
     public init(from decoder: Decoder) throws {
@@ -38,8 +71,94 @@ public struct BuildingSettings: Codable, Hashable, Sendable {
         self.blockingHours = (try? c.decode(Double.self, forKey: .blockingHours)) ?? 2
         self.flowTemp      = (try? c.decode(Double.self, forKey: .flowTemp)) ?? 55
         self.returnTemp    = (try? c.decode(Double.self, forKey: .returnTemp)) ?? 45
+        self.underfloorFlowTemp   = (try? c.decode(Double.self, forKey: .underfloorFlowTemp)) ?? 40
+        self.underfloorReturnTemp = (try? c.decode(Double.self, forKey: .underfloorReturnTemp)) ?? 33
         self.spreadK       = (try? c.decode(Double.self, forKey: .spreadK)) ?? 10
         self.simultaneity  = (try? c.decode(Double.self, forKey: .simultaneity)) ?? 0.8
+        self.components    = (try? c.decode(BuildingComponents.self, forKey: .components)) ?? BuildingComponents()
+        self.valveModelID  = try? c.decode(String.self, forKey: .valveModelID)
+        self.vdz           = (try? c.decode(VdZInputs.self, forKey: .vdz)) ?? VdZInputs()
+        self.pump          = (try? c.decode(PumpSizingInput.self, forKey: .pump)) ?? PumpSizingInput()
+    }
+}
+
+/// Zentrale U-/g-Werte des Gebäudes („Bauteilbibliothek"): einmal fürs
+/// ganze Objekt festlegen und per Knopfdruck auf alle Räume übertragen.
+/// Die Baujahr-Klasse (`BuildingEra`) füllt sie vor; einzelne Räume dürfen
+/// danach weiterhin abweichen (Anbau, neue Fenster in einem Zimmer).
+public struct BuildingComponents: Codable, Hashable, Sendable {
+    public var wallU: Double
+    public var windowU: Double
+    public var windowG: Double
+    public var doorU: Double
+    public var roofU: Double
+    public var floorU: Double
+    /// Baujahr-Klasse, aus der die Werte stammen (nur Dokumentation).
+    public var era: String?
+
+    public init(wallU: Double = 0.28, windowU: Double = 1.1, windowG: Double = 0.6,
+                doorU: Double = 1.8, roofU: Double = 0.2, floorU: Double = 0.3,
+                era: String? = nil) {
+        self.wallU = wallU
+        self.windowU = windowU
+        self.windowG = windowG
+        self.doorU = doorU
+        self.roofU = roofU
+        self.floorU = floorU
+        self.era = era
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case wallU, windowU, windowG, doorU, roofU, floorU, era
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.wallU   = (try? c.decode(Double.self, forKey: .wallU)) ?? 0.28
+        self.windowU = (try? c.decode(Double.self, forKey: .windowU)) ?? 1.1
+        self.windowG = (try? c.decode(Double.self, forKey: .windowG)) ?? 0.6
+        self.doorU   = (try? c.decode(Double.self, forKey: .doorU)) ?? 1.8
+        self.roofU   = (try? c.decode(Double.self, forKey: .roofU)) ?? 0.2
+        self.floorU  = (try? c.decode(Double.self, forKey: .floorU)) ?? 0.3
+        self.era     = try? c.decode(String.self, forKey: .era)
+    }
+
+    /// Übernimmt die Werte einer Baujahr-Klasse.
+    public static func fromEra(_ era: BuildingEra) -> BuildingComponents {
+        BuildingComponents(wallU: era.wallU, windowU: era.windowU, windowG: era.windowG,
+                           doorU: era.doorU, roofU: era.roofU, floorU: era.floorU,
+                           era: era.rawValue)
+    }
+
+    /// Schreibt die zentralen Werte in einen Raum. Decke und Boden werden nur
+    /// angefasst, wenn sie dort überhaupt angesetzt sind – ob ein Raum eine
+    /// Außendecke hat, weiß nur der Nutzer, nicht die Bauteilbibliothek.
+    public func applied(to room: Room) -> Room {
+        var r = room
+        r.walls = r.walls.map { wall in
+            var w = wall
+            w.uValue = wallU
+            return w
+        }
+        r.windows = r.windows.map { window in
+            var w = window
+            w.uValue = windowU
+            w.gValue = windowG
+            return w
+        }
+        r.doors = r.doors.map { door in
+            var d = door
+            d.uValue = door.isGlazed ? windowU : doorU
+            if door.isGlazed { d.gValue = windowG }
+            return d
+        }
+        if var heating = r.heating {
+            if heating.ceilingUValue != nil { heating.ceilingUValue = roofU }
+            if heating.floorUValue != nil { heating.floorUValue = floorU }
+            r.heating = heating
+        }
+        if let era { r.constructionEra = era }
+        return r
     }
 }
 
@@ -160,8 +279,9 @@ public enum HydraulicBalancing {
     /// - Parameter spreadK: Auslegungs-Spreizung in K.
     public static func preset(loadW: Double, spreadK: Double) -> ValvePreset {
         let spread = max(spreadK, 3)
-        // m = Q · 0,86 / ΔT  [kg/h]
-        let flow = loadW * 0.86 / spread
+        // m = Q · 0,86 / ΔT  [kg/h] – negative Lasten abfangen, damit alle
+        // drei Rechenwege (hier, ValveDatabase, PumpSizing) identisch klemmen.
+        let flow = max(loadW, 0) * 0.86 / spread
         // kv = V [m³/h] / sqrt(Δp [bar])
         let kv = (flow / 1000.0) / sqrt(valveDpMbar / 1000.0)
         let stage = presetKv.first { $0.kv >= kv }?.stage

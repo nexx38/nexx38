@@ -41,6 +41,24 @@ struct RoomEditView: View {
         )
     }
 
+    /// Binding auf die (optionale) Heizkreisliste – leer = Feld bleibt nil.
+    private var loopsBinding: Binding<[UnderfloorLoop]> {
+        Binding(
+            get: { room.underfloorLoops ?? [] },
+            set: { room.underfloorLoops = $0.isEmpty ? nil : $0 }
+        )
+    }
+
+    /// Fußbodenheizungs-Check bei der Gebäude-Vorlauftemperatur des Fußbodens.
+    private var underfloorCheck: UnderfloorCheckResult? {
+        guard let loops = room.underfloorLoops, !loops.isEmpty else { return nil }
+        return UnderfloorHeating.check(loops: loops,
+                                       demandW: heatingResult.total,
+                                       roomTemp: room.heating?.indoorTemperature ?? 20,
+                                       flowTemp: store.building.underfloorFlowTemp,
+                                       spreadK: store.building.spreadK)
+    }
+
     /// Heizkörper-Check des Raums bei den Gebäude-Vorlauftemperaturen.
     private var radiatorCheck: RadiatorCheckResult? {
         guard let radiators = room.radiators, !radiators.isEmpty else { return nil }
@@ -84,6 +102,39 @@ struct RoomEditView: View {
                               systemImage: "arrow.up.and.down.square")
                     }
                 }
+            }
+
+            Section {
+                Picker("Nutzung", selection: Binding(
+                    get: { room.usageProfile ?? "" },
+                    set: { raw in
+                        if raw.isEmpty {
+                            room.usageProfile = nil
+                        } else if let profile = UsageProfile(rawValue: raw) {
+                            room = profile.applied(to: room)
+                        }
+                    }
+                )) {
+                    Text("keine Vorgabe").tag("")
+                    ForEach(UsageProfile.allCases, id: \.rawValue) { profile in
+                        Text(profile.label).tag(profile.rawValue)
+                    }
+                }
+                Picker("Etage", selection: Binding(
+                    get: { room.storey ?? 0 },
+                    set: { room.storey = $0 }
+                )) {
+                    Text("Keller").tag(-1)
+                    Text("Erdgeschoss").tag(0)
+                    Text("1. OG").tag(1)
+                    Text("2. OG").tag(2)
+                    Text("3. OG").tag(3)
+                    Text("Dachgeschoss").tag(4)
+                }
+            } header: {
+                Text("Nutzung")
+            } footer: {
+                Text("Das Profil setzt Norm-Innentemperatur (Bad 24 °C, Wohnen 20 °C) sowie Personen, Geräte, Licht und Luftwechsel für die Kühllast. Einzelwerte bleiben danach änderbar.")
             }
 
             Section {
@@ -274,6 +325,62 @@ struct RoomEditView: View {
             } footer: {
                 Text(String(format: "Prüft, ob die vorhandenen Heizkörper bei Wärmepumpen-Vorlauf %.0f/%.0f °C reichen. Temperaturen im Gebäude-Bildschirm einstellbar.",
                             store.building.flowTemp, store.building.returnTemp))
+            }
+
+            Section {
+                ForEach(loopsBinding) { $loop in
+                    UnderfloorLoopEditor(loop: $loop)
+                }
+                .onDelete { loopsBinding.wrappedValue.remove(atOffsets: $0) }
+                Button {
+                    let number = loopsBinding.wrappedValue.count + 1
+                    loopsBinding.wrappedValue.append(
+                        UnderfloorLoop(roomID: room.id, name: "HK \(number)",
+                                       areaSqm: max(1, room.floorArea)))
+                } label: {
+                    Label("Heizkreis hinzufügen", systemImage: "plus")
+                }
+                if let check = underfloorCheck {
+                    HStack {
+                        Text("Deckung bei \(Int(store.building.underfloorFlowTemp)) °C")
+                        Spacer()
+                        Text(String(format: "%.0f %% – %@", check.coverage * 100, check.verdict.label))
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(check.verdict == .zuKlein ? .red :
+                                             check.verdict == .knapp ? .orange : .green)
+                    }
+                    if let required = check.requiredFlowTemp {
+                        HStack {
+                            Text("Erforderlicher Vorlauf")
+                            Spacer()
+                            Text(String(format: "%.1f °C", required))
+                                .font(.subheadline.weight(.medium))
+                                .foregroundStyle(required > store.building.flowTemp ? .red : .primary)
+                        }
+                    }
+                    if check.exceedsSurfaceLimit {
+                        HStack(alignment: .top, spacing: 8) {
+                            Image(systemName: "thermometer.sun.fill").foregroundStyle(.red)
+                            Text(String(format: "Bodenoberfläche über der Grenze (%.1f °C rechnerisch). Verlegeabstand enger wählen oder Fläche vergrößern.",
+                                        check.surfaceTemp))
+                                .font(.footnote)
+                        }
+                        .listRowBackground(Color.red.opacity(0.12))
+                    }
+                    ForEach(check.loops) { loop in
+                        if let warning = loop.warning {
+                            HStack(alignment: .top, spacing: 8) {
+                                Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
+                                Text("\(loop.name): \(warning)").font(.footnote)
+                            }
+                            .listRowBackground(Color.orange.opacity(0.12))
+                        }
+                    }
+                }
+            } header: {
+                Text("Fußbodenheizung")
+            } footer: {
+                Text("Kurzverfahren angelehnt an DIN EN 1264. Die erforderliche Vorlauftemperatur ist bei Wärmepumpen die wichtigste Zahl – je niedriger, desto besser die Arbeitszahl. Herstellerauslegung bleibt maßgebend.")
             }
 
             Section("Innere Lasten") {
@@ -533,6 +640,52 @@ private struct RadiatorEditor: View {
                 Text(String(format: "Norm %.0f W", radiator.normPower))
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+private struct UnderfloorLoopEditor: View {
+    @Binding var loop: UnderfloorLoop
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                TextField("Name", text: $loop.name)
+                    .font(.subheadline.weight(.medium))
+                Spacer()
+                Text(String(format: "%.0f m Rohr", loop.pipeLengthM))
+                    .font(.caption)
+                    .foregroundStyle(loop.lengthVerdict == .zuLang ? .red :
+                                     loop.lengthVerdict == .grenzwertig ? .orange : .secondary)
+            }
+            HStack(spacing: 12) {
+                CompactField(label: "Fläche", value: $loop.areaSqm, unit: "m²")
+                Picker("", selection: $loop.spacing) {
+                    ForEach(PipeSpacing.allCases, id: \.self) { spacing in
+                        Text(spacing.label).tag(spacing)
+                    }
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
+            }
+            HStack {
+                Picker("", selection: $loop.covering) {
+                    ForEach(FloorCovering.allCases, id: \.self) { covering in
+                        Text(covering.label).tag(covering)
+                    }
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
+                Spacer()
+                Picker("", selection: $loop.pipe) {
+                    ForEach(PipeType.allCases, id: \.self) { pipe in
+                        Text(pipe.label).tag(pipe)
+                    }
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
             }
         }
         .padding(.vertical, 4)

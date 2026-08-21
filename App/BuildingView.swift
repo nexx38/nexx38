@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import KuehllastCore
 
 /// Gebäude-/Anlagen-Bildschirm: Wärmepumpen-Auslegung, Multisplit-Klima,
@@ -7,6 +8,7 @@ import KuehllastCore
 struct BuildingView: View {
     @EnvironmentObject var store: RoomStore
     @State private var pdfURL: URL?
+    @State private var vdzURL: URL?
 
     private var wpAccent: Color { Color(red: 0.9, green: 0.4, blue: 0.1) }
     private var acAccent: Color { Color(red: 0.33, green: 0.29, blue: 0.72) }
@@ -38,17 +40,25 @@ struct BuildingView: View {
                 }
                 SettingStepper(label: "EVU-Sperrzeit", value: $store.building.blockingHours,
                                unit: "h", step: 1, range: 0...6, decimals: 0)
-                SettingStepper(label: "Vorlauf", value: $store.building.flowTemp,
+                SettingStepper(label: "Vorlauf Heizkörper", value: $store.building.flowTemp,
                                unit: "°C", step: 5, range: 30...75, decimals: 0)
-                SettingStepper(label: "Rücklauf", value: $store.building.returnTemp,
+                SettingStepper(label: "Rücklauf Heizkörper", value: $store.building.returnTemp,
                                unit: "°C", step: 5, range: 25...65, decimals: 0)
+                SettingStepper(label: "Vorlauf Fußboden", value: $store.building.underfloorFlowTemp,
+                               unit: "°C", step: 1, range: 25...50, decimals: 0)
+                SettingStepper(label: "Rücklauf Fußboden", value: $store.building.underfloorReturnTemp,
+                               unit: "°C", step: 1, range: 20...45, decimals: 0)
                 SettingStepper(label: "Spreizung Abgleich", value: $store.building.spreadK,
                                unit: "K", step: 1, range: 5...20, decimals: 0)
                 SettingStepper(label: "Gleichzeitigkeit Klima", value: $store.building.simultaneity,
                                unit: "", step: 0.05, range: 0.5...1.0, decimals: 2)
             } header: {
                 Text("Anlagen-Einstellungen")
+            } footer: {
+                Text("Heizkörper und Fußbodenheizung laufen in derselben Anlage mit unterschiedlichen Temperaturen – deshalb zwei Paare.")
             }
+
+            componentsSection
 
             Section {
                 row("Heizlast Gebäude", String(format: "%.0f W", heatingTotal.rounded()))
@@ -97,6 +107,8 @@ struct BuildingView: View {
             }
 
             radiatorSection
+            underfloorSection
+            fundingSection
 
             Section {
                 if roomsWithRadiators.isEmpty {
@@ -116,20 +128,31 @@ struct BuildingView: View {
                                 }
                                 Spacer()
                                 VStack(alignment: .trailing, spacing: 2) {
-                                    Text(item.preset.presetLabel)
+                                    let selection = valveSelection(flowKgPerH: item.preset.flowKgPerH)
+                                    Text(selection?.settingLabel ?? item.preset.presetLabel)
                                         .font(.subheadline.weight(.medium))
+                                        .foregroundStyle(selection?.isUsable == false ? .red : .primary)
                                     Text(String(format: "%.0f kg/h", item.preset.flowKgPerH))
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
+                                    if let hint = selection?.hint {
+                                        Text(hint)
+                                            .font(.caption2)
+                                            .foregroundStyle(.orange)
+                                            .multilineTextAlignment(.trailing)
+                                    }
                                 }
                             }
                         }
                     }
                 }
+                valvePicker
             } header: {
                 Text("Hydraulischer Abgleich (Verfahren B)")
             } footer: {
-                Text("Vereinfachtes Verfahren B: Raumlast anteilig je Heizkörper, generische Ventilstufen. Die Hersteller-Ventiltabelle bleibt maßgebend.")
+                Text(selectedValve.map {
+                    "Voreinstellwerte für \($0.displayName) – \($0.quality.label), Quelle: \($0.source). Regeldifferenz \(Int($0.controlDeviationK)) K."
+                } ?? "Ohne Ventilauswahl werden generische Stufen gezeigt. Wähle dein Fabrikat, dann stehen hier die Werte aus dem Herstellerdatenblatt.")
             }
         }
         .navigationTitle("Gebäude / Anlage")
@@ -142,10 +165,20 @@ struct BuildingView: View {
                     }
                 }
             }
+            // Die Dezimal-Tastatur hat keinen eigenen Schließen-Knopf.
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Fertig") {
+                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder),
+                                                    to: nil, from: nil, for: nil)
+                }
+            }
         }
         .task {
             pdfURL = BuildingPDFReport.generate(rooms: store.currentRooms, settings: store.building,
                                                 project: store.currentProject)
+            vdzURL = VdZPDFReport.generate(rooms: store.currentRooms, settings: store.building,
+                                           project: store.currentProject)
         }
         .onChange(of: store.building) { _, _ in
             // Rücklauf muss unter dem Vorlauf bleiben (sonst Unsinnswerte).
@@ -154,6 +187,223 @@ struct BuildingView: View {
             }
             pdfURL = BuildingPDFReport.generate(rooms: store.currentRooms, settings: store.building,
                                                 project: store.currentProject)
+            vdzURL = VdZPDFReport.generate(rooms: store.currentRooms, settings: store.building,
+                                           project: store.currentProject)
+        }
+    }
+
+    // MARK: - Förderunterlagen (VdZ / BEG)
+
+    private var vdzReport: VdZReport {
+        VdZReportBuilder.build(rooms: store.currentRooms, settings: store.building)
+    }
+
+    @ViewBuilder
+    private var fundingSection: some View {
+        Section {
+            ComponentField(label: "Beheizte Wohnfläche (Unterlagen)",
+                           value: $store.building.vdz.totalLivingAreaSqm, unit: "m²")
+            Toggle("Ausdehnungsgefäß geprüft", isOn: $store.building.vdz.expansionVesselChecked)
+            ComponentField(label: "Fülldruck", value: $store.building.vdz.fillPressureBar, unit: "bar")
+            ComponentField(label: "Vordruck AG", value: $store.building.vdz.vesselPrePressureBar, unit: "bar")
+            ComponentField(label: "Enddruck AG", value: $store.building.vdz.vesselEndPressureBar, unit: "bar")
+            Toggle("Differenzdruckregler vorhanden", isOn: $store.building.vdz.differentialPressureController)
+            Toggle("Durchflussregler / Strangventil", isOn: $store.building.vdz.flowController)
+            ComponentField(label: "Erzeugerleistung eingestellt",
+                           value: $store.building.vdz.generatorSetPowerKW, unit: "kW")
+            TextField("Heizkurve / Regelung (z. B. Steigung 0,4)",
+                      text: $store.building.vdz.heatingCurveNote)
+            TextField("Bemerkungen", text: $store.building.vdz.remarks)
+
+            Group {
+                ComponentField(label: "Ungünstigster Strang",
+                               value: $store.building.pump.longestCircuitM, unit: "m")
+                ComponentField(label: "Druckverlust Erzeuger",
+                               value: $store.building.pump.generatorDpMbar, unit: "mbar")
+                ComponentField(label: "Restförderhöhe lt. Datenblatt",
+                               value: $store.building.pump.availableHeadM, unit: "m")
+            }
+
+            let report = vdzReport
+            ForEach(report.circuits) { circuit in
+                HStack {
+                    Text(circuit.kind.label)
+                    Spacer()
+                    Text(String(format: "%.0f l/h · %.1f m", circuit.totalFlowLPerH, circuit.pumpHeadM))
+                        .font(.subheadline.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+            }
+            ForEach(report.hints, id: \.self) { hint in
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "doc.badge.ellipsis").foregroundStyle(.orange)
+                    Text(hint).font(.footnote)
+                }
+                .listRowBackground(Color.orange.opacity(0.12))
+            }
+
+            if let vdzURL {
+                ShareLink(item: vdzURL) {
+                    Label("Abgleich-Unterlage teilen (PDF)", systemImage: "square.and.arrow.up")
+                }
+            }
+        } header: {
+            Text("Förderunterlagen – Hydraulischer Abgleich Verfahren B")
+        } footer: {
+            Text("Liefert die Werte fürs VdZ-Bestätigungsformular und die Anlage (raumweise Heizlast, Abgleichwerte je Heizfläche). Das VdZ-Formular selbst bleibt Pflicht und wird vom Fachbetrieb unterschrieben – die BzA entsteht im KfW-Portal.")
+        }
+    }
+
+    // MARK: - Ventilauswahl
+
+    private var selectedValve: ValveModel? {
+        store.building.valveModelID.flatMap { ValveDatabase.model(id: $0) }
+    }
+
+    /// Voreinstellung für einen Volumenstrom – nur wenn ein Fabrikat gewählt ist.
+    private func valveSelection(flowKgPerH: Double) -> ValveSelectionResult? {
+        guard let model = selectedValve else { return nil }
+        let kv = ValveDatabase.kvNeeded(flowKgPerH: flowKgPerH)
+        return model.setting(forKv: kv)
+    }
+
+    /// Auswahlliste: nur Hersteller mit hinterlegten Modellen (Taconova führt
+    /// kein Heizkörperventil mit kv-Tabelle und taucht deshalb nicht auf).
+    private var valvePicker: some View {
+        Picker("Thermostatventil", selection: Binding(
+            get: { store.building.valveModelID ?? "" },
+            set: { store.building.valveModelID = $0.isEmpty ? nil : $0 }
+        )) {
+            Text("generische Stufen").tag("")
+            ForEach(ValveDatabase.populatedManufacturers, id: \.rawValue) { manufacturer in
+                Section(manufacturer.label) {
+                    ForEach(ValveDatabase.models(of: manufacturer), id: \.id) { model in
+                        Text("\(model.name), \(model.size.label)").tag(model.id)
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Fußbodenheizung
+
+    /// Alle Räume mit Heizkreisen samt Prüfergebnis.
+    private var roomsWithLoops: [(room: Room, check: UnderfloorCheckResult)] {
+        store.currentRooms.compactMap { room in
+            guard let loops = room.underfloorLoops, !loops.isEmpty else { return nil }
+            let check = UnderfloorHeating.check(
+                loops: loops,
+                demandW: HeatingLoadCalculator().calculate(room).total,
+                roomTemp: room.heating?.indoorTemperature ?? 20,
+                flowTemp: store.building.underfloorFlowTemp,
+                spreadK: store.building.spreadK)
+            return (room, check)
+        }
+    }
+
+    /// Höchste im Gebäude erforderliche Vorlauftemperatur – sie bestimmt, wie
+    /// warm die Wärmepumpe fahren muss, und damit die Arbeitszahl der Anlage.
+    private var maxRequiredFlowTemp: Double? {
+        roomsWithLoops.compactMap { $0.check.requiredFlowTemp }.max()
+    }
+
+    @ViewBuilder
+    private var underfloorSection: some View {
+        Section {
+            if roomsWithLoops.isEmpty {
+                Text("Noch keine Heizkreise erfasst – im Raum-Editor unter 'Fußbodenheizung' anlegen.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(roomsWithLoops, id: \.room.id) { entry in
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text(entry.room.name)
+                            Spacer()
+                            Text(String(format: "%.0f %% – %@",
+                                        entry.check.coverage * 100, entry.check.verdict.label))
+                                .font(.subheadline.weight(.medium))
+                                .foregroundStyle(entry.check.verdict == .zuKlein ? .red :
+                                                 entry.check.verdict == .knapp ? .orange : .green)
+                        }
+                        ForEach(entry.check.loops) { loop in
+                            HStack {
+                                Text("  \(loop.name) · \(Int(loop.areaSqm)) m²")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Spacer()
+                                Text(String(format: "%.0f m · %.0f kg/h · %.0f W",
+                                            loop.pipeLengthM, loop.flowKgPerH, loop.outputW))
+                                    .font(.caption.monospacedDigit())
+                                    .foregroundStyle(loop.lengthVerdict == .zuLang ? .red : .secondary)
+                            }
+                        }
+                    }
+                    .padding(.vertical, 2)
+                }
+                if let required = maxRequiredFlowTemp {
+                    HStack {
+                        Image(systemName: "thermometer.medium")
+                            .foregroundStyle(wpAccent)
+                        Text("Erforderlicher Vorlauf (höchster Raum)")
+                        Spacer()
+                        Text(String(format: "%.1f °C", required))
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(required > store.building.underfloorFlowTemp ? .red : wpAccent)
+                    }
+                }
+            }
+        } header: {
+            Text(String(format: "Fußbodenheizung bei %.0f/%.0f °C",
+                        store.building.underfloorFlowTemp, store.building.underfloorReturnTemp))
+        } footer: {
+            Text("Der höchste erforderliche Vorlauf bestimmt die Auslegung der ganzen Anlage – ein einziger unterversorgter Raum zwingt die Wärmepumpe dauerhaft höher und kostet Arbeitszahl.")
+        }
+    }
+
+    // MARK: - Zentrale Bauteilwerte ("Bauteilbibliothek")
+
+    /// Einmal fürs Gebäude festlegen statt in jedem Raum – im Feldtest war
+    /// das Nachtragen je Raum die lästigste und fehleranfälligste Stelle.
+    @ViewBuilder
+    private var componentsSection: some View {
+        Section {
+            Picker("Baujahr-Klasse", selection: Binding(
+                get: { store.building.components.era ?? "" },
+                set: { raw in
+                    if let era = BuildingEra(rawValue: raw) {
+                        store.building.components = BuildingComponents.fromEra(era)
+                    }
+                }
+            )) {
+                Text("eigene Werte").tag("")
+                ForEach(BuildingEra.allCases, id: \.rawValue) { era in
+                    Text(era.label).tag(era.rawValue)
+                }
+            }
+
+            ComponentField(label: "Außenwand", value: $store.building.components.wallU, unit: "W/(m²K)")
+            ComponentField(label: "Fenster", value: $store.building.components.windowU, unit: "W/(m²K)")
+            ComponentField(label: "Fenster g-Wert", value: $store.building.components.windowG, unit: "")
+            ComponentField(label: "Außentür", value: $store.building.components.doorU, unit: "W/(m²K)")
+            ComponentField(label: "Dach / Decke", value: $store.building.components.roofU, unit: "W/(m²K)")
+            ComponentField(label: "Boden", value: $store.building.components.floorU, unit: "W/(m²K)")
+
+            Button {
+                let components = store.building.components
+                for index in store.rooms.indices
+                where store.rooms[index].projectID == store.currentProjectID {
+                    store.rooms[index] = components.applied(to: store.rooms[index])
+                }
+            } label: {
+                Label("Auf alle \(store.currentRooms.count) Räume übertragen",
+                      systemImage: "square.and.arrow.down.on.square")
+            }
+            .disabled(store.currentRooms.isEmpty)
+        } header: {
+            Text("Bauteilwerte (Gebäude)")
+        } footer: {
+            Text("Baujahr-Klasse wählen oder Werte selbst eintragen, dann übertragen. Einzelne Räume dürfen danach abweichen (neuer Anbau, erneuerte Fenster). Decke und Boden werden nur dort gesetzt, wo sie im Raum schon angesetzt sind.")
         }
     }
 
@@ -223,6 +473,28 @@ struct BuildingView: View {
             Text(value)
                 .font(.subheadline.monospacedDigit())
                 .foregroundStyle(.secondary)
+        }
+    }
+}
+
+/// Zahlenfeld für einen zentralen Bauteilwert.
+private struct ComponentField: View {
+    let label: String
+    @Binding var value: Double
+    let unit: String
+
+    var body: some View {
+        HStack {
+            Text(label)
+            Spacer()
+            TextField(label, value: $value, format: .number.precision(.fractionLength(0...2)))
+                .keyboardType(.decimalPad)
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 70)
+                .multilineTextAlignment(.trailing)
+            if !unit.isEmpty {
+                Text(unit).font(.caption).foregroundStyle(.secondary)
+            }
         }
     }
 }

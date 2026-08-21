@@ -3,9 +3,21 @@ import Foundation
 /// Baujahr-Klasse eines Gebäudes mit typischen U-Werten der Bauteile.
 ///
 /// Die Werte sind übliche Anhaltswerte für unsanierte Gebäude der jeweiligen
-/// Epoche (angelehnt an die bekannten Sanierungs-/Bauteiltabellen, u. a.
-/// WSchV 77/84/95, EnEV, GEG). Sie sind AN­NAHMEN für das Kurzverfahren –
+/// Epoche (angelehnt an die bekannten Bauteiltabellen der Wärmeschutz- und
+/// Energieeinsparverordnungen). Sie sind AN­NAHMEN für das Kurzverfahren –
 /// der PDF-Bericht weist sie entsprechend aus („vom Fachbetrieb zu prüfen").
+///
+/// ⚠️ OFFEN für Förderunterlagen: Die BEG erlaubt ausdrücklich „U-Werte nach
+/// Typologie", verweist dafür aber auf die amtliche „Bekanntmachung der
+/// Regeln zur Datenaufnahme und Datenverwendung im Wohngebäudebestand"
+/// vom 08.10.2020 (BAnz AT 04.12.2020 B1), Tabellen 2 und 3. Diese Werte
+/// sind als amtliche Bekanntmachung lizenzfrei (§ 5 Abs. 1 UrhG) – im
+/// Gegensatz zu den inhaltsgleichen Tabellen der DIN-Norm. Für die
+/// Förderunterlage sollten die Klassen hier gegen den BAnz abgeglichen und
+/// die Quelle im Bericht genannt werden.
+///
+/// Gesetzesbezeichnung: Das frühere GEG heißt seit dem 29.07.2026
+/// **Gebäudemodernisierungsgesetz (GModG)** – in Berichten nie mehr „GEG".
 public enum BuildingEra: String, Codable, CaseIterable, Sendable {
     case vor1949   = "vor1949"
     case bis1968   = "1949_1968"
@@ -22,8 +34,8 @@ public enum BuildingEra: String, Codable, CaseIterable, Sendable {
         case .bis1978: return "1969–1978"
         case .bis1994: return "1979–1994 (WSchV 77/84)"
         case .bis2001: return "1995–2001 (WSchV 95)"
-        case .bis2015: return "2002–2015 (EnEV)"
-        case .ab2016:  return "ab 2016 (EnEV/GEG)"
+        case .bis2015: return "2002–2015"
+        case .ab2016:  return "ab 2016"
         }
     }
 

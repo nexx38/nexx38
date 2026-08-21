@@ -161,13 +161,43 @@ final class VdZReportTests: XCTestCase {
         XCTAssertTrue(report.hints.contains { $0.contains("Heizkurve") })
     }
 
+    // MARK: - Vollständigkeit des Gebäudes (Förderrisiko!)
+
+    func testFehlenderRaumFaelltUeberDieWohnflaecheAuf() {
+        // 25 + 8 + 12 = 45 m² erfasst, laut Unterlagen hat das Haus 120 m².
+        // Ohne diese Prüfung ginge eine viel zu kleine Gebäudeheizlast in
+        // die Förderunterlage.
+        var settings = BuildingSettings()
+        settings.vdz.totalLivingAreaSqm = 120
+        let report = VdZReportBuilder.build(rooms: beispielRaeume(), settings: settings)
+
+        XCTAssertEqual(report.capturedAreaSqm, 45, accuracy: 0.001)
+        XCTAssertEqual(report.areaDeviation ?? 0, 0.625, accuracy: 0.001)
+        XCTAssertTrue(report.hints.contains { $0.contains("fehlt ein Raum") })
+    }
+
+    func testPassendeWohnflaecheErzeugtKeineMahnung() {
+        var settings = BuildingSettings()
+        settings.vdz.totalLivingAreaSqm = 46   // 45 erfasst → 2,2 % Abweichung
+        let report = VdZReportBuilder.build(rooms: beispielRaeume(), settings: settings)
+        XCTAssertLessThan(report.areaDeviation ?? 1, 0.10)
+        XCTAssertFalse(report.hints.contains { $0.contains("fehlt ein Raum") })
+    }
+
+    func testOhneWohnflaecheWirdZurAngabeAufgefordert() {
+        let report = VdZReportBuilder.build(rooms: beispielRaeume(), settings: BuildingSettings())
+        XCTAssertNil(report.areaDeviation)
+        XCTAssertTrue(report.hints.contains { $0.contains("Wohnfläche") })
+    }
+
     func testVollstaendigeAngabenErzeugenKeineMahnung() {
         var settings = BuildingSettings()
         settings.valveModelID = ValveDatabase.all.first?.id
         settings.vdz = VdZInputs(expansionVesselChecked: true,
                                  fillPressureBar: 1.8,
                                  generatorSetPowerKW: 8,
-                                 heatingCurveNote: "Steigung 0,4 / Niveau 0")
+                                 heatingCurveNote: "Steigung 0,4 / Niveau 0",
+                                 totalLivingAreaSqm: 45)
         var raeume = beispielRaeume()
         // Alle Räume mit Heizfläche versehen – dann darf nichts mehr mahnen.
         raeume[2].underfloorLoops = [UnderfloorLoop(roomID: raeume[2].id, areaSqm: 12)]

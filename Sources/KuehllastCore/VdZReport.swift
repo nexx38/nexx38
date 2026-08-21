@@ -28,6 +28,12 @@ public struct VdZInputs: Codable, Hashable, Sendable {
     public var heatingCurveNote: String
     /// Bemerkungen fürs Formular.
     public var remarks: String
+    /// Beheizte Wohnfläche des Gebäudes laut Unterlagen in m².
+    /// Gegenprobe zur Summe der erfassten Räume: Der hydraulische Abgleich
+    /// gilt für die GANZE Anlage – fehlt ein Raum im Projekt, wäre die
+    /// Gebäudeheizlast zu klein und die Förderunterlage falsch. 0 = nicht
+    /// angegeben, dann kann die App die Vollständigkeit nicht prüfen.
+    public var totalLivingAreaSqm: Double
 
     public init(expansionVesselChecked: Bool = false,
                 fillPressureBar: Double = 0,
@@ -37,7 +43,8 @@ public struct VdZInputs: Codable, Hashable, Sendable {
                 flowController: Bool = false,
                 generatorSetPowerKW: Double = 0,
                 heatingCurveNote: String = "",
-                remarks: String = "") {
+                remarks: String = "",
+                totalLivingAreaSqm: Double = 0) {
         self.expansionVesselChecked = expansionVesselChecked
         self.fillPressureBar = fillPressureBar
         self.vesselPrePressureBar = vesselPrePressureBar
@@ -47,12 +54,13 @@ public struct VdZInputs: Codable, Hashable, Sendable {
         self.generatorSetPowerKW = generatorSetPowerKW
         self.heatingCurveNote = heatingCurveNote
         self.remarks = remarks
+        self.totalLivingAreaSqm = totalLivingAreaSqm
     }
 
     private enum CodingKeys: String, CodingKey {
         case expansionVesselChecked, fillPressureBar, vesselPrePressureBar
         case vesselEndPressureBar, differentialPressureController, flowController
-        case generatorSetPowerKW, heatingCurveNote, remarks
+        case generatorSetPowerKW, heatingCurveNote, remarks, totalLivingAreaSqm
     }
 
     public init(from decoder: Decoder) throws {
@@ -66,6 +74,7 @@ public struct VdZInputs: Codable, Hashable, Sendable {
         self.generatorSetPowerKW    = (try? c.decode(Double.self, forKey: .generatorSetPowerKW)) ?? 0
         self.heatingCurveNote       = (try? c.decode(String.self, forKey: .heatingCurveNote)) ?? ""
         self.remarks                = (try? c.decode(String.self, forKey: .remarks)) ?? ""
+        self.totalLivingAreaSqm     = (try? c.decode(Double.self, forKey: .totalLivingAreaSqm)) ?? 0
     }
 }
 
@@ -157,6 +166,10 @@ public struct VdZReport: Sendable {
     /// Räume ohne erfasste Heizfläche – die fehlen in der Anlage und fallen
     /// beim Prüfen auf. Lieber vorher melden als hinterher nachliefern.
     public var roomsWithoutSurface: [String]
+    /// Summe der erfassten Raumflächen in m².
+    public var capturedAreaSqm: Double
+    /// Abweichung zur angegebenen Wohnfläche (0…1); nil = keine Angabe.
+    public var areaDeviation: Double?
     /// Hinweise zu Grenzen und Pflichten (gehören sichtbar aufs Papier).
     public var hints: [String]
 }
@@ -294,7 +307,26 @@ public enum VdZReportBuilder {
                                        loadW: underfloorLoad))
         }
 
+        // Vollständigkeitsprüfung: Der Abgleich gilt fürs ganze Gebäude.
+        // Fehlt ein Raum im Projekt, ist die Gebäudeheizlast zu klein –
+        // in einer Förderunterlage der teuerste denkbare Fehler.
+        let capturedArea = roomRows.reduce(0.0) { $0 + $1.areaSqm }
+        var deviation: Double?
+        let statedArea = settings.vdz.totalLivingAreaSqm
+        if statedArea > 0 {
+            deviation = abs(capturedArea - statedArea) / statedArea
+        }
+
         var hints: [String] = []
+        if let deviation, deviation > 0.10 {
+            hints.append(String(format: "Erfasste Fläche %.1f m² weicht um %.0f %% von der "
+                                + "angegebenen Wohnfläche %.1f m² ab – fehlt ein Raum? "
+                                + "Der Abgleich gilt für die gesamte Anlage.",
+                                capturedArea, deviation * 100, statedArea))
+        } else if statedArea <= 0 {
+            hints.append("Beheizte Wohnfläche des Gebäudes eintragen – nur damit kann geprüft "
+                         + "werden, ob alle Räume erfasst sind.")
+        }
         if !withoutSurface.isEmpty {
             hints.append("Ohne Heizfläche erfasst: " + withoutSurface.joined(separator: ", ")
                          + ". Diese Räume fehlen in der Abgleich-Anlage.")
@@ -322,6 +354,8 @@ public enum VdZReportBuilder {
                          surfaces: surfaceRows,
                          totalLoadW: totalLoad,
                          roomsWithoutSurface: withoutSurface,
+                         capturedAreaSqm: capturedArea,
+                         areaDeviation: deviation,
                          hints: hints)
     }
 }

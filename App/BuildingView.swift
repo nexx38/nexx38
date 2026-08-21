@@ -201,6 +201,8 @@ struct BuildingView: View {
     @ViewBuilder
     private var fundingSection: some View {
         Section {
+            ComponentField(label: "Beheizte Wohnfläche (Unterlagen)",
+                           value: $store.building.vdz.totalLivingAreaSqm, unit: "m²")
             Toggle("Ausdehnungsgefäß geprüft", isOn: $store.building.vdz.expansionVesselChecked)
             ComponentField(label: "Fülldruck", value: $store.building.vdz.fillPressureBar, unit: "bar")
             ComponentField(label: "Vordruck AG", value: $store.building.vdz.vesselPrePressureBar, unit: "bar")

@@ -51,6 +51,12 @@ enum VdZPDFReport {
             }
             y = row("Erstellt am", dateString(), y: y)
             y = row("Verfahren", "B (raumweise Heizlastberechnung nach DIN EN 12831-1 / DIN/TS 12831-1)", y: y)
+            y = row("Erfasste Fläche",
+                    settings.vdz.totalLivingAreaSqm > 0
+                        ? String(format: "%.1f m² von %.1f m² Wohnfläche",
+                                 report.capturedAreaSqm, settings.vdz.totalLivingAreaSqm)
+                        : String(format: "%.1f m² (Wohnfläche nicht angegeben)", report.capturedAreaSqm),
+                    y: y)
             y += 10
 
             // ---- Formularwerte je Heizkreis ----

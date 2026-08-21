@@ -30,13 +30,21 @@ public struct BuildingSettings: Codable, Hashable, Sendable {
     /// Fabrikat, deshalb gebäudeweit statt je Heizkörper. Leer = generische
     /// Stufen wie bisher.
     public var valveModelID: String?
+    /// Eingaben für das VdZ-Formular „Bestätigung des Hydraulischen
+    /// Abgleichs (Einzelmaßnahmen BEG)". Das sind Vor-Ort-Feststellungen,
+    /// die keine Software errechnen kann – sie müssen aber ins Formular.
+    public var vdz: VdZInputs
+    /// Eingaben für die überschlägige Pumpenauslegung.
+    public var pump: PumpSizingInput
 
     public init(dhwPersons: Int = 3, blockingHours: Double = 2,
                 flowTemp: Double = 55, returnTemp: Double = 45,
                 underfloorFlowTemp: Double = 40, underfloorReturnTemp: Double = 33,
                 spreadK: Double = 10, simultaneity: Double = 0.8,
                 components: BuildingComponents = BuildingComponents(),
-                valveModelID: String? = nil) {
+                valveModelID: String? = nil,
+                vdz: VdZInputs = VdZInputs(),
+                pump: PumpSizingInput = PumpSizingInput()) {
         self.dhwPersons = dhwPersons
         self.blockingHours = blockingHours
         self.flowTemp = flowTemp
@@ -47,12 +55,14 @@ public struct BuildingSettings: Codable, Hashable, Sendable {
         self.simultaneity = simultaneity
         self.components = components
         self.valveModelID = valveModelID
+        self.vdz = vdz
+        self.pump = pump
     }
 
     private enum CodingKeys: String, CodingKey {
         case dhwPersons, blockingHours, flowTemp, returnTemp
         case underfloorFlowTemp, underfloorReturnTemp
-        case spreadK, simultaneity, components, valveModelID
+        case spreadK, simultaneity, components, valveModelID, vdz, pump
     }
 
     public init(from decoder: Decoder) throws {
@@ -67,6 +77,8 @@ public struct BuildingSettings: Codable, Hashable, Sendable {
         self.simultaneity  = (try? c.decode(Double.self, forKey: .simultaneity)) ?? 0.8
         self.components    = (try? c.decode(BuildingComponents.self, forKey: .components)) ?? BuildingComponents()
         self.valveModelID  = try? c.decode(String.self, forKey: .valveModelID)
+        self.vdz           = (try? c.decode(VdZInputs.self, forKey: .vdz)) ?? VdZInputs()
+        self.pump          = (try? c.decode(PumpSizingInput.self, forKey: .pump)) ?? PumpSizingInput()
     }
 }
 

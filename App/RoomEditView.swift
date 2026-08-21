@@ -87,6 +87,39 @@ struct RoomEditView: View {
             }
 
             Section {
+                Picker("Nutzung", selection: Binding(
+                    get: { room.usageProfile ?? "" },
+                    set: { raw in
+                        if raw.isEmpty {
+                            room.usageProfile = nil
+                        } else if let profile = UsageProfile(rawValue: raw) {
+                            room = profile.applied(to: room)
+                        }
+                    }
+                )) {
+                    Text("keine Vorgabe").tag("")
+                    ForEach(UsageProfile.allCases, id: \.rawValue) { profile in
+                        Text(profile.label).tag(profile.rawValue)
+                    }
+                }
+                Picker("Etage", selection: Binding(
+                    get: { room.storey ?? 0 },
+                    set: { room.storey = $0 }
+                )) {
+                    Text("Keller").tag(-1)
+                    Text("Erdgeschoss").tag(0)
+                    Text("1. OG").tag(1)
+                    Text("2. OG").tag(2)
+                    Text("3. OG").tag(3)
+                    Text("Dachgeschoss").tag(4)
+                }
+            } header: {
+                Text("Nutzung")
+            } footer: {
+                Text("Das Profil setzt Norm-Innentemperatur (Bad 24 °C, Wohnen 20 °C) sowie Personen, Geräte, Licht und Luftwechsel für die Kühllast. Einzelwerte bleiben danach änderbar.")
+            }
+
+            Section {
                 Picker("Baujahr-Klasse", selection: Binding(
                     get: { room.constructionEra ?? "" },
                     set: { raw in

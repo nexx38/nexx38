@@ -31,9 +31,19 @@ final class RoomStore: ObservableObject {
         projects.first { $0.id == currentProjectID }
     }
 
-    /// Räume des aktiven Projekts (Reihenfolge wie erfasst).
+    /// Räume des aktiven Projekts. Reihenfolge wie erfasst – sobald aber
+    /// Etagen gepflegt sind, wird nach Geschoss gruppiert (stabil, damit
+    /// innerhalb einer Etage die Scan-Reihenfolge erhalten bleibt).
     var currentRooms: [Room] {
-        rooms.filter { $0.projectID == currentProjectID }
+        let filtered = rooms.filter { $0.projectID == currentProjectID }
+        guard filtered.contains(where: { $0.storey != nil }) else { return filtered }
+        return filtered.enumerated()
+            .sorted { a, b in
+                let left = a.element.storey ?? 0
+                let right = b.element.storey ?? 0
+                return left == right ? a.offset < b.offset : left < right
+            }
+            .map(\.element)
     }
 
     /// Anlagen-Einstellungen des aktiven Projekts (les- und schreibbar –

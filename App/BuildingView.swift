@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import KuehllastCore
 
 /// Gebäude-/Anlagen-Bildschirm: Wärmepumpen-Auslegung, Multisplit-Klima,
@@ -38,17 +39,25 @@ struct BuildingView: View {
                 }
                 SettingStepper(label: "EVU-Sperrzeit", value: $store.building.blockingHours,
                                unit: "h", step: 1, range: 0...6, decimals: 0)
-                SettingStepper(label: "Vorlauf", value: $store.building.flowTemp,
+                SettingStepper(label: "Vorlauf Heizkörper", value: $store.building.flowTemp,
                                unit: "°C", step: 5, range: 30...75, decimals: 0)
-                SettingStepper(label: "Rücklauf", value: $store.building.returnTemp,
+                SettingStepper(label: "Rücklauf Heizkörper", value: $store.building.returnTemp,
                                unit: "°C", step: 5, range: 25...65, decimals: 0)
+                SettingStepper(label: "Vorlauf Fußboden", value: $store.building.underfloorFlowTemp,
+                               unit: "°C", step: 1, range: 25...50, decimals: 0)
+                SettingStepper(label: "Rücklauf Fußboden", value: $store.building.underfloorReturnTemp,
+                               unit: "°C", step: 1, range: 20...45, decimals: 0)
                 SettingStepper(label: "Spreizung Abgleich", value: $store.building.spreadK,
                                unit: "K", step: 1, range: 5...20, decimals: 0)
                 SettingStepper(label: "Gleichzeitigkeit Klima", value: $store.building.simultaneity,
                                unit: "", step: 0.05, range: 0.5...1.0, decimals: 2)
             } header: {
                 Text("Anlagen-Einstellungen")
+            } footer: {
+                Text("Heizkörper und Fußbodenheizung laufen in derselben Anlage mit unterschiedlichen Temperaturen – deshalb zwei Paare.")
             }
+
+            componentsSection
 
             Section {
                 row("Heizlast Gebäude", String(format: "%.0f W", heatingTotal.rounded()))
@@ -142,6 +151,14 @@ struct BuildingView: View {
                     }
                 }
             }
+            // Die Dezimal-Tastatur hat keinen eigenen Schließen-Knopf.
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Fertig") {
+                    UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder),
+                                                    to: nil, from: nil, for: nil)
+                }
+            }
         }
         .task {
             pdfURL = BuildingPDFReport.generate(rooms: store.currentRooms, settings: store.building,
@@ -154,6 +171,52 @@ struct BuildingView: View {
             }
             pdfURL = BuildingPDFReport.generate(rooms: store.currentRooms, settings: store.building,
                                                 project: store.currentProject)
+        }
+    }
+
+    // MARK: - Zentrale Bauteilwerte ("Bauteilbibliothek")
+
+    /// Einmal fürs Gebäude festlegen statt in jedem Raum – im Feldtest war
+    /// das Nachtragen je Raum die lästigste und fehleranfälligste Stelle.
+    @ViewBuilder
+    private var componentsSection: some View {
+        Section {
+            Picker("Baujahr-Klasse", selection: Binding(
+                get: { store.building.components.era ?? "" },
+                set: { raw in
+                    if let era = BuildingEra(rawValue: raw) {
+                        store.building.components = BuildingComponents.fromEra(era)
+                    }
+                }
+            )) {
+                Text("eigene Werte").tag("")
+                ForEach(BuildingEra.allCases, id: \.rawValue) { era in
+                    Text(era.label).tag(era.rawValue)
+                }
+            }
+
+            ComponentField(label: "Außenwand", value: $store.building.components.wallU, unit: "W/(m²K)")
+            ComponentField(label: "Fenster", value: $store.building.components.windowU, unit: "W/(m²K)")
+            ComponentField(label: "Fenster g-Wert", value: $store.building.components.windowG, unit: "")
+            ComponentField(label: "Außentür", value: $store.building.components.doorU, unit: "W/(m²K)")
+            ComponentField(label: "Dach / Decke", value: $store.building.components.roofU, unit: "W/(m²K)")
+            ComponentField(label: "Boden", value: $store.building.components.floorU, unit: "W/(m²K)")
+
+            Button {
+                let components = store.building.components
+                for index in store.rooms.indices
+                where store.rooms[index].projectID == store.currentProjectID {
+                    store.rooms[index] = components.applied(to: store.rooms[index])
+                }
+            } label: {
+                Label("Auf alle \(store.currentRooms.count) Räume übertragen",
+                      systemImage: "square.and.arrow.down.on.square")
+            }
+            .disabled(store.currentRooms.isEmpty)
+        } header: {
+            Text("Bauteilwerte (Gebäude)")
+        } footer: {
+            Text("Baujahr-Klasse wählen oder Werte selbst eintragen, dann übertragen. Einzelne Räume dürfen danach abweichen (neuer Anbau, erneuerte Fenster). Decke und Boden werden nur dort gesetzt, wo sie im Raum schon angesetzt sind.")
         }
     }
 
@@ -223,6 +286,28 @@ struct BuildingView: View {
             Text(value)
                 .font(.subheadline.monospacedDigit())
                 .foregroundStyle(.secondary)
+        }
+    }
+}
+
+/// Zahlenfeld für einen zentralen Bauteilwert.
+private struct ComponentField: View {
+    let label: String
+    @Binding var value: Double
+    let unit: String
+
+    var body: some View {
+        HStack {
+            Text(label)
+            Spacer()
+            TextField(label, value: $value, format: .number.precision(.fractionLength(0...2)))
+                .keyboardType(.decimalPad)
+                .textFieldStyle(.roundedBorder)
+                .frame(width: 70)
+                .multilineTextAlignment(.trailing)
+            if !unit.isEmpty {
+                Text(unit).font(.caption).foregroundStyle(.secondary)
+            }
         }
     }
 }

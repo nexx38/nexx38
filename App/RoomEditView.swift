@@ -58,6 +58,32 @@ struct RoomEditView: View {
                 TextField("Name", text: $room.name)
                 LabeledStepper(label: "Fläche", value: $room.floorArea, unit: "m²", step: 0.5, range: 1...500)
                 LabeledStepper(label: "Höhe", value: $room.height, unit: "m", step: 0.05, range: 1.8...6)
+
+                let geometryNotes = Plausibility.geometryNotes(for: room)
+                if !geometryNotes.isEmpty {
+                    ForEach(geometryNotes, id: \.self) { note in
+                        HStack(alignment: .top, spacing: 8) {
+                            Image(systemName: "ruler")
+                                .foregroundStyle(.orange)
+                            Text(note)
+                                .font(.footnote)
+                        }
+                    }
+                    .listRowBackground(Color.orange.opacity(0.12))
+                }
+
+                // Ohne diesen Knopf müsste man die Höhe bei jedem einzelnen
+                // Wandstück nachtragen – im Feldtest waren das 21 Stück.
+                if room.walls.contains(where: { abs($0.height - room.height) > 0.01 }) {
+                    Button {
+                        for index in room.walls.indices {
+                            room.walls[index].height = room.height
+                        }
+                    } label: {
+                        Label(String(format: "Alle Wandhöhen auf %.2f m setzen", room.height),
+                              systemImage: "arrow.up.and.down.square")
+                    }
+                }
             }
 
             Section {

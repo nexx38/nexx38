@@ -154,6 +154,48 @@ public enum Plausibility {
              highHint: "U-Werte und Außenflächen prüfen.")
     }
 
+    /// Übliche lichte Raumhöhe in Wohngebäuden; darüber ist es entweder eine
+    /// Galerie/Halle oder – viel häufiger – ein verunglückter Scan.
+    public static let plausibleRoomHeight: ClosedRange<Double> = 2.0...3.2
+    /// Übliche Höhe von Türen und Terrassen-/Schiebetüren.
+    public static let plausibleDoorHeight = 2.6
+
+    /// Prüft die GEOMETRIE eines gescannten Raums auf offensichtlich falsche
+    /// Maße. Hintergrund: RoomPlan zieht Wände bis unter die obere Decke, wenn
+    /// beim Scannen ein offener Treppenraum oder eine Galerie im Bild war –
+    /// dann kommt der halbe Raum in doppelter Höhe heraus und Heiz- wie
+    /// Kühllast sind stillschweigend etwa doppelt so hoch. Genau das ist im
+    /// Feldtest passiert (2,62 m realer Raum als 4,76 m erfasst).
+    /// Liefert die Fundstellen als fertige deutsche Hinweistexte.
+    public static func geometryNotes(for room: Room) -> [String] {
+        var notes: [String] = []
+
+        if room.height > plausibleRoomHeight.upperBound {
+            notes.append(String(format: "Raumhöhe %.2f m ist für einen Wohnraum ungewöhnlich hoch. "
+                                + "Beim Scan durch einen offenen Treppenraum gefilmt? Höhe nachmessen.",
+                                room.height))
+        } else if room.height < plausibleRoomHeight.lowerBound {
+            notes.append(String(format: "Raumhöhe %.2f m ist ungewöhnlich niedrig – bitte nachmessen.",
+                                room.height))
+        }
+
+        let tallDoors = room.doors.filter { $0.height > plausibleDoorHeight }
+        if let highest = tallDoors.map({ $0.height }).max() {
+            notes.append(String(format: "%d Tür(en) über %.1f m hoch (höchste %.2f m). "
+                                + "Übliche Terrassen-/Schiebetüren sind ~2,20 m – Maße prüfen.",
+                                tallDoors.count, plausibleDoorHeight, highest))
+        }
+
+        // Wandhöhen, die stark von der Raumhöhe abweichen, deuten auf
+        // Wandstücke aus einem anderen Geschoss hin.
+        let strays = room.walls.filter { abs($0.height - room.height) > 0.5 }
+        if !strays.isEmpty {
+            notes.append("\(strays.count) Wandstück(e) weichen deutlich von der Raumhöhe ab.")
+        }
+
+        return notes
+    }
+
     private static func note(specific v: Double, band: ClosedRange<Double>,
                              lowHint: String, highHint: String) -> String? {
         if v < band.lowerBound {

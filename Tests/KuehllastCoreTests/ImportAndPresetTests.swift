@@ -152,6 +152,36 @@ final class ImportAndPresetTests: XCTestCase {
         XCTAssertNil(legacy.position)
     }
 
+    // MARK: - Geometrie-Plausibilität (Feldtest 21.08.: Scan lieferte doppelte Höhe)
+
+    func testGeometryNotesCatchDoubledScanHeights() {
+        // Echter Fall: 2,62-m-Wohnzimmer wurde als 4,76 m erfasst, die
+        // Schiebetüren mit 4,35 m statt 2,20 m → Kühllast fast doppelt.
+        let door = Door(width: 4.66, height: 4.35, isExternal: true, isGlazed: true)
+        let wall = Wall(width: 5.5, height: 4.76, isExternal: true)
+        let room = Room(floorArea: 54.96, height: 4.76, walls: [wall], doors: [door])
+
+        let notes = Plausibility.geometryNotes(for: room)
+        XCTAssertEqual(notes.count, 2, "Raumhöhe UND Türhöhe müssen auffallen")
+        XCTAssertTrue(notes.contains { $0.contains("Raumhöhe") })
+        XCTAssertTrue(notes.contains { $0.contains("Tür") })
+    }
+
+    func testGeometryNotesSilentForNormalRoom() {
+        let door = Door(width: 4.63, height: 2.2, isExternal: true, isGlazed: true)
+        let wall = Wall(width: 5.5, height: 2.62, isExternal: true)
+        let room = Room(floorArea: 55, height: 2.62, walls: [wall], doors: [door])
+        XCTAssertTrue(Plausibility.geometryNotes(for: room).isEmpty)
+    }
+
+    func testGeometryNotesCatchStrayWallHeight() {
+        // Ein Wandstück aus dem Geschoss darüber.
+        let ok = Wall(width: 4, height: 2.6, isExternal: true)
+        let stray = Wall(width: 2, height: 4.8, isExternal: true)
+        let room = Room(floorArea: 20, height: 2.6, walls: [ok, stray])
+        XCTAssertTrue(Plausibility.geometryNotes(for: room).contains { $0.contains("Wandstück") })
+    }
+
     // MARK: - Room-Dekodierung bleibt abwärtskompatibel
 
     func testRoomDecodesWithoutNewOptionalFields() throws {

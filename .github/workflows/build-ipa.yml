@@ -7,7 +7,7 @@ name: Build unsigned IPA
 
 on:
   push:
-    branches: [kuehllastscan, main]
+    branches: [dreid]
   workflow_dispatch:      # erlaubt manuellen Start per Knopfdruck auf GitHub
 
 jobs:
@@ -64,6 +64,6 @@ jobs:
       - name: Upload IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: LastScan-unsigned-ipa
+          name: LastScan3D-unsigned-ipa
           path: out/LastScan.ipa
           if-no-files-found: error

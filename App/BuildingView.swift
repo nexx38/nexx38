@@ -106,6 +106,7 @@ struct BuildingView: View {
             }
 
             radiatorSection
+            underfloorSection
 
             Section {
                 if roomsWithRadiators.isEmpty {
@@ -171,6 +172,82 @@ struct BuildingView: View {
             }
             pdfURL = BuildingPDFReport.generate(rooms: store.currentRooms, settings: store.building,
                                                 project: store.currentProject)
+        }
+    }
+
+    // MARK: - Fußbodenheizung
+
+    /// Alle Räume mit Heizkreisen samt Prüfergebnis.
+    private var roomsWithLoops: [(room: Room, check: UnderfloorCheckResult)] {
+        store.currentRooms.compactMap { room in
+            guard let loops = room.underfloorLoops, !loops.isEmpty else { return nil }
+            let check = UnderfloorHeating.check(
+                loops: loops,
+                demandW: HeatingLoadCalculator().calculate(room).total,
+                roomTemp: room.heating?.indoorTemperature ?? 20,
+                flowTemp: store.building.underfloorFlowTemp,
+                spreadK: store.building.spreadK)
+            return (room, check)
+        }
+    }
+
+    /// Höchste im Gebäude erforderliche Vorlauftemperatur – sie bestimmt, wie
+    /// warm die Wärmepumpe fahren muss, und damit die Arbeitszahl der Anlage.
+    private var maxRequiredFlowTemp: Double? {
+        roomsWithLoops.compactMap { $0.check.requiredFlowTemp }.max()
+    }
+
+    @ViewBuilder
+    private var underfloorSection: some View {
+        Section {
+            if roomsWithLoops.isEmpty {
+                Text("Noch keine Heizkreise erfasst – im Raum-Editor unter 'Fußbodenheizung' anlegen.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(roomsWithLoops, id: \.room.id) { entry in
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text(entry.room.name)
+                            Spacer()
+                            Text(String(format: "%.0f %% – %@",
+                                        entry.check.coverage * 100, entry.check.verdict.label))
+                                .font(.subheadline.weight(.medium))
+                                .foregroundStyle(entry.check.verdict == .zuKlein ? .red :
+                                                 entry.check.verdict == .knapp ? .orange : .green)
+                        }
+                        ForEach(entry.check.loops) { loop in
+                            HStack {
+                                Text("  \(loop.name) · \(Int(loop.areaSqm)) m²")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Spacer()
+                                Text(String(format: "%.0f m · %.0f kg/h · %.0f W",
+                                            loop.pipeLengthM, loop.flowKgPerH, loop.outputW))
+                                    .font(.caption.monospacedDigit())
+                                    .foregroundStyle(loop.lengthVerdict == .zuLang ? .red : .secondary)
+                            }
+                        }
+                    }
+                    .padding(.vertical, 2)
+                }
+                if let required = maxRequiredFlowTemp {
+                    HStack {
+                        Image(systemName: "thermometer.medium")
+                            .foregroundStyle(wpAccent)
+                        Text("Erforderlicher Vorlauf (höchster Raum)")
+                        Spacer()
+                        Text(String(format: "%.1f °C", required))
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(required > store.building.underfloorFlowTemp ? .red : wpAccent)
+                    }
+                }
+            }
+        } header: {
+            Text(String(format: "Fußbodenheizung bei %.0f/%.0f °C",
+                        store.building.underfloorFlowTemp, store.building.underfloorReturnTemp))
+        } footer: {
+            Text("Der höchste erforderliche Vorlauf bestimmt die Auslegung der ganzen Anlage – ein einziger unterversorgter Raum zwingt die Wärmepumpe dauerhaft höher und kostet Arbeitszahl.")
         }
     }
 

@@ -252,6 +252,9 @@ public struct Room: Codable, Identifiable, Hashable, Sendable {
     /// Vorhandene Heizkörper (Bestandsaufnahme) – für den WP-Tauglichkeits-
     /// Check und den hydraulischen Abgleich. Optional für alte Dateien.
     public var radiators: [Radiator]?
+    /// Heizkreise der Fußbodenheizung in diesem Raum. Ein Raum kann beides
+    /// haben (Heizkörper + Fußboden), deshalb zwei getrennte Listen.
+    public var underfloorLoops: [UnderfloorLoop]?
     /// Zugehöriges Projekt (Kunde/Objekt). Optional: alte Dateien ohne
     /// Projekt werden beim Laden dem Standard-Projekt zugeordnet.
     public var projectID: UUID?
@@ -282,7 +285,8 @@ public struct Room: Codable, Identifiable, Hashable, Sendable {
                 projectID: UUID? = nil,
                 modelFilename: String? = nil,
                 storey: Int? = nil,
-                usageProfile: String? = nil) {
+                usageProfile: String? = nil,
+                underfloorLoops: [UnderfloorLoop]? = nil) {
         self.id = id
         self.name = name
         self.floorArea = floorArea
@@ -303,5 +307,6 @@ public struct Room: Codable, Identifiable, Hashable, Sendable {
         self.modelFilename = modelFilename
         self.storey = storey
         self.usageProfile = usageProfile
+        self.underfloorLoops = underfloorLoops
     }
 }

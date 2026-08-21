@@ -119,6 +119,25 @@ final class UsageAndComponentsTests: XCTestCase {
         XCTAssertEqual(decoded.components.wallU, 0.28, accuracy: 0.001)
     }
 
+    func testRoomCarriesUnderfloorLoopsAndSurvivesRoundTrip() throws {
+        let loop = UnderfloorLoop(roomID: UUID(), name: "HK 1", areaSqm: 18,
+                                  spacing: .va15, covering: .parkett)
+        let room = Room(floorArea: 20, height: 2.5, underfloorLoops: [loop])
+        let decoded = try JSONDecoder().decode(Room.self, from: JSONEncoder().encode(room))
+        XCTAssertEqual(decoded.underfloorLoops?.count, 1)
+        XCTAssertEqual(decoded.underfloorLoops?.first?.spacing, .va15)
+        XCTAssertEqual(decoded.underfloorLoops?.first?.covering, .parkett)
+        XCTAssertEqual(decoded.underfloorLoops?.first?.areaSqm ?? 0, 18, accuracy: 0.001)
+    }
+
+    func testRoomDecodesWithoutUnderfloorLoops() throws {
+        var dict = try JSONSerialization.jsonObject(
+            with: JSONEncoder().encode(Room(floorArea: 20, height: 2.5))) as! [String: Any]
+        dict.removeValue(forKey: "underfloorLoops")
+        let data = try JSONSerialization.data(withJSONObject: dict)
+        XCTAssertNil(try JSONDecoder().decode(Room.self, from: data).underfloorLoops)
+    }
+
     func testRoomDecodesWithoutStoreyAndProfile() throws {
         let room = Room(floorArea: 20, height: 2.5)
         var dict = try JSONSerialization.jsonObject(

@@ -267,8 +267,9 @@ public enum HydraulicBalancing {
     /// - Parameter spreadK: Auslegungs-Spreizung in K.
     public static func preset(loadW: Double, spreadK: Double) -> ValvePreset {
         let spread = max(spreadK, 3)
-        // m = Q · 0,86 / ΔT  [kg/h]
-        let flow = loadW * 0.86 / spread
+        // m = Q · 0,86 / ΔT  [kg/h] – negative Lasten abfangen, damit alle
+        // drei Rechenwege (hier, ValveDatabase, PumpSizing) identisch klemmen.
+        let flow = max(loadW, 0) * 0.86 / spread
         // kv = V [m³/h] / sqrt(Δp [bar])
         let kv = (flow / 1000.0) / sqrt(valveDpMbar / 1000.0)
         let stage = presetKv.first { $0.kv >= kv }?.stage
